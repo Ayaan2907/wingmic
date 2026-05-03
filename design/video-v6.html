@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wingmic — Preview Video v6</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0a; overflow: hidden; }
+  @keyframes blink { 0%,50% { opacity:1 } 51%,100% { opacity:0 } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="animations.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel">
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accentColor": "#FFC452",
+  "secondColor": "#86efac",
+  "thirdColor": "#FF8FAB",
+  "redColor": "#FF6B6B",
+  "openingTagline": "You meet people everywhere.",
+  "endHeadline": "Stop losing connections.",
+  "endItalic": "Start building your graph.",
+  "ctaText": "Join the beta waitlist"
+}/*EDITMODE-END*/;
+
+const BG = '#0a0a0a';
+const MONO = "'JetBrains Mono', monospace";
+const SANS = "'Inter', system-ui, sans-serif";
+const SERIF = "'Instrument Serif', serif";
+
+// ============================ AUDIO ENGINE ============================
+// Single AudioContext, lazily created on first user gesture.
+const Audio = (() => {
+  let ctx = null;
+  let masterGain = null;
+  let muted = false;
+  let unlocked = false;
+
+  function ensure() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0.6;
+      masterGain.connect(ctx.destination);
+    }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+  function setMuted(m) {
+    muted = m;
+    if (masterGain) masterGain.gain.value = m ? 0 : 0.6;
+  }
+  function setVolume(v) {
+    if (masterGain) masterGain.gain.value = muted ? 0 : v;
+  }
+  function unlock() {
+    if (unlocked) return;
+    ensure();
+    unlocked = true;
+    // Warm up speech synth so first utterance isn't laggy
+    try {
+      const u = new SpeechSynthesisUtterance('');
+      window.speechSynthesis.speak(u);
+    } catch(e) {}
+  }
+
+  // --- One-shot tones ---
+  function tone({ freq = 440, dur = 0.2, type = 'sine', gain = 0.3, attack = 0.01, release = 0.1, freqEnd = null, delay = 0 }) {
+    const c = ensure(); if (!c || muted) return;
+    const now = c.currentTime + delay;
+    const osc = c.createOscillator();
+    const g = c.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, now);
+    if (freqEnd != null) osc.frequency.exponentialRampToValueAtTime(Math.max(1, freqEnd), now + dur);
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(gain, now + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur + release);
+    osc.connect(g); g.connect(masterGain);
+    osc.start(now);
+    osc.stop(now + dur + release + 0.05);
+  }
+
+  function noise({ dur = 0.3, gain = 0.18, filterFreq = 2000, filterQ = 1, sweep = null, delay = 0, type = 'lowpass' }) {
+    const c = ensure(); if (!c || muted) return;
+    const now = c.currentTime + delay;
+    const bufSize = Math.floor(c.sampleRate * dur);
+    const buf = c.createBuffer(1, bufSize, c.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufSize);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const filt = c.createBiquadFilter();
+    filt.type = type;
+    filt.frequency.setValueAtTime(filterFreq, now);
+    filt.Q.value = filterQ;
+    if (sweep != null) filt.frequency.exponentialRampToValueAtTime(Math.max(50, sweep), now + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(gain, now + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    src.connect(filt); filt.connect(g); g.connect(masterGain);
+    src.start(now);
+    src.stop(now + dur + 0.05);
+  }
+
+  // --- Sound effects ---
+  const SFX = {
+    stamp:    () => { tone({ freq: 320, dur: 0.06, type: 'square', gain: 0.18, freqEnd: 180 }); noise({ dur: 0.12, gain: 0.1, filterFreq: 1200, sweep: 400 }); },
+    pop:      () => { tone({ freq: 900, dur: 0.08, type: 'sine', gain: 0.18, freqEnd: 1400, attack: 0.005 }); },
+    whoosh:   () => { noise({ dur: 0.5, gain: 0.16, filterFreq: 3500, sweep: 200, type: 'bandpass', filterQ: 1.5 }); },
+    strike:   () => { tone({ freq: 220, dur: 0.05, type: 'triangle', gain: 0.12, freqEnd: 110 }); noise({ dur: 0.08, gain: 0.08, filterFreq: 800, sweep: 200 }); },
+    sad:      () => { tone({ freq: 440, dur: 0.4, type: 'sine', gain: 0.2, freqEnd: 220, release: 0.3 }); },
+    chime:    () => {
+      [880, 1320, 1760].forEach((f, i) => tone({ freq: f, dur: 0.5, type: 'sine', gain: 0.18, attack: 0.02, release: 0.4, delay: i * 0.06 }));
+    },
+    aha:      () => {
+      [523, 659, 784, 1047].forEach((f, i) => tone({ freq: f, dur: 0.35, type: 'triangle', gain: 0.14, attack: 0.01, release: 0.3, delay: i * 0.07 }));
+    },
+    keytype:  () => { tone({ freq: 1800 + Math.random() * 600, dur: 0.02, type: 'square', gain: 0.06, release: 0.03 }); },
+    click:    () => { tone({ freq: 2400, dur: 0.015, type: 'square', gain: 0.08, release: 0.02 }); },
+    nodeAdd:  () => { tone({ freq: 660, dur: 0.08, type: 'sine', gain: 0.12, freqEnd: 990, attack: 0.005, release: 0.08 }); },
+    edgeDraw: () => { tone({ freq: 440, dur: 0.06, type: 'triangle', gain: 0.06, freqEnd: 660, release: 0.05 }); },
+    success:  () => {
+      [523, 784, 1047, 1568].forEach((f, i) => tone({ freq: f, dur: 0.4, type: 'sine', gain: 0.16, attack: 0.01, release: 0.5, delay: i * 0.08 }));
+    },
+    cta:      () => {
+      tone({ freq: 220, dur: 0.15, type: 'sawtooth', gain: 0.16, freqEnd: 440, release: 0.15 });
+      [659, 880].forEach((f, i) => tone({ freq: f, dur: 0.3, type: 'triangle', gain: 0.14, attack: 0.01, release: 0.3, delay: 0.15 + i * 0.08 }));
+    },
+    finalChord: () => {
+      [261, 329, 392, 523, 659].forEach((f, i) => tone({ freq: f, dur: 1.4, type: 'sine', gain: 0.12, attack: 0.05, release: 1.2, delay: i * 0.04 }));
+    },
+  };
+
+  // --- Looping ambient drone (turned on/off by track) ---
+  let droneNodes = null;
+  function startDrone({ freq = 110, gain = 0.04 }) {
+    const c = ensure(); if (!c || droneNodes) return;
+    const o1 = c.createOscillator(); o1.type = 'sine'; o1.frequency.value = freq;
+    const o2 = c.createOscillator(); o2.type = 'sine'; o2.frequency.value = freq * 1.5;
+    const o3 = c.createOscillator(); o3.type = 'triangle'; o3.frequency.value = freq * 2;
+    const g = c.createGain(); g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(gain, c.currentTime + 1.0);
+    o1.connect(g); o2.connect(g); o3.connect(g); g.connect(masterGain);
+    o1.start(); o2.start(); o3.start();
+    droneNodes = { o1, o2, o3, g };
+  }
+  function stopDrone() {
+    if (!droneNodes) return;
+    const c = ensure();
+    const { o1, o2, o3, g } = droneNodes;
+    g.gain.cancelScheduledValues(c.currentTime);
+    g.gain.linearRampToValueAtTime(0, c.currentTime + 0.5);
+    setTimeout(() => { try { o1.stop(); o2.stop(); o3.stop(); } catch(e){} }, 600);
+    droneNodes = null;
+  }
+
+  // --- Voice (SpeechSynthesis) ---
+  let voiceCache = null;
+  function pickVoice(prefer) {
+    if (voiceCache) return voiceCache;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices || !voices.length) return null;
+    const en = voices.filter(v => v.lang && v.lang.startsWith('en'));
+    const list = en.length ? en : voices;
+    voiceCache = list.find(v => /samantha|google us|alex|daniel|karen/i.test(v.name)) || list[0];
+    return voiceCache;
+  }
+  function speak({ text, rate = 1.0, pitch = 1.0, volume = 0.9, voiceHint = null }) {
+    if (!('speechSynthesis' in window) || muted) return;
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = rate; u.pitch = pitch; u.volume = volume;
+      const v = pickVoice(voiceHint);
+      if (v) u.voice = v;
+      window.speechSynthesis.speak(u);
+    } catch(e) {}
+  }
+  function cancelSpeech() {
+    try { window.speechSynthesis.cancel(); } catch(e){}
+  }
+
+  return { ensure, unlock, setMuted, setVolume, SFX, startDrone, stopDrone, speak, cancelSpeech, isMuted: () => muted };
+})();
+
+// ============================ SOUNDTRACK ============================
+// Each cue: { t: <seconds in timeline>, do: () => Audio.something(...) }
+const SOUNDTRACK = [
+  // Scene 0 — Montage 0–5s
+  { t: 0.0, do: () => { Audio.startDrone({ freq: 98, gain: 0.05 }); } },
+  { t: 0.1, do: () => Audio.SFX.whoosh() },
+  { t: 0.5, do: () => Audio.SFX.stamp() },
+  { t: 1.3, do: () => Audio.SFX.stamp() },
+  { t: 2.1, do: () => Audio.SFX.stamp() },
+  { t: 2.9, do: () => Audio.SFX.stamp() },
+  { t: 3.5, do: () => Audio.SFX.stamp() },
+  { t: 4.0, do: () => Audio.speak({ text: "You meet people every week.", rate: 0.95, pitch: 1.0 }) },
+
+  // Scene 1 — Dinner 5–11s
+  { t: 5.2, do: () => Audio.SFX.whoosh() },
+  { t: 6.0, do: () => Audio.speak({ text: "It's Tuesday night. DevConnect dinner.", rate: 1.0, pitch: 1.0 }) },
+  { t: 8.5, do: () => Audio.speak({ text: "Twelve people. One night.", rate: 0.95, pitch: 1.0 }) },
+  { t: 9.6, do: () => Audio.SFX.chime() },
+
+  // Scene 2 — Forgetting 11–16s
+  { t: 11.2, do: () => Audio.SFX.sad() },
+  { t: 11.7, do: () => Audio.speak({ text: "Friday morning. Who did I meet?", rate: 0.92, pitch: 0.95 }) },
+  { t: 13.4, do: () => Audio.SFX.strike() },
+  { t: 13.6, do: () => Audio.SFX.strike() },
+  { t: 13.8, do: () => Audio.SFX.strike() },
+  { t: 14.0, do: () => Audio.SFX.strike() },
+  { t: 14.2, do: () => Audio.SFX.strike() },
+  { t: 14.4, do: () => Audio.SFX.strike() },
+  { t: 14.6, do: () => Audio.SFX.strike() },
+  { t: 14.8, do: () => Audio.SFX.strike() },
+  { t: 15.0, do: () => Audio.SFX.strike() },
+  { t: 15.4, do: () => Audio.speak({ text: "You remember three.", rate: 0.85, pitch: 0.9 }) },
+
+  // Scene 3 — Aha 16–19s
+  { t: 16.3, do: () => Audio.SFX.aha() },
+  { t: 16.8, do: () => Audio.speak({ text: "What if your phone just remembered for you?", rate: 1.0, pitch: 1.05 }) },
+
+  // Scene 4 — Speak 19–25s
+  { t: 19.2, do: () => Audio.SFX.click() },
+  { t: 19.4, do: () => Audio.speak({ text: "Step one. Just talk.", rate: 1.0, pitch: 1.0 }) },
+  { t: 20.5, do: () => Audio.SFX.pop() },
+  // User-voice-style brain dump (slightly different rate/pitch)
+  { t: 21.2, do: () => Audio.speak({ text: "Met Sarah from Acme. Rust lead. She wants my repo before standup tomorrow.", rate: 1.05, pitch: 0.92 }) },
+
+  // Scene 5 — Graph 25–31s
+  { t: 25.2, do: () => Audio.SFX.whoosh() },
+  { t: 25.5, do: () => Audio.speak({ text: "Step two. Claude builds your graph.", rate: 1.0, pitch: 1.0 }) },
+  { t: 27.0, do: () => Audio.SFX.nodeAdd() },
+  { t: 27.3, do: () => Audio.SFX.nodeAdd() },
+  { t: 27.6, do: () => Audio.SFX.nodeAdd() },
+  { t: 27.9, do: () => Audio.SFX.nodeAdd() },
+  { t: 28.2, do: () => Audio.SFX.nodeAdd() },
+  { t: 28.6, do: () => Audio.SFX.edgeDraw() },
+  { t: 28.9, do: () => Audio.SFX.edgeDraw() },
+  { t: 29.2, do: () => Audio.SFX.edgeDraw() },
+  { t: 29.5, do: () => Audio.SFX.edgeDraw() },
+  { t: 30.0, do: () => Audio.SFX.chime() },
+
+  // Scene 6 — Query 31–36s
+  { t: 31.2, do: () => Audio.SFX.click() },
+  { t: 31.4, do: () => Audio.speak({ text: "Step three. Ask anything, in plain English.", rate: 1.0, pitch: 1.0 }) },
+  { t: 33.0, do: () => Audio.SFX.keytype() },
+  { t: 33.2, do: () => Audio.SFX.keytype() },
+  { t: 33.4, do: () => Audio.SFX.keytype() },
+  { t: 33.6, do: () => Audio.SFX.keytype() },
+  { t: 33.8, do: () => Audio.SFX.keytype() },
+  { t: 34.0, do: () => Audio.SFX.keytype() },
+  { t: 34.6, do: () => Audio.SFX.success() },
+
+  // Scene 7 — Acts 36–43s (agent drafts a check-in)
+  { t: 36.2, do: () => Audio.SFX.whoosh() },
+  { t: 36.5, do: () => Audio.speak({ text: "Step four. While you sleep, your agent acts.", rate: 1.0, pitch: 1.0 }) },
+  { t: 39.0, do: () => Audio.SFX.keytype() },
+  { t: 39.2, do: () => Audio.SFX.keytype() },
+  { t: 39.4, do: () => Audio.SFX.keytype() },
+  { t: 39.6, do: () => Audio.SFX.keytype() },
+  { t: 39.8, do: () => Audio.SFX.keytype() },
+  { t: 40.0, do: () => Audio.SFX.keytype() },
+  { t: 41.2, do: () => Audio.speak({ text: "Drafted. Tap to send.", rate: 1.0, pitch: 1.05 }) },
+  { t: 42.4, do: () => Audio.SFX.success() },
+
+  // Scene 8 — Beta CTA 43–50s
+  { t: 43.2, do: () => Audio.stopDrone() },
+  { t: 43.3, do: () => Audio.SFX.cta() },
+  { t: 43.6, do: () => Audio.speak({ text: "Stop losing connections. Start building your graph.", rate: 0.97, pitch: 1.05 }) },
+  { t: 45.8, do: () => Audio.SFX.finalChord() },
+  { t: 46.4, do: () => Audio.speak({ text: "Wingmic dot X Y Z. Join the beta.", rate: 0.95, pitch: 1.0 }) },
+];
+
+function useSoundtrack(enabled) {
+  const t = useTime();
+  const lastTimeRef = React.useRef(-1);
+  const firedRef = React.useRef(new Set());
+  React.useEffect(() => {
+    if (!enabled) return;
+    const last = lastTimeRef.current;
+    // Detect loop / scrub: if time jumped backward by >0.5s, reset fired set
+    if (t < last - 0.5) {
+      firedRef.current.clear();
+      Audio.cancelSpeech();
+      Audio.stopDrone();
+    }
+    SOUNDTRACK.forEach((cue, i) => {
+      if (cue.t <= t && cue.t > last && !firedRef.current.has(i)) {
+        firedRef.current.add(i);
+        try { cue.do(); } catch(e) { console.warn('sfx error', e); }
+      }
+    });
+    lastTimeRef.current = t;
+  }, [t, enabled]);
+  // On mount/unmount, ensure audio cleanup on disable
+  React.useEffect(() => {
+    if (!enabled) {
+      Audio.cancelSpeech();
+      Audio.stopDrone();
+      firedRef.current.clear();
+    }
+  }, [enabled]);
+  return null;
+}
+
+const easeOut = Easing.easeOutCubic;
+const easeBack = Easing.easeOutBack;
+const fadeIn  = (t, s, d=0.5) => animate({ from: 0, to: 1, start: s, end: s+d, ease: easeOut })(t);
+const fadeOut = (t, s, d=0.5) => animate({ from: 1, to: 0, start: s, end: s+d, ease: easeOut })(t);
+const pop     = (t, s, d=0.6) => animate({ from: 0.6, to: 1, start: s, end: s+d, ease: easeBack })(t);
+
+function Particles({ count = 28, cx = 640, cy = 360, startTime, colors }) {
+  const t = useTime();
+  const elapsed = t - startTime;
+  if (elapsed < 0 || elapsed > 2.5) return null;
+  const seeds = React.useMemo(() => Array.from({ length: count }, (_, i) => ({
+    angle: (i / count) * Math.PI * 2 + Math.random() * 0.4,
+    speed: 90 + Math.random() * 220,
+    size: 3 + Math.random() * 5,
+    color: colors[i % colors.length],
+  })), [count]);
+  return (
+    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+      {seeds.map((p, i) => {
+        const x = cx + Math.cos(p.angle) * p.speed * elapsed * 0.85;
+        const y = cy + Math.sin(p.angle) * p.speed * elapsed * 0.85 + elapsed * elapsed * 50;
+        const op = Math.max(0, 1 - elapsed / 1.4);
+        return <div key={i} style={{ position: 'absolute', left: x, top: y, width: p.size, height: p.size, borderRadius: '50%', background: p.color, opacity: op }} />;
+      })}
+    </div>
+  );
+}
+
+function VoiceBars({ active, color, count = 26, height = 36, t }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 3, height }}>
+      {Array.from({ length: count }, (_, i) => {
+        const seed = (Math.sin(t * 6 + i * 0.7) + Math.cos(t * 3 + i * 1.1)) * 0.5 + 0.5;
+        const h = active ? 5 + seed * (height - 8) : 4;
+        return <div key={i} style={{ width: 3, height: h, borderRadius: 2, background: active ? color : 'rgba(255,255,255,0.18)' }} />;
+      })}
+    </div>
+  );
+}
+
+// ============================ SCENE 0 — Montage Intro (0–5s) ============================
+// Word-stamps + glimpses: hackathons, conferences, dinners, networking
+function SceneMontage({ ACCENT, SECOND, THIRD, openingTagline }) {
+  const t = useTime();
+  if (t > 5.5) return null;
+  const sceneOp = t < 0.3 ? fadeIn(t, 0, 0.3) : t > 4.7 ? fadeOut(t, 4.7, 0.5) : 1;
+
+  // Tagline at top
+  const tagOp = fadeIn(t, 0.1, 0.4);
+
+  // Big stamps for each event type
+  const stamps = [
+    { label: 'HACKATHONS',   color: ACCENT, x: 130, y: 200, rot: -6, start: 0.5, scene: 'code' },
+    { label: 'CONFERENCES',  color: SECOND, x: 760, y: 130, rot: 4,  start: 1.3, scene: 'mic' },
+    { label: 'DINNERS',      color: THIRD,  x: 200, y: 470, rot: 5,  start: 2.1, scene: 'wine' },
+    { label: 'MEETUPS',      color: '#7DD3FC', x: 730, y: 430, rot: -3, start: 2.9, scene: 'group' },
+    { label: 'NETWORKING',   color: '#A78BFA', x: 420, y: 320, rot: -2, start: 3.5, scene: 'badge' },
+  ];
+
+  return (
+    <Sprite start={0} end={5}>
+      <div style={{ position: 'absolute', inset: 0, background: BG, opacity: sceneOp, overflow: 'hidden' }}>
+        {/* Soft warm gradient */}
+        <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 60% 50% at 50% 50%, ${ACCENT}10 0%, transparent 65%)` }} />
+
+        {/* Faint grid */}
+        <div style={{
+          position: 'absolute', inset: 0, opacity: 0.5,
+          backgroundImage: 'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)',
+          backgroundSize: '48px 48px',
+        }} />
+
+        {/* Tagline */}
+        <div style={{ position: 'absolute', top: 60, left: 0, right: 0, textAlign: 'center', opacity: tagOp }}>
+          <div style={{ fontFamily: MONO, fontSize: 13, color: 'rgba(255,255,255,0.5)', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8 }}>
+            ◇ Wingmic
+          </div>
+          <div style={{ fontFamily: SANS, fontSize: 32, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>
+            {openingTagline}
+          </div>
+        </div>
+
+        {/* Event stamps */}
+        {stamps.map((s, i) => {
+          const op = fadeIn(t, s.start, 0.3);
+          const sc = pop(t, s.start, 0.4);
+          const lateFade = animate({ from: 1, to: 0.45, start: s.start + 1.0, end: s.start + 1.6 })(t);
+          return (
+            <div key={s.label} style={{
+              position: 'absolute', left: s.x, top: s.y,
+              opacity: op * lateFade, transform: `rotate(${s.rot}deg) scale(${sc})`,
+              transformOrigin: 'left center',
+            }}>
+              {/* Mini glyph card */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 14,
+                padding: '14px 22px',
+                background: `${s.color}12`, border: `1.5px solid ${s.color}50`,
+                borderRadius: 14, boxShadow: `4px 4px 0 rgba(0,0,0,0.4)`,
+              }}>
+                {/* Glyph */}
+                <div style={{
+                  width: 44, height: 44, borderRadius: 10,
+                  background: s.color, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#000',
+                }}>
+                  {s.scene === 'code' && (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 18l-6-6 6-6m6 12l6-6-6-6" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  )}
+                  {s.scene === 'mic' && (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="9" y="2" width="6" height="12" rx="3" fill="#000"/><path d="M5 11a7 7 0 0014 0M12 18v3" stroke="#000" strokeWidth="2" strokeLinecap="round"/></svg>
+                  )}
+                  {s.scene === 'wine' && (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M7 3h10l-1 8a4 4 0 11-8 0L7 3zm5 13v5m-3 0h6" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  )}
+                  {s.scene === 'group' && (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" fill="#000"/><circle cx="17" cy="9" r="2.5" fill="#000"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 19c0-2 2-4 5-4" stroke="#000" strokeWidth="2" strokeLinecap="round"/></svg>
+                  )}
+                  {s.scene === 'badge' && (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="2" stroke="#000" strokeWidth="2"/><circle cx="12" cy="10" r="3" fill="#000"/><path d="M8 17h8" stroke="#000" strokeWidth="2" strokeLinecap="round"/></svg>
+                  )}
+                </div>
+                <div style={{
+                  fontFamily: SANS, fontSize: 30, fontWeight: 900, color: s.color,
+                  letterSpacing: '-0.02em',
+                }}>{s.label}</div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Bottom counter */}
+        <div style={{
+          position: 'absolute', bottom: 80, left: 0, right: 0, textAlign: 'center',
+          opacity: fadeIn(t, 4.0, 0.4),
+        }}>
+          <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 30, color: 'rgba(255,255,255,0.7)', fontWeight: 400 }}>
+            …and you're meeting people every week.
+          </div>
+        </div>
+      </div>
+    </Sprite>
+  );
+}
+
+// ============================ SCENE 1 — Dinner (5–11s) ============================
+function SceneTheNight({ ACCENT, SECOND, THIRD }) {
+  const t = useTime() - 5;
+  if (t < -0.5 || t > 6.5) return null;
+  const sceneOp = t < 0.4 ? fadeIn(t, 0, 0.4) : t > 5.6 ? fadeOut(t, 5.6, 0.4) : 1;
+
+  const ambientShift = Math.sin(t * 0.5) * 6;
+
+  const intros = [
+    { name: 'Sarah',  who: 'Rust @ Acme',         line: 'Hey! I\'m Sarah, I lead Rust at Acme.',         color: ACCENT, x: 140, y: 180, start: 0.6 },
+    { name: 'Marcus', who: 'indie hacker',        line: 'Marcus, building a search engine in my garage.', color: THIRD,  x: 880, y: 160, start: 1.4 },
+    { name: 'Priya',  who: 'eng @ Cloudflare',    line: 'I\'m Priya — we just launched edge functions.',  color: SECOND, x: 940, y: 380, start: 2.2 },
+    { name: 'Alex',   who: 'investor, Long Run',  line: 'Alex. I write checks for tools devs love.',      color: '#7DD3FC', x: 80, y: 440, start: 3.0 },
+    { name: 'Jordan', who: 'PM @ Linear',         line: 'Jordan, head of product at Linear.',             color: '#A78BFA', x: 480, y: 520, start: 3.8 },
+  ];
+
+  const labelOp = fadeIn(t, 0.2, 0.4);
+  const counterOp = fadeIn(t, 4.6, 0.4);
+  const counterScale = pop(t, 4.6, 0.6);
+
+  return (
+    <Sprite start={5} end={11}>
+      <div style={{ position: 'absolute', inset: 0, background: BG, opacity: sceneOp, overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0,
+          background: `radial-gradient(ellipse 70% 50% at 50% 50%, ${ACCENT}10 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 20% 80%, ${THIRD}08 0%, transparent 60%)` }} />
+        {Array.from({ length: 14 }, (_, i) => {
+          const x = (i * 73 % 1280 * 1.4 + ambientShift) % 1280;
+          const y = (i * 91 % 720);
+          const r = 30 + (i * 7) % 40;
+          return <div key={i} style={{ position: 'absolute', left: x - r, top: y - r, width: r*2, height: r*2, borderRadius: '50%', background: i % 2 ? ACCENT : THIRD, opacity: 0.04 + (i % 3) * 0.02, filter: 'blur(20px)' }} />;
+        })}
+
+        <div style={{ position: 'absolute', top: 36, left: 0, right: 0, textAlign: 'center', opacity: labelOp,
+          fontFamily: MONO, fontSize: 12, color: 'rgba(255,255,255,0.45)', letterSpacing: 3, textTransform: 'uppercase' }}>
+          ◇ Tuesday · 9:47pm · DevConnect dinner
+        </div>
+
+        <div style={{ position: 'absolute', left: '50%', top: '46%', transform: 'translate(-50%,-50%)', opacity: fadeIn(t, 0.4, 0.5) }}>
+          <div style={{ width: 84, height: 84, borderRadius: '50%',
+            background: `linear-gradient(135deg, ${ACCENT}, ${THIRD})`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: `0 0 60px ${ACCENT}40`,
+            fontSize: 32, fontWeight: 900, color: '#000', fontFamily: SANS }}>YOU</div>
+        </div>
+
+        {intros.map(p => {
+          const op = fadeIn(t, p.start, 0.4);
+          const y = animate({ from: 12, to: 0, start: p.start, end: p.start + 0.5, ease: easeOut })(t);
+          const lateFade = animate({ from: 1, to: 0.55, start: p.start + 1.2, end: p.start + 2 })(t);
+          return (
+            <div key={p.name} style={{ position: 'absolute', left: p.x, top: p.y, opacity: op * lateFade, transform: `translateY(${y}px)`, maxWidth: 280 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: p.color, color: '#000',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, fontFamily: SANS }}>{p.name[0]}</div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', fontFamily: SANS }}>{p.name}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', fontFamily: MONO }}>{p.who}</div>
+                </div>
+              </div>
+              <div style={{ padding: '10px 14px', borderRadius: '14px 14px 14px 4px',
+                background: 'rgba(255,255,255,0.05)', border: `1px solid ${p.color}30`,
+                fontSize: 13.5, color: 'rgba(255,255,255,0.85)', fontFamily: SANS, lineHeight: 1.5 }}>"{p.line}"</div>
+            </div>
+          );
+        })}
+
+        <div style={{ position: 'absolute', bottom: 70, left: 0, right: 0, textAlign: 'center', opacity: counterOp, transform: `scale(${counterScale})` }}>
+          <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: 14 }}>
+            <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 84, color: ACCENT, fontWeight: 400, lineHeight: 1, letterSpacing: '-0.03em' }}>12</span>
+            <span style={{ fontFamily: SANS, fontSize: 22, color: 'rgba(255,255,255,0.6)', fontWeight: 500 }}>new people, one night.</span>
+          </div>
+        </div>
+      </div>
+    </Sprite>
+  );
+}
+
+// ============================ SCENE 2 — Forgetting (11–16s) ============================
+function SceneForgetting({ ACCENT, RED }) {
+  const t = useTime() - 11;
+  if (t < -0.5 || t > 5.5) return null;
+  const sceneOp = t < 0.5 ? fadeIn(t, 0, 0.5) : t > 4.5 ? fadeOut(t, 4.5, 0.5) : 1;
+
+  const labelOp = fadeIn(t, 0.1, 0.4);
+  const names = ['Sarah', 'Marcus', 'Priya', 'Alex', 'Jordan', 'Deepak', 'Taylor', 'Maya', 'Chris', 'Lena', 'Raj', 'Eva'];
+  const remembered = ['Sarah', 'Marcus', 'Priya'];
+  const headlineOp = fadeIn(t, 0.4, 0.5);
+  const subOp = fadeIn(t, 3.2, 0.4);
+
+  return (
+    <Sprite start={11} end={16}>
+      <div style={{ position: 'absolute', inset: 0, background: '#08080d', opacity: sceneOp, overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 60% 50% at 50% 50%, ${RED}10 0%, transparent 60%)` }} />
+
+        <div style={{ position: 'absolute', top: 36, left: 0, right: 0, textAlign: 'center', opacity: labelOp,
+          fontFamily: MONO, fontSize: 12, color: 'rgba(255,255,255,0.45)', letterSpacing: 3, textTransform: 'uppercase' }}>
+          ◇ Friday · 7:14am · three days later
+        </div>
+
+        <div style={{ position: 'absolute', top: 110, left: 0, right: 0, textAlign: 'center', opacity: headlineOp }}>
+          <div style={{ fontFamily: SANS, fontSize: 56, fontWeight: 800, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1 }}>Who did I meet?</div>
+          <div style={{ marginTop: 16, fontFamily: SERIF, fontStyle: 'italic', fontSize: 28, color: 'rgba(255,255,255,0.45)' }}>(the handshake memory leak)</div>
+        </div>
+
+        <div style={{ position: 'absolute', top: 290, left: 0, right: 0, display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'center', padding: '0 140px' }}>
+          {names.map((name, i) => {
+            const nameStart = 0.8 + i * 0.05;
+            const op = fadeIn(t, nameStart, 0.25);
+            const isRemembered = remembered.includes(name);
+            const forgetStart = 2.2 + (i * 0.06);
+            const strikeAmt = isRemembered ? 0 : animate({ from: 0, to: 1, start: forgetStart, end: forgetStart + 0.25 })(t);
+            const fadeAmt   = isRemembered ? 1 : animate({ from: 1, to: 0.18, start: forgetStart, end: forgetStart + 0.4 })(t);
+            return (
+              <div key={i} style={{ opacity: op * fadeAmt, padding: '10px 20px', borderRadius: 10,
+                background: isRemembered ? `${ACCENT}15` : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${isRemembered ? ACCENT+'40' : 'rgba(255,255,255,0.08)'}`,
+                fontSize: 18, fontFamily: SANS, fontWeight: 600, color: '#fff', position: 'relative' }}>
+                {name}
+                {strikeAmt > 0.05 && <div style={{ position: 'absolute', left: '8%', top: '50%', height: 2, width: `${strikeAmt * 84}%`, background: RED, transform: 'translateY(-50%)' }} />}
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ position: 'absolute', bottom: 140, left: 0, right: 0, textAlign: 'center', opacity: subOp }}>
+          <div style={{ fontFamily: SANS, fontSize: 22, fontWeight: 500, color: 'rgba(255,255,255,0.4)', marginBottom: 12 }}>
+            You met <span style={{ color: '#fff', fontWeight: 700 }}>12 people</span>.
+          </div>
+          <div style={{ fontFamily: SANS, fontSize: 40, fontWeight: 800, color: RED, letterSpacing: '-0.02em' }}>
+            You remember <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400 }}>three.</span>
+          </div>
+        </div>
+      </div>
+    </Sprite>
+  );
+}
+
+// ============================ SCENE 3 — Aha (16–19s) ============================
+function SceneAha({ ACCENT, SECOND, THIRD }) {
+  const t = useTime() - 16;
+  if (t < -0.5 || t > 3.5) return null;
+  const sceneOp = t < 0.4 ? fadeIn(t, 0, 0.4) : t > 2.6 ? fadeOut(t, 2.6, 0.4) : 1;
+  const lineOp = fadeIn(t, 0.2, 0.5);
+  const phoneScale = pop(t, 0.8, 0.6);
+  const phoneOp = fadeIn(t, 0.8, 0.5);
+  const glowR = animate({ from: 0, to: 200, start: 1.2, end: 2.6, ease: easeOut })(t);
+
+  return (
+    <Sprite start={16} end={19}>
+      <div style={{ position: 'absolute', inset: 0, background: BG, opacity: sceneOp, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'absolute', width: glowR * 2, height: glowR * 2, borderRadius: '50%',
+          background: `radial-gradient(circle, ${ACCENT}30 0%, transparent 70%)` }} />
+        <div style={{ position: 'relative', width: 240, height: 480, borderRadius: 32, background: '#0a0a10',
+          border: '6px solid #1a1a20', opacity: phoneOp, transform: `scale(${phoneScale})`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: `0 30px 80px rgba(0,0,0,0.5), 0 0 80px ${ACCENT}30` }}>
+          <div style={{ width: 120, height: 120, borderRadius: 28, background: ACCENT, color: '#000',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 72, fontWeight: 900, fontFamily: SANS, boxShadow: `0 20px 40px ${ACCENT}40` }}>W</div>
+        </div>
+        <div style={{ position: 'absolute', top: 110, left: 0, right: 0, textAlign: 'center', opacity: lineOp }}>
+          <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 44, color: 'rgba(255,255,255,0.85)', fontWeight: 400, letterSpacing: '-0.02em' }}>
+            What if your phone <span style={{ color: ACCENT }}>just remembered for you?</span>
+          </div>
+        </div>
+        <div style={{ position: 'absolute', bottom: 110, left: 0, right: 0, textAlign: 'center', opacity: fadeIn(t, 1.6, 0.5) }}>
+          <div style={{ fontFamily: MONO, fontSize: 13, color: ACCENT, letterSpacing: 2.5, textTransform: 'uppercase' }}>↓ open wingmic</div>
+        </div>
+        <Particles count={30} cx={640} cy={360} startTime={1.0} colors={[ACCENT, SECOND, THIRD]} />
+      </div>
+    </Sprite>
+  );
+}
+
+// ============================ SCENE 4 — Speak (19–25s) ============================
+function SceneSpeak({ ACCENT }) {
+  const t = useTime() - 19;
+  if (t < -0.5 || t > 6.5) return null;
+  const sceneOp = t < 0.4 ? fadeIn(t, 0, 0.4) : t > 5.6 ? fadeOut(t, 5.6, 0.4) : 1;
+  const labelOp = fadeIn(t, 0.2, 0.4);
+  const phoneScale = pop(t, 0.4, 0.5);
+  const micActive = t > 0.9 && t < 4.2;
+  const transcript = "Met Sarah from Acme — Rust lead. She wants me to send my repo before standup tomorrow.";
+  const charCount = Math.floor(clamp((t - 1.2) / 2.5, 0, 1) * transcript.length);
+  const captionOp = fadeIn(t, 0.4, 0.5);
+
+  return (
+    <Sprite start={19} end={25}>
+      <div style={{ position: 'absolute', inset: 0, background: BG, opacity: sceneOp }}>
+        <div style={{ position: 'absolute', top: 36, left: 0, right: 0, textAlign: 'center', opacity: labelOp,
+          fontFamily: MONO, fontSize: 13, color: ACCENT, letterSpacing: 3, textTransform: 'uppercase' }}>◇ Step 1 — Speak</div>
+        <div style={{ position: 'absolute', top: 76, left: 0, right: 0, textAlign: 'center', opacity: captionOp }}>
+          <div style={{ fontFamily: SANS, fontSize: 42, fontWeight: 800, color: '#fff', letterSpacing: '-0.025em' }}>
+            Just <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400, color: ACCENT }}>talk.</span> No typing.
+          </div>
+        </div>
+
+        <div style={{ position: 'absolute', left: '50%', top: '52%', transform: `translate(-50%,-50%) scale(${phoneScale})`,
+          width: 300, height: 540, borderRadius: 36, background: '#0a0a10', border: '6px solid #1a1a20', overflow: 'hidden',
+          boxShadow: `0 30px 80px rgba(0,0,0,0.5), 0 0 60px ${ACCENT}10`, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ height: 22, background: '#1a1a20', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <div style={{ width: 60, height: 14, borderRadius: 8, background: '#0a0a10' }} />
+          </div>
+          <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: ACCENT }}>wingmic</span>
+            <span style={{ fontFamily: MONO, fontSize: 10, color: micActive ? ACCENT : 'rgba(255,255,255,0.3)' }}>● {micActive ? 'live' : 'idle'}</span>
+          </div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 22, gap: 18 }}>
+            <div style={{ position: 'relative', width: 110, height: 110, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {micActive && [0,1,2].map(i => {
+                const phase = ((t - 0.9) * 1.4 + i * 0.5) % 1.4;
+                return <div key={i} style={{ position: 'absolute', width: 70 + phase * 60, height: 70 + phase * 60,
+                  borderRadius: '50%', border: `2px solid ${ACCENT}`, opacity: Math.max(0, 0.5 - phase * 0.4) }} />;
+              })}
+              <div style={{ width: 78, height: 78, borderRadius: '50%', background: micActive ? ACCENT : 'rgba(255,255,255,0.06)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                  <rect x="9" y="2" width="6" height="12" rx="3" fill={micActive ? '#000' : 'rgba(255,255,255,0.5)'} />
+                  <path d="M5 11a7 7 0 0014 0" stroke={micActive ? '#000' : 'rgba(255,255,255,0.5)'} strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </div>
+            </div>
+            <VoiceBars active={micActive} color={ACCENT} t={t} />
+            {t > 1.2 && (
+              <div style={{ width: '100%', padding: '12px 14px', borderRadius: 12,
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                fontSize: 13, color: 'rgba(255,255,255,0.85)', fontFamily: SANS, lineHeight: 1.55, fontStyle: 'italic', minHeight: 60 }}>
+                "{transcript.slice(0, charCount)}
+                {micActive && charCount < transcript.length && <span style={{ display: 'inline-block', width: 2, height: 14, background: ACCENT, marginLeft: 1, verticalAlign: 'middle', animation: 'blink 0.7s infinite' }} />}
+                {charCount >= transcript.length && '"'}
+              </div>
+            )}
+          </div>
+          <div style={{ height: 18, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <div style={{ width: 100, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.2)' }} />
+          </div>
+        </div>
+
+        <div style={{ position: 'absolute', right: 80, top: '40%', opacity: fadeIn(t, 2.5, 0.5),
+          fontFamily: MONO, fontSize: 12, color: 'rgba(255,255,255,0.5)', maxWidth: 220,
+          padding: 16, borderRadius: 12, background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ color: ACCENT, marginBottom: 6, fontWeight: 700 }}>30 seconds</div>
+          That's all it takes.<br/>Walk to your car. Brain dump.
+        </div>
+      </div>
+    </Sprite>
+  );
+}
+
+// ============================ SCENE 5 — Graph (25–31s) ============================
+function SceneGraph({ ACCENT, SECOND, THIRD }) {
+  const t = useTime() - 25;
+  if (t < -0.5 || t > 6.5) return null;
+  const sceneOp = t < 0.4 ? fadeIn(t, 0, 0.4) : t > 5.6 ? fadeOut(t, 5.6, 0.4) : 1;
+  const labelOp = fadeIn(t, 0.2, 0.4);
+  const captionOp = fadeIn(t, 0.4, 0.5);
+
+  const nodes = [
+    { id: 'you', label: 'You', cx: 640, cy: 360, r: 26, color: '#fff', type: 'self', delay: 0 },
+    { id: 'sarah', label: 'Sarah', cx: 460, cy: 240, r: 18, color: ACCENT, delay: 0.4 },
+    { id: 'marcus', label: 'Marcus', cx: 820, cy: 230, r: 18, color: THIRD, delay: 0.7 },
+    { id: 'priya', label: 'Priya', cx: 850, cy: 480, r: 18, color: SECOND, delay: 1.0 },
+    { id: 'alex', label: 'Alex', cx: 440, cy: 490, r: 18, color: '#7DD3FC', delay: 1.3 },
+    { id: 'jordan', label: 'Jordan', cx: 640, cy: 560, r: 18, color: '#A78BFA', delay: 1.6 },
+    { id: 'acme', label: 'Acme', cx: 290, cy: 170, r: 12, color: ACCENT, type: 'org', delay: 2.0 },
+    { id: 'cf', label: 'Cloudflare', cx: 990, cy: 540, r: 12, color: SECOND, type: 'org', delay: 2.3 },
+    { id: 'linear', label: 'Linear', cx: 700, cy: 640, r: 12, color: '#A78BFA', type: 'org', delay: 2.5 },
+    { id: 'longrun', label: 'Long Run', cx: 290, cy: 560, r: 12, color: '#7DD3FC', type: 'org', delay: 2.7 },
+    { id: 'devcon', label: 'DevConnect', cx: 640, cy: 110, r: 11, color: '#666', type: 'event', delay: 3.0 },
+    { id: 'rust', label: '#rust', cx: 280, cy: 320, r: 9, color: '#888', type: 'topic', delay: 3.3 },
+    { id: 'edge', label: '#edge_config', cx: 1010, cy: 380, r: 9, color: '#888', type: 'topic', delay: 3.5 },
+  ];
+  const edges = [
+    { from: 'you', to: 'sarah', delay: 0.6 },{ from: 'you', to: 'marcus', delay: 0.9 },
+    { from: 'you', to: 'priya', delay: 1.2 },{ from: 'you', to: 'alex', delay: 1.5 },{ from: 'you', to: 'jordan', delay: 1.8 },
+    { from: 'sarah', to: 'acme', delay: 2.1 },{ from: 'priya', to: 'cf', delay: 2.4 },
+    { from: 'jordan', to: 'linear', delay: 2.6 },{ from: 'alex', to: 'longrun', delay: 2.8 },
+    { from: 'sarah', to: 'devcon', delay: 3.1 },{ from: 'marcus', to: 'devcon', delay: 3.2 },
+    { from: 'sarah', to: 'rust', delay: 3.4 },{ from: 'priya', to: 'edge', delay: 3.6 },
+    { from: 'sarah', to: 'marcus', delay: 3.9 },
+  ];
+  const nodeMap = {};
+  nodes.forEach(n => nodeMap[n.id] = n);
+  const drift = (n) => ({ cx: n.cx + Math.sin(t * 0.6 + n.cx * 0.01) * 4, cy: n.cy + Math.cos(t * 0.8 + n.cy * 0.01) * 4 });
+  const youPulse = 1 + Math.sin(t * 3) * 0.06;
+
+  return (
+    <Sprite start={25} end={31}>
+      <div style={{ position: 'absolute', inset: 0, background: BG, opacity: sceneOp }}>
+        <div style={{ position: 'absolute', top: 36, left: 0, right: 0, textAlign: 'center', opacity: labelOp,
+          fontFamily: MONO, fontSize: 13, color: ACCENT, letterSpacing: 3, textTransform: 'uppercase' }}>◇ Step 2 — Claude builds your graph</div>
+        <div style={{ position: 'absolute', top: 76, left: 0, right: 0, textAlign: 'center', opacity: captionOp }}>
+          <div style={{ fontFamily: SANS, fontSize: 38, fontWeight: 800, color: '#fff', letterSpacing: '-0.025em' }}>
+            Every <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400, color: ACCENT }}>connection</span>, mapped automatically.
+          </div>
+        </div>
+
+        <svg width="1280" height="720" viewBox="0 0 1280 720" style={{ position: 'absolute', inset: 0 }}>
+          {edges.map((e, i) => {
+            const op = animate({ from: 0, to: 0.3, start: e.delay, end: e.delay + 0.5 })(t);
+            const a = drift(nodeMap[e.from]); const b = drift(nodeMap[e.to]);
+            const isOrg = nodeMap[e.from].type === 'org' || nodeMap[e.to].type === 'org';
+            return <line key={i} x1={a.cx} y1={a.cy} x2={b.cx} y2={b.cy}
+              stroke={isOrg ? 'rgba(255,255,255,0.15)' : ACCENT} strokeWidth={isOrg ? 0.8 : 1.2} opacity={op} />;
+          })}
+          {nodes.map(n => {
+            const delay = n.delay || 0;
+            const op = fadeIn(t, delay, 0.4);
+            const sc = pop(t, delay, 0.5);
+            const p = drift(n);
+            return (
+              <g key={n.id} opacity={op} transform={`translate(${p.cx},${p.cy}) scale(${n.id === 'you' ? sc * youPulse : sc})`}>
+                {n.type === 'org' ? <rect x={-n.r} y={-n.r} width={n.r*2} height={n.r*2} rx={3} fill={n.color} opacity={0.85} />
+                  : n.type === 'event' ? <polygon points={`0,${-n.r} ${n.r},0 0,${n.r} ${-n.r},0`} fill={n.color} opacity={0.6} />
+                  : n.type === 'topic' ? <circle r={n.r} fill="none" stroke={n.color} strokeWidth="1.5" opacity={0.7} />
+                  : n.type === 'self' ? <circle r={n.r} fill={ACCENT} />
+                  : <circle r={n.r} fill={n.color} opacity={0.9} />}
+                {n.type === 'self'
+                  ? <text textAnchor="middle" dy="5" fill="#000" fontFamily={SANS} fontSize="12" fontWeight="800">YOU</text>
+                  : <text textAnchor="middle" dy={n.r + 18} fill="rgba(255,255,255,0.55)" fontFamily={SANS} fontSize="12" fontWeight="500">{n.label}</text>}
+              </g>
+            );
+          })}
+        </svg>
+
+        <div style={{ position: 'absolute', bottom: 50, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 36, opacity: fadeIn(t, 4.4, 0.5) }}>
+          {[{v:'13',l:'nodes'},{v:'14',l:'edges'},{v:'4',l:'follow-ups'}].map(s => (
+            <div key={s.l} style={{ textAlign: 'center' }}>
+              <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 38, color: ACCENT, fontWeight: 400, lineHeight: 1 }}>{s.v}</div>
+              <div style={{ fontFamily: MONO, fontSize: 11, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Sprite>
+  );
+}
+
+// ============================ SCENE 6 — Query (31–36s) ============================
+function SceneQuery({ ACCENT, SECOND, THIRD }) {
+  const t = useTime() - 31;
+  if (t < -0.5 || t > 5.5) return null;
+  const sceneOp = t < 0.4 ? fadeIn(t, 0, 0.4) : t > 4.6 ? fadeOut(t, 4.6, 0.4) : 1;
+  const labelOp = fadeIn(t, 0.2, 0.4);
+  const captionOp = fadeIn(t, 0.4, 0.5);
+  const query = "who do I know that ships rust?";
+  const queryChars = Math.floor(clamp((t - 0.8) / 1.6, 0, 1) * query.length);
+  const results = [
+    { score: 0.91, name: 'Sarah Chen', meta: 'Acme · met DevConnect Tue', hot: true },
+    { score: 0.84, name: 'Marcus Lee', meta: 'solo · met DevConnect Tue' },
+    { score: 0.72, name: 'Yuki Tanaka', meta: 'Cloudflare · referred by Lina' },
+    { score: 0.68, name: 'Devansh Rao', meta: 'Vercel · met online' },
+  ];
+
+  return (
+    <Sprite start={31} end={36}>
+      <div style={{ position: 'absolute', inset: 0, background: BG, opacity: sceneOp, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '90px 0 0' }}>
+        <div style={{ position: 'absolute', top: 36, left: 0, right: 0, textAlign: 'center', opacity: labelOp,
+          fontFamily: MONO, fontSize: 13, color: ACCENT, letterSpacing: 3, textTransform: 'uppercase' }}>◇ Step 3 — Ask anything</div>
+        <div style={{ opacity: captionOp, marginBottom: 36 }}>
+          <div style={{ fontFamily: SANS, fontSize: 38, fontWeight: 800, color: '#fff', letterSpacing: '-0.025em', textAlign: 'center' }}>
+            Plain English. <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400, color: ACCENT }}>From anywhere.</span>
+          </div>
+        </div>
+        <div style={{ width: 720, borderRadius: 14, overflow: 'hidden',
+          background: '#08080d', border: '1px solid rgba(255,255,255,0.1)',
+          boxShadow: '0 30px 60px rgba(0,0,0,0.5)', opacity: fadeIn(t, 0.4, 0.5) }}>
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {['#ff5f56','#ffbd2e','#27ca3f'].map(c => <div key={c} style={{ width: 9, height: 9, borderRadius: '50%', background: c }} />)}
+            </div>
+            <span style={{ fontFamily: MONO, fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>terminal · zsh</span>
+            <div style={{ width: 30 }} />
+          </div>
+          <div style={{ padding: 24, fontFamily: MONO, fontSize: 14, lineHeight: 1.85 }}>
+            <div>
+              <span style={{ color: ACCENT }}>›</span>{' '}
+              <span style={{ color: '#fff' }}>wingmic</span>{' '}
+              <span style={{ color: SECOND }}>"{query.slice(0, queryChars)}{queryChars < query.length && t < 2.5 && <span style={{ display: 'inline-block', width: 7, height: 14, background: ACCENT, verticalAlign: 'middle', animation: 'blink 0.7s infinite' }} />}"</span>
+            </div>
+            {t > 2.7 && <div style={{ color: 'rgba(255,255,255,0.4)', marginTop: 10 }}>↪ found 4 matches in 0.3s</div>}
+            <div style={{ marginTop: 8, paddingLeft: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {results.map((r, i) => {
+                const op = fadeIn(t, 2.9 + i * 0.18, 0.3);
+                return (
+                  <div key={r.name} style={{ opacity: op, color: 'rgba(255,255,255,0.85)' }}>
+                    <span style={{ color: ACCENT }}>{r.score.toFixed(2)}</span>{' '}
+                    <span style={{ color: '#fff' }}>{r.name}</span>{' '}
+                    <span style={{ color: 'rgba(255,255,255,0.4)' }}>· {r.meta}</span>
+                    {r.hot && <span style={{ color: THIRD, marginLeft: 8 }}>← top match</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        <div style={{ marginTop: 32, display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', opacity: fadeIn(t, 3.8, 0.4) }}>
+          {['Mobile app', 'REST API', 'MCP server', 'Slack bot', 'Claude Desktop'].map(s => (
+            <span key={s} style={{ padding: '8px 14px', borderRadius: 999,
+              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+              fontFamily: MONO, fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>{s}</span>
+          ))}
+        </div>
+      </div>
+    </Sprite>
+  );
+}
+
+// ============================ SCENE 7 — Acts (36–43s) ============================
+// Phone wakes up at night, wingmic agent drafts a check-in autonomously
+function SceneActs({ ACCENT, SECOND, THIRD }) {
+  const t = useTime() - 36;
+  if (t < -0.5 || t > 7.5) return null;
+  const sceneOp = t < 0.4 ? fadeIn(t, 0, 0.4) : t > 6.6 ? fadeOut(t, 6.6, 0.4) : 1;
+  const labelOp = fadeIn(t, 0.2, 0.4);
+  const captionOp = fadeIn(t, 0.5, 0.5);
+
+  // Phone slides up
+  const phoneOp = fadeIn(t, 0.6, 0.5);
+  const phoneY = animate({ from: 60, to: 0, start: 0.6, end: 1.4, ease: easeOut })(t);
+
+  // Sleeping clock pre-draft (top of phone)
+  const clockOp = t < 2.4 ? fadeIn(t, 0.9, 0.4) : fadeOut(t, 2.4, 0.4);
+
+  // "wingmic is thinking" pulse appears
+  const thinkOp = t < 2.8 ? fadeIn(t, 1.5, 0.4) : fadeOut(t, 2.8, 0.3);
+
+  // Draft card slides into phone
+  const draftOp = fadeIn(t, 2.9, 0.5);
+  const draftY = animate({ from: 30, to: 0, start: 2.9, end: 3.6, ease: easeOut })(t);
+
+  // Draft body types in
+  const draftLines = [
+    'Hey Sarah —',
+    '',
+    'Great meeting you at DevConnect.',
+    'As promised, the edge-reload repo:',
+    'github.com/me/edge-reload',
+    '',
+    '— M',
+  ];
+  const fullText = draftLines.join('\n');
+  const typeStart = 3.5;
+  const typeEnd = 5.4;
+  const typedChars = Math.floor(clamp((t - typeStart) / (typeEnd - typeStart), 0, 1) * fullText.length);
+  const typedText = fullText.slice(0, typedChars);
+
+  // "Send" button appears
+  const sendOp = fadeIn(t, 5.5, 0.4);
+  const sendScale = pop(t, 5.5, 0.5);
+
+  // Sent badge confirmation
+  const sentOp = fadeIn(t, 6.1, 0.3);
+
+  // Reasoning pills (agent's "why")
+  const pills = [
+    { text: '7d since DevConnect', delay: 1.7 },
+    { text: 'promise: send repo', delay: 1.9 },
+    { text: 'her mtg @ 9am', delay: 2.1 },
+  ];
+
+  return (
+    <Sprite start={36} end={43}>
+      <div style={{ position: 'absolute', inset: 0, background: BG, opacity: sceneOp, overflow: 'hidden' }}>
+        {/* Soft ambient glow */}
+        <div style={{ position: 'absolute', inset: 0,
+          background: `radial-gradient(ellipse 50% 40% at 65% 50%, ${ACCENT}10 0%, transparent 65%)` }} />
+
+        {/* Step label */}
+        <div style={{ position: 'absolute', top: 36, left: 0, right: 0, textAlign: 'center', opacity: labelOp,
+          fontFamily: MONO, fontSize: 13, color: ACCENT, letterSpacing: 3, textTransform: 'uppercase' }}>◇ Step 4 — While you sleep, your agent acts</div>
+
+        {/* Caption */}
+        <div style={{ position: 'absolute', top: 80, left: 0, right: 0, textAlign: 'center', opacity: captionOp }}>
+          <div style={{ fontFamily: SANS, fontSize: 38, fontWeight: 800, color: '#fff', letterSpacing: '-0.025em' }}>
+            Drafts the follow-up. <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontWeight: 400, color: ACCENT }}>You just send.</span>
+          </div>
+        </div>
+
+        {/* Left side — agent reasoning */}
+        <div style={{ position: 'absolute', left: 110, top: 230, width: 360, opacity: fadeIn(t, 1.4, 0.5) }}>
+          <div style={{ fontFamily: MONO, fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: 2, marginBottom: 14, textTransform: 'uppercase' }}>
+            03:42 AM · agent traces graph
+          </div>
+          <div style={{ fontFamily: MONO, fontSize: 13, color: 'rgba(255,255,255,0.65)', lineHeight: 1.7, marginBottom: 18 }}>
+            <div style={{ opacity: fadeIn(t, 1.5, 0.3) }}><span style={{ color: ACCENT }}>›</span> scan: open follow-ups</div>
+            <div style={{ opacity: fadeIn(t, 1.7, 0.3) }}><span style={{ color: ACCENT }}>›</span> match: <span style={{ color: '#fff' }}>Sarah Chen</span> ⨯ <span style={{ color: '#fff' }}>repo</span></div>
+            <div style={{ opacity: fadeIn(t, 1.9, 0.3) }}><span style={{ color: ACCENT }}>›</span> ctx: 7 days · she has 9am mtg</div>
+            <div style={{ opacity: fadeIn(t, 2.4, 0.3) }}><span style={{ color: SECOND }}>›</span> drafting<span style={{ animation: 'blink 0.7s infinite', display: 'inline-block', width: 6, height: 12, background: SECOND, marginLeft: 4, verticalAlign: '-2px' }} /></div>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {pills.map((p, i) => (
+              <span key={i} style={{
+                opacity: fadeIn(t, p.delay, 0.3),
+                padding: '5px 11px', borderRadius: 999,
+                background: 'rgba(255,255,255,0.04)', border: `1px solid ${ACCENT}30`,
+                fontFamily: MONO, fontSize: 11, color: 'rgba(255,255,255,0.7)',
+              }}>{p.text}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Phone on the right */}
+        <div style={{ position: 'absolute', right: 130, top: 180, width: 300, height: 480,
+          opacity: phoneOp, transform: `translateY(${phoneY}px)`,
+          borderRadius: 38, background: '#08080d',
+          border: '1px solid rgba(255,255,255,0.1)',
+          boxShadow: `0 30px 60px rgba(0,0,0,0.6), 0 0 80px ${ACCENT}15`,
+          overflow: 'hidden',
+        }}>
+          {/* Dynamic island */}
+          <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)',
+            width: 90, height: 26, borderRadius: 16, background: '#000', zIndex: 5 }} />
+
+          {/* Sleeping clock — fades out */}
+          <div style={{ position: 'absolute', top: 80, left: 0, right: 0, textAlign: 'center', opacity: clockOp }}>
+            <div style={{ fontFamily: SANS, fontSize: 60, fontWeight: 200, color: 'rgba(255,255,255,0.85)', letterSpacing: '-0.04em' }}>3:42</div>
+            <div style={{ fontFamily: SANS, fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>Wednesday, Nov 13</div>
+          </div>
+
+          {/* Thinking indicator */}
+          <div style={{ position: 'absolute', top: 175, left: 0, right: 0, textAlign: 'center', opacity: thinkOp }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '6px 14px', borderRadius: 999,
+              background: `${ACCENT}15`, border: `1px solid ${ACCENT}40`,
+              fontFamily: MONO, fontSize: 11, color: ACCENT, letterSpacing: 1, textTransform: 'uppercase' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: ACCENT, animation: 'pulse 1s infinite' }} />
+              wingmic thinking
+            </div>
+          </div>
+
+          {/* Draft notification card */}
+          <div style={{ position: 'absolute', top: 56, left: 14, right: 14,
+            opacity: draftOp, transform: `translateY(${draftY}px)`,
+            background: 'rgba(20,20,28,0.95)', borderRadius: 16,
+            border: `1px solid ${ACCENT}30`, padding: 14,
+            backdropFilter: 'blur(12px)',
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ width: 22, height: 22, borderRadius: 6, background: ACCENT, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#000', fontWeight: 800, fontFamily: MONO, fontSize: 11 }}>w</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: SANS, fontSize: 11, fontWeight: 700, color: '#fff' }}>wingmic</div>
+                <div style={{ fontFamily: MONO, fontSize: 9, color: 'rgba(255,255,255,0.4)' }}>drafted a check-in · now</div>
+              </div>
+              <div style={{ fontFamily: MONO, fontSize: 8, fontWeight: 700, color: ACCENT,
+                padding: '2px 6px', borderRadius: 4, background: `${ACCENT}18`, border: `1px solid ${ACCENT}40`,
+                textTransform: 'uppercase', letterSpacing: 0.6 }}>↗ check-in</div>
+            </div>
+
+            {/* To */}
+            <div style={{ fontFamily: MONO, fontSize: 10, color: 'rgba(255,255,255,0.45)', marginBottom: 8 }}>
+              To: <span style={{ color: '#fff' }}>Sarah Chen</span>  · subj: <span style={{ color: 'rgba(255,255,255,0.7)' }}>The edge-config repo</span>
+            </div>
+
+            {/* Draft body — types in */}
+            <div style={{
+              fontFamily: MONO, fontSize: 10.5, color: 'rgba(255,255,255,0.85)',
+              background: 'rgba(0,0,0,0.3)', borderRadius: 8,
+              padding: 10, lineHeight: 1.55, whiteSpace: 'pre-wrap', minHeight: 96,
+            }}>
+              {typedText}
+              {typedChars < fullText.length && t > typeStart && (
+                <span style={{ display: 'inline-block', width: 5, height: 11, background: ACCENT, verticalAlign: 'middle', animation: 'blink 0.5s infinite' }} />
+              )}
+            </div>
+
+            {/* Send button */}
+            <div style={{ marginTop: 10, display: 'flex', gap: 6, opacity: sendOp, transform: `scale(${sendScale})` }}>
+              <button style={{
+                flex: 1, padding: '9px', borderRadius: 8, border: 'none',
+                background: ACCENT, color: '#000', fontWeight: 800,
+                fontSize: 11, fontFamily: SANS,
+                boxShadow: '2px 2px 0 #000',
+              }}>Send now →</button>
+              <button style={{
+                padding: '9px 12px', borderRadius: 8,
+                background: 'transparent', color: 'rgba(255,255,255,0.6)',
+                border: '1px solid rgba(255,255,255,0.15)', fontFamily: MONO, fontSize: 10,
+              }}>edit</button>
+            </div>
+
+            {/* Sent confirmation */}
+            <div style={{ marginTop: 8, opacity: sentOp, fontFamily: MONO, fontSize: 9.5, color: ACCENT, letterSpacing: 1, textAlign: 'center', textTransform: 'uppercase' }}>
+              ✓ sent · 03:43 AM
+            </div>
+          </div>
+        </div>
+      </div>
+    </Sprite>
+  );
+}
+
+// ============================ SCENE 8 — Beta CTA (43–50s) ============================
+function SceneBeta({ ACCENT, SECOND, THIRD, endHeadline, endItalic, ctaText }) {
+  const t = useTime() - 43;
+  if (t < -0.5) return null;
+  const sceneOp = t < 0.4 ? fadeIn(t, 0, 0.4) : 1;
+  const glowR = animate({ from: 0, to: 540, start: 0.2, end: 6, ease: easeOut })(t);
+  const badgeOp = fadeIn(t, 0.3, 0.4);
+  const badgeScale = pop(t, 0.3, 0.6);
+  const logoOp = fadeIn(t, 0.9, 0.5);
+  const logoScale = pop(t, 0.9, 0.6);
+  const headlineOp = fadeIn(t, 1.6, 0.5);
+  const ctaOp = fadeIn(t, 2.6, 0.5);
+  const ctaScale = pop(t, 2.6, 0.6);
+  const urlOp = fadeIn(t, 3.4, 0.5);
+  const shimmerPos = ((t - 2.5) * 80) % 280 - 50;
+
+  return (
+    <Sprite start={43} end={50}>
+      <div style={{ position: 'absolute', inset: 0, background: BG, opacity: sceneOp, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'absolute', width: glowR * 2, height: glowR * 2, borderRadius: '50%',
+          background: `radial-gradient(circle, ${ACCENT}18 0%, ${THIRD}08 40%, transparent 70%)`, pointerEvents: 'none' }} />
+        <div style={{ opacity: badgeOp, transform: `scale(${badgeScale})`, marginBottom: 24,
+          padding: '8px 22px', borderRadius: 999, background: `${ACCENT}15`, border: `1.5px solid ${ACCENT}50`,
+          display: 'flex', alignItems: 'center', gap: 8,
+          fontFamily: MONO, fontSize: 13, fontWeight: 700, color: ACCENT, letterSpacing: 3, textTransform: 'uppercase' }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: ACCENT, animation: 'blink 1.2s infinite' }} />
+          v0.1 Beta · live now
+        </div>
+        <div style={{ opacity: logoOp, transform: `scale(${logoScale})`,
+          padding: '24px 56px', borderRadius: 22,
+          background: `linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01))`,
+          border: `1px solid ${ACCENT}30`, marginBottom: 22 }}>
+          <div style={{ fontFamily: SANS, fontSize: 76, fontWeight: 900, letterSpacing: '-0.04em', color: '#fff' }}>
+            wingmic<span style={{ color: ACCENT }}>.xyz</span>
+          </div>
+        </div>
+        <div style={{ opacity: headlineOp, marginBottom: 36, textAlign: 'center', maxWidth: 900, padding: '0 60px' }}>
+          <div style={{ fontFamily: SANS, fontSize: 36, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em', lineHeight: 1.15 }}>{endHeadline}</div>
+          <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 36, fontWeight: 400, color: ACCENT, letterSpacing: '-0.02em', marginTop: 4 }}>{endItalic}</div>
+        </div>
+        <div style={{ opacity: ctaOp, transform: `scale(${ctaScale})`,
+          padding: '20px 52px', borderRadius: 14, position: 'relative', overflow: 'hidden',
+          background: ACCENT, marginBottom: 28,
+          boxShadow: `4px 4px 0 #000, 0 20px 40px ${ACCENT}40`, border: '1.5px solid #000' }}>
+          <div style={{ position: 'absolute', top: 0, left: shimmerPos + '%', width: '40%', height: '100%',
+            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)', pointerEvents: 'none' }} />
+          <span style={{ fontSize: 24, fontWeight: 800, color: '#000', fontFamily: SANS, position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+            {ctaText}
+            <svg width="20" height="20" viewBox="0 0 14 14" fill="none"><path d="M1 7h12m0 0L8 2m5 5l-5 5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/></svg>
+          </span>
+        </div>
+        <div style={{ opacity: urlOp, textAlign: 'center' }}>
+          <div style={{ fontFamily: MONO, fontSize: 18, color: '#fff', marginBottom: 10, letterSpacing: 1 }}>→ wingmic.xyz</div>
+          <div style={{ fontFamily: MONO, fontSize: 12, color: 'rgba(255,255,255,0.4)', letterSpacing: 1.5 }}>1,247 devs already in line · waves of 50 · MIT @ GA</div>
+        </div>
+        <Particles count={50} cx={640} cy={360} startTime={0.5} colors={[ACCENT, SECOND, THIRD, '#fff']} />
+      </div>
+    </Sprite>
+  );
+}
+
+// ============================ Main ============================
+function Video({ tweaks }) {
+  const t = useTime();
+  const labelEl = React.useRef(null);
+  React.useEffect(() => {
+    if (labelEl.current) labelEl.current.setAttribute('data-screen-label', `t=${Math.floor(t)}s`);
+  }, [Math.floor(t)]);
+  const c = {
+    ACCENT: tweaks.accentColor, SECOND: tweaks.secondColor, THIRD: tweaks.thirdColor, RED: tweaks.redColor,
+  };
+  return (
+    <div ref={labelEl} data-screen-label="t=0s">
+      <SceneMontage {...c} openingTagline={tweaks.openingTagline} />
+      <SceneTheNight {...c} />
+      <SceneForgetting {...c} />
+      <SceneAha {...c} />
+      <SceneSpeak {...c} />
+      <SceneGraph {...c} />
+      <SceneQuery {...c} />
+      <SceneActs {...c} />
+      <SceneBeta {...c} endHeadline={tweaks.endHeadline} endItalic={tweaks.endItalic} ctaText={tweaks.ctaText} />
+    </div>
+  );
+}
+
+// Soundtrack runs inside <Stage> so useTime() is in scope
+function SoundtrackPlayer({ enabled }) {
+  useSoundtrack(enabled);
+  return null;
+}
+
+function AudioToggle({ on, onToggle }) {
+  return (
+    <button
+      onClick={onToggle}
+      aria-label={on ? 'Mute audio' : 'Enable audio'}
+      style={{
+        position: 'fixed', top: 16, right: 16, zIndex: 100,
+        padding: '10px 16px', borderRadius: 999,
+        background: on ? '#FFC452' : 'rgba(255,255,255,0.08)',
+        color: on ? '#000' : '#fff',
+        border: '1.5px solid ' + (on ? '#000' : 'rgba(255,255,255,0.15)'),
+        boxShadow: on ? '3px 3px 0 #000' : 'none',
+        fontFamily: MONO, fontSize: 12, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase',
+        display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+      }}
+    >
+      <span style={{ fontSize: 14 }}>{on ? '🔊' : '🔇'}</span>
+      {on ? 'Sound on' : 'Sound off'}
+    </button>
+  );
+}
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  // Default off — browsers block audio until user gesture anyway, and surprise audio is rude.
+  const [audioOn, setAudioOn] = React.useState(false);
+
+  const toggleAudio = React.useCallback(() => {
+    setAudioOn(prev => {
+      const next = !prev;
+      if (next) {
+        Audio.unlock();
+        Audio.setMuted(false);
+      } else {
+        Audio.setMuted(true);
+        Audio.cancelSpeech();
+        Audio.stopDrone();
+      }
+      return next;
+    });
+  }, []);
+
+  return (
+    <>
+      <Stage width={1280} height={720} duration={50} background={BG} autoplay={true} loop={true} persistKey="wingmic-video-v6">
+        <Video tweaks={t} />
+        <SoundtrackPlayer enabled={audioOn} />
+      </Stage>
+      <AudioToggle on={audioOn} onToggle={toggleAudio} />
+      <TweaksPanel>
+        <TweakSection label="Palette" />
+        <TweakColor label="Primary accent" value={t.accentColor} onChange={(v) => setTweak('accentColor', v)} />
+        <TweakColor label="Secondary"      value={t.secondColor} onChange={(v) => setTweak('secondColor', v)} />
+        <TweakColor label="Tertiary"       value={t.thirdColor}  onChange={(v) => setTweak('thirdColor', v)} />
+        <TweakColor label="Forget red"     value={t.redColor}    onChange={(v) => setTweak('redColor', v)} />
+        <TweakSection label="Copy" />
+        <TweakText  label="Opening tagline" value={t.openingTagline} onChange={(v) => setTweak('openingTagline', v)} />
+        <TweakText  label="End headline"    value={t.endHeadline}    onChange={(v) => setTweak('endHeadline', v)} />
+        <TweakText  label="End italic"      value={t.endItalic}      onChange={(v) => setTweak('endItalic', v)} />
+        <TweakText  label="CTA button"      value={t.ctaText}        onChange={(v) => setTweak('ctaText', v)} />
+      </TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

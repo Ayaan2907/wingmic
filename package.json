@@ -1,0 +1,34 @@
+{
+  "name": "wingmic",
+  "version": "0.1.0-beta.0",
+  "private": true,
+  "description": "Voice-first networking memory. Your social RAM, on disk.",
+  "license": "MIT",
+  "homepage": "https://wingmic.xyz",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wingmic/wingmic.git"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter '@wingmic/web' dev",
+    "build": "bun run --filter '*' build",
+    "lint": "bun run --filter '*' lint",
+    "typecheck": "bun run --filter '*' typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "prettier-plugin-tailwindcss": "^0.6.8",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20",
+    "bun": ">=1.1"
+  },
+  "packageManager": "bun@1.3.10"
+}

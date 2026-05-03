@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest a new feature or improvement
+title: "[feat]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: dropdown
+    id: wedge
+    attributes:
+      label: Which wedge does this touch?
+      options:
+        - Capture (voice in, structured graph out)
+        - Recall (search and query)
+        - Imports (LinkedIn, Google contacts, vCard)
+        - Acts (agent drafts and follow-ups)
+        - Cross-cutting / infrastructure
+    validations:
+      required: true
+  - type: textarea
+    id: user-moment
+    attributes:
+      label: User moment
+      description: Describe the moment, not the implementation. "When I'm at a conference and..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What would you build? How would it feel?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

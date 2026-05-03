@@ -1,0 +1,13 @@
+node_modules
+.next
+.turbo
+dist
+build
+out
+coverage
+bun.lockb
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+design/homepage-v2.html
+design/video-v6.html
