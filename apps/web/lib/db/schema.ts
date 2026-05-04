@@ -45,6 +45,61 @@ export const users = sqliteTable('user', {
   updatedAt: ts('updated_at'),
 });
 
+// BetterAuth core tables — kept in sync with @better-auth/cli expectations.
+// See https://better-auth.com/docs/concepts/database#schema
+
+export const sessions = sqliteTable(
+  'session',
+  {
+    id: id(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    token: text('token').notNull().unique(),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    createdAt: ts('created_at'),
+    updatedAt: ts('updated_at'),
+  },
+  (t) => [index('session_user_idx').on(t.userId)],
+);
+
+export const accounts = sqliteTable(
+  'account',
+  {
+    id: id(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    accountId: text('account_id').notNull(),
+    providerId: text('provider_id').notNull(),
+    accessToken: text('access_token'),
+    refreshToken: text('refresh_token'),
+    idToken: text('id_token'),
+    accessTokenExpiresAt: integer('access_token_expires_at', { mode: 'timestamp' }),
+    refreshTokenExpiresAt: integer('refresh_token_expires_at', { mode: 'timestamp' }),
+    scope: text('scope'),
+    password: text('password'),
+    createdAt: ts('created_at'),
+    updatedAt: ts('updated_at'),
+  },
+  (t) => [index('account_user_idx').on(t.userId)],
+);
+
+export const verifications = sqliteTable(
+  'verification',
+  {
+    id: id(),
+    identifier: text('identifier').notNull(),
+    value: text('value').notNull(),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+    createdAt: ts('created_at'),
+    updatedAt: ts('updated_at'),
+  },
+  (t) => [index('verification_identifier_idx').on(t.identifier)],
+);
+
 export const identityClaims = sqliteTable(
   'identity_claim',
   {
