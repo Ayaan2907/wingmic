@@ -139,31 +139,100 @@ wingmic/
 
 ---
 
-## quick start (local dev)
+## quick start
 
-Prerequisites:
+Pick your path. Both work.
 
-- **Bun 1.3+** (`curl -fsSL https://bun.sh/install | bash`)
-- **Node 20+**
+### 🤖 with an agent (Claude Code, Cursor, Codex, etc.)
+
+Paste this prompt into your AI coding assistant. It walks you through clone → secrets → first run, asking at each step.
+
+```
+Set up wingmic for me on this machine. The repo is github.com/Ayaan2907/wingmic — an
+open-source voice-first networking memory app.
+
+Do this in order, stopping for me at each step:
+
+  1. Check if Bun (>=1.3) and Node (>=20) are installed. Install Bun if missing
+     via `curl -fsSL https://bun.sh/install | bash`.
+  2. Clone https://github.com/Ayaan2907/wingmic.git into ./wingmic if not already.
+  3. Run `bun install` from the repo root.
+  4. Copy apps/web/.env.example to apps/web/.env.local.
+  5. Walk me through obtaining the 8 required secrets per docs/deploy.md § 2:
+       - TURSO_DB_URL + TURSO_AUTH_TOKEN  (turso CLI)
+       - BETTER_AUTH_SECRET                (openssl rand -base64 48)
+       - BETTER_AUTH_URL                   (http://localhost:3210 for local dev)
+       - RESEND_API_KEY + RESEND_FROM      (resend.com — domain must be verified)
+       - ANTHROPIC_API_KEY                 (console.anthropic.com)
+       - OPENAI_API_KEY                    (platform.openai.com)
+     Stop and ask me at each one — do NOT generate or fetch any keys yourself.
+     For local dev only ANTHROPIC_API_KEY and OPENAI_API_KEY are required;
+     the rest can be left blank with safe defaults.
+  6. Once .env.local is filled, run `cd apps/web && bun run db:apply` to create
+     a local SQLite at apps/web/local.db.
+  7. Run `bun run dev` from the repo root. Show me http://localhost:3210 once it's up.
+  8. Tell me to sign in: visit /signin, type any email, and check the dev-server
+     console — the magic link is logged there since RESEND_API_KEY isn't set.
+
+Brand voice rule: when committing or summarizing, do NOT add "Co-Authored-By: Claude"
+or any AI co-author trailer. Authorship is mine.
+```
+
+### 🛠 manually
+
+Prerequisites: **Bun 1.3+** (`curl -fsSL https://bun.sh/install | bash`) and **Node 20+**.
 
 ```bash
-# 1. Clone + install
 git clone https://github.com/Ayaan2907/wingmic.git
 cd wingmic
 bun install
 
-# 2. Copy env, fill in keys (see "secrets" below)
 cp apps/web/.env.example apps/web/.env.local
+# Fill in ANTHROPIC_API_KEY and OPENAI_API_KEY at minimum.
+# See docs/deploy.md § 2 for how to acquire each.
 
-# 3. Apply DB schema to a local SQLite file
 cd apps/web && bun run db:apply
+cd -
 
-# 4. Start the dev server
-bun run dev
-# → http://localhost:3210
+bun run dev   # → http://localhost:3210
 ```
 
-For local dev the only **required** env vars are `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`. The rest fall back to safe defaults (file-based libSQL, console-logged magic links). See [docs/deploy.md](docs/deploy.md) for the full table.
+Sign in: type any email at `/signin`. The magic link is logged to the dev console since `RESEND_API_KEY` isn't set locally.
+
+### 🤝 making your first contribution
+
+Paste this into your AI coding assistant when you want to send a PR.
+
+```
+Help me make my first contribution to wingmic (github.com/Ayaan2907/wingmic).
+
+  1. Read these in order — they're the maintainer contract:
+       - README.md
+       - CONTRIBUTING.md
+       - docs/architecture.md
+       - design/design-system.md (only if the work is UI / brand-voice)
+  2. List open issues tagged `good first issue`:
+       gh issue list --label "good first issue" --state open
+  3. Ask me which issue number I want to tackle. Don't pick one for me.
+  4. Read the issue body in full. Identify exact files to touch.
+  5. Branch from main: `git checkout -b feat/<short-name>` or fix/, docs/, chore/
+     per CONTRIBUTING.md branch conventions.
+  6. Make the change. Add or update Vitest or Playwright tests for new behavior.
+  7. Run the local CI checks before committing:
+       - bun run typecheck
+       - bun --filter @wingmic/web lint
+       - bun run test
+       - bun run build
+     All must pass.
+  8. Commit using Conventional Commits (e.g. `feat(capture): add text fallback`).
+     Do NOT add "Co-Authored-By: Claude" or any AI trailer to the commit message.
+  9. Push and open a PR with the template-required fields filled in. Reference
+     the issue number with `closes #N`.
+ 10. Stop and let me review before pushing or merging.
+
+Stay focused on the chosen issue. If you spot unrelated improvements, file
+them as separate issues — don't pile them into the PR.
+```
 
 ---
 
