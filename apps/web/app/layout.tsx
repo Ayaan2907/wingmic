@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
+import { TRPCProvider } from '@/lib/trpc/client';
 import './globals.css';
 
 const inter = Inter({
@@ -73,7 +74,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       lang="en"
       className={`${inter.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        <TRPCProvider>{children}</TRPCProvider>
+      </body>
     </html>
   );
 }
