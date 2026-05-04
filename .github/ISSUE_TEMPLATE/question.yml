@@ -1,0 +1,30 @@
+name: 🤔 Question or design discussion
+description: Ask a question about wingmic, or propose a design / architecture conversation.
+title: "[q]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For open-ended discussions, prefer [GitHub Discussions](https://github.com/Ayaan2907/wingmic/discussions). Use this template for questions tied to a specific issue or design decision in the repo.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What were you trying to do? What docs / issues / code did you read first?
+
+  - type: textarea
+    id: links
+    attributes:
+      label: Relevant links
+      placeholder: |
+        - https://github.com/Ayaan2907/wingmic/blob/main/...
+        - https://wingmic.xyz/...

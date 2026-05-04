@@ -1,0 +1,85 @@
+name: 🐛 Bug report
+description: Report something broken in wingmic.
+title: "[bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Smaller, more specific bug reports get fixed faster.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: When I tap the mic and say "...", the transcript shows "..." instead of "...".
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Smallest possible reproduction. If it works on the live site, link to it.
+      placeholder: |
+        1. Go to /capture
+        2. Tap the mic
+        3. Say "..."
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: dropdown
+    id: wedge
+    attributes:
+      label: Which wedge does this touch?
+      options:
+        - Capture (voice → graph)
+        - Recall (NL search)
+        - Imports (LinkedIn / Google / vCard)
+        - Acts (agent drafting)
+        - Cross-cutting / infra (auth, db, build, deploy)
+        - Homepage / marketing
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Wingmic version / commit
+      placeholder: v0.1.0-beta or commit sha
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Browser + OS
+      placeholder: Chrome 132 on macOS 15 / iOS Safari 18 on iPhone 15
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / console output
+      description: Browser console errors, network failures, server logs (if self-hosting).
+      render: shell
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Pre-flight check
+      options:
+        - label: I searched existing issues and didn't find a duplicate.
+          required: true
+        - label: I'm running the latest `main` (or the most recent release).
+          required: true

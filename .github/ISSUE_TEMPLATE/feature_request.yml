@@ -1,0 +1,67 @@
+name: ✨ Feature request
+description: Suggest a new feature or improvement.
+title: "[feat]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        We frame features as **user moments**, not implementations. Tell us when this would help and why — the engineering layer is downstream.
+
+  - type: dropdown
+    id: wedge
+    attributes:
+      label: Which wedge does this touch?
+      options:
+        - Capture (voice → graph)
+        - Recall (NL search)
+        - Imports (LinkedIn / Google / vCard)
+        - Acts (agent drafting)
+        - Cross-cutting / infra
+        - Homepage / marketing
+    validations:
+      required: true
+
+  - type: textarea
+    id: user-moment
+    attributes:
+      label: User moment
+      description: When does this matter? Describe the moment, not the code.
+      placeholder: |
+        "When I'm at a conference and someone hands me a business card, I want to ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What would you build? How would it feel? Brand-voice copy if you have it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else could solve this? Why isn't that better?
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: How does this fit the roadmap?
+      options:
+        - v0.1.x — small enough to land before next milestone
+        - v0.2 — Imports-adjacent
+        - v0.3 — Acts-adjacent
+        - v0.4 — MCP-adjacent
+        - v0.5+ — self-host / future
+        - I don't know — happy to discuss
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched existing issues and didn't find a duplicate.
+          required: true

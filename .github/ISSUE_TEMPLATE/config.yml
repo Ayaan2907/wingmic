@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/Ayaan2907/wingmic/discussions
+    about: Ask questions, share ideas, talk about your setup, show off what you built.
+  - name: 🔒 Security
+    url: https://github.com/Ayaan2907/wingmic/blob/main/SECURITY.md
+    about: Report a security vulnerability privately. Do not open a public issue.
+  - name: 📖 Docs
+    url: https://github.com/Ayaan2907/wingmic/tree/main/docs
+    about: Read the docs before opening an issue — most setup questions are answered there.
