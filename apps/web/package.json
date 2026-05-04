@@ -12,7 +12,8 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:apply": "bun run scripts/migrate.ts"
+    "db:apply": "bun run scripts/migrate.ts",
+    "extract:eval": "bun run lib/extractor/eval/runner.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.74",

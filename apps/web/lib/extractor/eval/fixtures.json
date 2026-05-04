@@ -1,0 +1,61 @@
+[
+  {
+    "id": "fixture_001_basic_handshake",
+    "transcript": "met sarah from acme at the rust meetup, she leads their edge runtime team, said she'd love to chat about my edge worker repo, send her the github link tomorrow morning",
+    "expected": {
+      "persons": [
+        {
+          "name": "sarah",
+          "role_contains": "edge runtime",
+          "companyHint": "acme",
+          "topics_include": ["rust", "edge runtime"]
+        }
+      ],
+      "companies_include": ["acme"],
+      "events_include": ["rust meetup"],
+      "topics_include": ["rust", "edge runtime"],
+      "actions": [
+        { "kind": "email", "body_contains": "github", "whenHint_contains": "tomorrow" }
+      ]
+    }
+  },
+  {
+    "id": "fixture_002_two_people",
+    "transcript": "at devconnect met marcus from cloudflare, eng manager on workers, also met priya solo dev shipping ai tooling, both interested in mcp servers",
+    "expected": {
+      "persons": [
+        { "name": "marcus", "role_contains": "manager", "companyHint": "cloudflare" },
+        { "name": "priya", "topics_include": ["ai tooling"] }
+      ],
+      "companies_include": ["cloudflare"],
+      "events_include": ["devconnect"],
+      "topics_include": ["mcp", "ai tooling"]
+    }
+  },
+  {
+    "id": "fixture_003_no_company",
+    "transcript": "had coffee with my old colleague jamie this morning, talking about their new startup idea, follow up next week",
+    "expected": {
+      "persons": [{ "name": "jamie", "role_contains": null, "companyHint": null }],
+      "actions": [{ "kind": "reminder", "whenHint_contains": "week" }]
+    }
+  },
+  {
+    "id": "fixture_004_event_with_date",
+    "transcript": "at aws reinvent 2026 in las vegas, met david from stripe payments team, swap notes on idempotency keys later",
+    "expected": {
+      "persons": [{ "name": "david", "companyHint": "stripe" }],
+      "companies_include": ["stripe"],
+      "events_include": ["aws reinvent 2026", "aws re:invent"],
+      "topics_include": ["idempotency"]
+    }
+  },
+  {
+    "id": "fixture_005_typo_alias",
+    "transcript": "met s. chen again — the same one from acme last month, she goes by 'chen' at work, mentioned vercel might be hiring her",
+    "expected": {
+      "persons": [{ "name": "s. chen", "aliases_include": ["chen"], "companyHint": "acme" }],
+      "companies_include": ["acme", "vercel"]
+    }
+  }
+]
