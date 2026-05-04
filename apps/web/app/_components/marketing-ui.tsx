@@ -1,5 +1,5 @@
 // @ts-nocheck
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps, react/no-unescaped-entities, @next/next/no-img-element */
+/* eslint-disable react-hooks/exhaustive-deps, @next/next/no-img-element */
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
