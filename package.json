@@ -7,7 +7,7 @@
   "homepage": "https://wingmic.xyz",
   "repository": {
     "type": "git",
-    "url": "https://github.com/wingmic/wingmic.git"
+    "url": "https://github.com/Ayaan2907/wingmic.git"
   },
   "workspaces": [
     "apps/*",
