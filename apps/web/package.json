@@ -8,12 +8,17 @@
     "build": "next build",
     "start": "next start --port 3000",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:apply": "bun run scripts/migrate.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.74",
     "@ai-sdk/openai": "^3.0.58",
     "@libsql/client": "^0.17.3",
+    "@paralleldrive/cuid2": "^3.3.0",
     "@tanstack/react-query": "^5.100.9",
     "@trpc/client": "^11.17.0",
     "@trpc/next": "^11.17.0",
