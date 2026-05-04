@@ -1,0 +1,18 @@
+{
+  // wingmic on cloudflare workers via @opennextjs/cloudflare
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wingmic",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-01-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "vars": {
+    "NEXT_PUBLIC_APP_URL": "https://wingmic.xyz"
+  }
+  // Secrets are NOT here. Set with `wrangler secret put` or the dashboard:
+  //   TURSO_DB_URL, TURSO_AUTH_TOKEN, BETTER_AUTH_SECRET, BETTER_AUTH_URL,
+  //   RESEND_API_KEY, RESEND_FROM, ANTHROPIC_API_KEY, OPENAI_API_KEY
+}

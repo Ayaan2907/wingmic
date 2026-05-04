@@ -48,3 +48,8 @@ prisma/dev.db*
 # claude / agent dirs (per-developer)
 .claude/settings.local.json
 .gstack/
+
+
+# OpenNext / Cloudflare adapter output
+.open-next/
+.vercel/
