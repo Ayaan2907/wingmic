@@ -1,12 +1,8 @@
 <div align="center">
 
-```
-  ┌──────────────────────────────────────────────────────┐
-  │  ░ ░ ░  wingmic.xyz                                  │
-  │                                                       │
-  │  your social RAM, on disk.                            │
-  └──────────────────────────────────────────────────────┘
-```
+<img src="design/screenshots/01-hero.png" alt="wingmic.xyz hero — you met twelve people this week. Wingmic remembers everyone." width="800" />
+
+# wingmic
 
 **voice-first networking memory · open source · MIT**
 
@@ -32,13 +28,21 @@ Stop forgetting. *Start building.*
 
 You meet 12 people at a conference. By day's end you remember 3 names, 1 company, and zero context. Your brain's RAM got garbage-collected.
 
+<div align="center">
+  <img src="design/screenshots/02-handshake-leak.png" alt="Your brain is RAM. Conferences are memory pressure. 12 people met · 3 names recalled · 0 follow-ups sent." width="640" />
+</div>
+
 LinkedIn is a graveyard. Notion CRMs want typing time you don't have. Phone contacts are a graveyard. Between two sessions at a conf you have ninety seconds and a coffee in one hand. There's no typing budget.
 
 Wingmic is the tool you open right after you meet someone. Voice-dump the context, commit to your memory graph, **never forget a connection again.**
 
 ---
 
-## what it does
+## three verbs · *speak. extract. query.*
+
+<div align="center">
+  <img src="design/screenshots/03-three-verbs.png" alt="Three verbs: Speak. Extract. Query. No CRM tax. No form filling. No manual tagging." width="720" />
+</div>
 
 ```
 you, after a meetup, into your phone:
@@ -62,6 +66,10 @@ you, three weeks later:
 
 That's the whole product. Hold a button. Talk for twenty seconds. Ask anything later, in plain English, get an answer.
 
+<div align="center">
+  <img src="design/screenshots/04-recall.png" alt="Ask in plain English. From anywhere. Mobile app, REST API, MCP server, Slack bot. Same graph." width="720" />
+</div>
+
 ---
 
 ## features
@@ -83,10 +91,15 @@ That's the whole product. Hold a button. Talk for twenty seconds. Ask anything l
 | version | what ships | status |
 |---|---|---|
 | **v0.1.1** | voice capture + NL recall (Approach B narrowed) | 🟡 wiring complete, awaiting first deploy |
-| v0.2 | contact imports — LinkedIn export, Google Contacts, vCard | 📋 issue tree filed |
-| v0.3 | Acts agent — drafts emails / check-ins / intros, **permission-first**, Inngest durability | 📋 issue tree filed |
+| v0.2 | contact imports — LinkedIn export, Google Contacts, vCard | 📋 [#10 epic](https://github.com/Ayaan2907/wingmic/issues/10) |
+| v0.3 | Acts agent — drafts emails / check-ins / intros, **permission-first**, Inngest durability | 📋 [#11 epic](https://github.com/Ayaan2907/wingmic/issues/11) |
 | v0.4 | MCP server — query your network from Claude / ChatGPT directly | 📋 deferred |
 | v0.5 | self-host — Docker Compose + BYO API keys | 📋 deferred |
+
+<div align="center">
+  <img src="design/screenshots/07-acts-agent.png" alt="v0.3 preview — Wingmic acts for you. Drafts the warm intro. Schedules the reminder. Sends the great-meeting-you email at the right moment. Permission-first." width="720" />
+  <p><em>v0.3 preview — Acts agent drafts the email, you click send.</em></p>
+</div>
 
 Roadmap and milestone progress live on the [project board](https://github.com/Ayaan2907/wingmic/projects).
 
