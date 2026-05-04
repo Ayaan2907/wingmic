@@ -461,7 +461,7 @@ function App() {
         color: '#fff', fontWeight: 500,
         display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24
       }}>
-        <span style={{ color: 'rgba(255,255,255,0.5)' }} className="mono">v0.1.0-beta · waves of 50</span>
+        <span style={{ color: 'rgba(255,255,255,0.5)' }} className="mono">v0.1.0-beta · capture + recall ship first · waves of 50</span>
         <span style={{ width: 4, height: 4, borderRadius: '50%', background: accent }} />
         <a href="#waitlist" style={{ color: accent, fontWeight: 600 }}>get an invite →</a>
       </div>
