@@ -1,8 +1,0 @@
-blank_issues_enabled: false
-contact_links:
-  - name: Discussions
-    url: https://github.com/wingmic/wingmic/discussions
-    about: Ask questions, share ideas, or talk about your setup.
-  - name: Security
-    url: https://github.com/wingmic/wingmic/blob/main/SECURITY.md
-    about: Report a security vulnerability privately.
