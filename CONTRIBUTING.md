@@ -41,9 +41,37 @@ See [`docs/deploy.md`](docs/deploy.md) for how to acquire each API key.
 
 ## branch + commit conventions
 
-### branches
+### release workflow (staging-first, no direct merges to main)
 
-Branch from `main`. Use `kind/short-name`:
+```
+       feat/* fix/* docs/* chore/*
+       refactor/* test/* perf/*
+                  │
+                  ▼  PR (base: staging)
+              ┌────────┐
+              │staging │  ← integration branch. CI gates every PR.
+              └────┬───┘
+                   │  release PR (cut by maintainer; base: main)
+                   ▼
+              ┌────────┐
+              │  main  │  ← production. Branch-protected.
+              └────────┘
+                   │
+                   ▼  cf:deploy + wrangler pages deploy
+              wingmic.xyz + app.wingmic.xyz
+```
+
+Rules:
+
+1. **Always branch from `staging`**, never from `main`. Pull latest staging first: `git checkout staging && git pull && git checkout -b feat/your-thing`.
+2. **All PRs target `staging` as base.** Direct PRs to `main` are blocked by branch protection.
+3. **Maintainer cuts release PRs** from `staging` → `main` on a cadence (weekly, after a wedge ships, before a `vN.x.y` tag).
+4. **Both branches require:** linear history, CI passing (typecheck + lint + vitest + build), conversation resolution before merge. `main` additionally dismisses stale reviews on push.
+5. **No force-push**, no direct push, no branch deletion on `main` or `staging`.
+
+### branch naming
+
+Use `kind/short-name`:
 
 ```
 feat/voice-capture
@@ -54,6 +82,10 @@ refactor/split-homeclient
 ```
 
 Kinds we use: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `perf`.
+
+### issue linkage
+
+**Every PR maps to an open issue.** If your change doesn't have an issue yet, file one first. PR body must include `closes #N` so the issue auto-closes on merge to `staging` (and stays closed when the release PR lands on `main`).
 
 ### commits
 
@@ -194,15 +226,20 @@ We use AI tooling internally to draft code. That's fine — but:
 
 ## release process
 
-Maintainer-only:
+Maintainer-only. Driven by the staging → main flow.
 
-1. Land all PRs targeting the milestone.
-2. Run `bun run extract:eval` — must hit ≥ 85% accuracy.
-3. Bump version in root `package.json` and `apps/web/package.json`.
-4. Tag: `git tag v0.x.y && git push --tags`
-5. Cut a GitHub Release with a changelog summarizing PRs since the last tag.
-6. Deploy: `cd apps/web && bun run cf:deploy`
-7. Post launch update on the [project board](https://github.com/Ayaan2907/wingmic/projects).
+1. Land all feature PRs against `staging`. Confirm CI green on every merge.
+2. Run `bun run extract:eval` against `staging` head — must hit ≥ 85% accuracy.
+3. Open the release PR: `gh pr create --base main --head staging --title "release: vX.Y.Z" --body "<changelog>"`. CI re-runs on the release PR.
+4. Bump versions on the release PR branch (`staging` itself is fine — the cut happens on merge): root `package.json`, `apps/web/package.json`, `apps/app/package.json`.
+5. Merge release PR to `main` (squash merge for clean linear history; the release commit IS the release artifact).
+6. Tag: `git checkout main && git pull && git tag vX.Y.Z && git push --tags`.
+7. Cut GitHub Release: `gh release create vX.Y.Z --generate-notes`.
+8. Deploy landing: `bun --filter=@wingmic/web build && bunx wrangler pages deploy apps/web/out --project-name=wingmic-landing` (when wingmic.xyz comes online).
+9. Deploy product: `bun --filter=@wingmic/app cf:deploy` (when app.wingmic.xyz comes online; blocked on #7 + Task 8 of v0.1.1 plan).
+10. Post launch update on the [project board](https://github.com/Ayaan2907/wingmic/projects).
+
+**Rollback:** if a release breaks production, the staging → main flow makes rollback a single command. `git checkout main && git revert <release-sha> && git push` reverses the release atomically. Direct hotfix path: branch `fix/<thing>` from `main`, PR to `staging`, fast-track to a patch release.
 
 ---
 
