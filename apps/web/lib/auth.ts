@@ -2,18 +2,17 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { magicLink } from 'better-auth/plugins';
 import { Resend } from 'resend';
+import { env } from './config/env';
 import { db } from './db/client';
 import { sendMagicLinkEmail } from './email/magic-link';
 import * as schema from './db/schema';
 
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null;
+const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
 
 export const auth = betterAuth({
   appName: 'wingmic',
-  baseURL: process.env.BETTER_AUTH_URL ?? 'http://localhost:3210',
-  secret: process.env.BETTER_AUTH_SECRET,
+  baseURL: env.BETTER_AUTH_URL,
+  secret: env.BETTER_AUTH_SECRET,
   database: drizzleAdapter(db, {
     provider: 'sqlite',
     schema: {
@@ -37,7 +36,7 @@ export const auth = betterAuth({
           return;
         }
         const { error } = await resend.emails.send({
-          from: process.env.RESEND_FROM ?? 'wingmic <auth@wingmic.xyz>',
+          from: env.RESEND_FROM,
           to: email,
           subject: 'your wingmic sign-in link',
           html,

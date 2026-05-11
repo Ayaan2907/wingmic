@@ -1,5 +1,6 @@
 import { createClient, type Client } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
+import { env } from '../config/env';
 import * as schema from './schema';
 
 declare global {
@@ -10,14 +11,15 @@ declare global {
 }
 
 function build() {
-  const url = process.env.TURSO_DB_URL ?? 'file:./local.db';
-  const authToken = process.env.TURSO_AUTH_TOKEN;
-  const client = createClient({ url, authToken });
+  const client = createClient({
+    url: env.TURSO_DB_URL,
+    authToken: env.TURSO_AUTH_TOKEN,
+  });
   return { client, db: drizzle(client, { schema }) };
 }
 
 const { client, db } =
-  process.env.NODE_ENV === 'production'
+  env.NODE_ENV === 'production'
     ? build()
     : (() => {
         if (!globalThis.__wingmic_db_client__ || !globalThis.__wingmic_db__) {

@@ -1,9 +1,10 @@
 import { anthropic } from '@ai-sdk/anthropic';
 import { generateObject } from 'ai';
+import { env } from '../config/env';
 import { ExtractionResult } from './schema';
 import { SYSTEM_PROMPT, userPrompt } from './prompt';
 
-const MODEL = process.env.ANTHROPIC_EXTRACTION_MODEL ?? 'claude-sonnet-4-6';
+const MODEL = env.ANTHROPIC_EXTRACTION_MODEL;
 
 export class ExtractionError extends Error {
   constructor(
@@ -25,7 +26,7 @@ export class ExtractionError extends Error {
  *   - schema-validation failure (Claude returned invalid shape)
  */
 export async function extract(transcript: string): Promise<ExtractionResult> {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!env.ANTHROPIC_API_KEY) {
     throw new ExtractionError('ANTHROPIC_API_KEY is not set');
   }
   if (!transcript.trim()) {

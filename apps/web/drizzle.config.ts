@@ -1,15 +1,13 @@
 import { defineConfig } from 'drizzle-kit';
-
-const url = process.env.TURSO_DB_URL ?? 'file:./local.db';
-const authToken = process.env.TURSO_AUTH_TOKEN;
+import { env } from './lib/config/env';
 
 export default defineConfig({
   schema: './lib/db/schema.ts',
   out: './drizzle',
   dialect: 'turso',
   dbCredentials: {
-    url,
-    authToken,
+    url: env.TURSO_DB_URL,
+    authToken: env.TURSO_AUTH_TOKEN,
   },
   verbose: true,
   strict: true,

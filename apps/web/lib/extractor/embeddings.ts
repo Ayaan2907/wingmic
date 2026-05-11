@@ -1,9 +1,8 @@
 import { openai } from '@ai-sdk/openai';
 import { embed, embedMany } from 'ai';
+import { env } from '../config/env';
 
-const MODEL = openai.textEmbeddingModel(
-  process.env.OPENAI_EMBEDDING_MODEL ?? 'text-embedding-3-small',
-);
+const MODEL = openai.textEmbeddingModel(env.OPENAI_EMBEDDING_MODEL);
 
 export class EmbeddingError extends Error {
   constructor(message: string, public readonly cause?: unknown) {
@@ -14,7 +13,7 @@ export class EmbeddingError extends Error {
 
 /** Single-string embedding. Returns a number[] of length 1536. */
 export async function embedText(value: string): Promise<number[]> {
-  if (!process.env.OPENAI_API_KEY) {
+  if (!env.OPENAI_API_KEY) {
     throw new EmbeddingError('OPENAI_API_KEY is not set');
   }
   if (!value.trim()) {
@@ -33,7 +32,7 @@ export async function embedText(value: string): Promise<number[]> {
 
 /** Batch embeddings for N strings. Returns array of length N. */
 export async function embedTexts(values: string[]): Promise<number[][]> {
-  if (!process.env.OPENAI_API_KEY) {
+  if (!env.OPENAI_API_KEY) {
     throw new EmbeddingError('OPENAI_API_KEY is not set');
   }
   if (values.length === 0) return [];
