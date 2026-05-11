@@ -14,16 +14,19 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --filter '@wingmic/web' dev",
-    "build": "bun run --filter '*' build",
-    "lint": "bun run --filter '*' lint",
-    "typecheck": "bun run --filter '*' typecheck",
-    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "dev":          "turbo dev --filter=@wingmic/web",
+    "build":        "turbo build",
+    "test":         "turbo test",
+    "lint":         "turbo lint",
+    "typecheck":    "turbo typecheck",
+    "format":       "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\""
   },
   "devDependencies": {
     "prettier": "^3.3.3",
     "prettier-plugin-tailwindcss": "^0.6.8",
+    "tsup": "^8.5.1",
+    "turbo": "^2.9.12",
     "typescript": "^5.6.3"
   },
   "engines": {
