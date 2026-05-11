@@ -1,0 +1,7 @@
+{
+  "name": "@wingmic/config-vitest",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./base.config.ts",
+  "files": ["*.ts"]
+}

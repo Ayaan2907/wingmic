@@ -38,6 +38,7 @@
         "zustand": "^5.0.12",
       },
       "devDependencies": {
+        "@eslint/eslintrc": "^3.3.5",
         "@opennextjs/cloudflare": "^1.19.5",
         "@playwright/test": "^1.59.1",
         "@resvg/resvg-js": "^2.6.2",
@@ -47,6 +48,8 @@
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
         "@vitejs/plugin-react": "^6.0.1",
+        "@wingmic/config-eslint": "*",
+        "@wingmic/config-tsconfig": "*",
         "autoprefixer": "^10.4.20",
         "drizzle-kit": "^0.31.10",
         "eslint": "^9.14.0",
@@ -58,6 +61,18 @@
         "vitest": "^4.1.5",
         "wrangler": "^4.87.0",
       },
+    },
+    "packages/config/eslint": {
+      "name": "@wingmic/config-eslint",
+      "version": "0.0.0",
+    },
+    "packages/config/tsconfig": {
+      "name": "@wingmic/config-tsconfig",
+      "version": "0.0.0",
+    },
+    "packages/config/vitest": {
+      "name": "@wingmic/config-vitest",
+      "version": "0.0.0",
     },
   },
   "packages": {
@@ -860,6 +875,12 @@
     "@vitest/spy": ["@vitest/spy@4.1.5", "", {}, "sha512-2lNOsh6+R2Idnf1TCZqSwYlKN2E/iDlD8sgU59kYVl+OMDmvldO1VDk39smRfpUNwYpNRVn3w4YfuC7KfbBnkQ=="],
 
     "@vitest/utils": ["@vitest/utils@4.1.5", "", { "dependencies": { "@vitest/pretty-format": "4.1.5", "convert-source-map": "^2.0.0", "tinyrainbow": "^3.1.0" } }, "sha512-76wdkrmfXfqGjueGgnb45ITPyUi1ycZ4IHgC2bhPDUfWHklY/q3MdLOAB+TF1e6xfl8NxNY0ZYaPCFNWSsw3Ug=="],
+
+    "@wingmic/config-eslint": ["@wingmic/config-eslint@workspace:packages/config/eslint"],
+
+    "@wingmic/config-tsconfig": ["@wingmic/config-tsconfig@workspace:packages/config/tsconfig"],
+
+    "@wingmic/config-vitest": ["@wingmic/config-vitest@workspace:packages/config/vitest"],
 
     "@wingmic/web": ["@wingmic/web@workspace:apps/web"],
 
