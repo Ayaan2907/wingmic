@@ -9,14 +9,16 @@
 
 ## Goal
 
-Restructure wingmic from a single-app workspace (`apps/web` + empty `packages/*` placeholders) into a fully-extracted Turborepo monorepo where shared brand, design tokens, db schema, extractor pipeline, and types live as first-class internal packages. Unblocks v0.4 MCP server, v0.3 Inngest worker, and v0.5 self-host portability without further extraction work.
+Restructure wingmic from a single-app workspace (`apps/web` + empty `packages/*` placeholders) into a Turborepo monorepo where the **entity-detection pipeline** (`packages/extractor`), the **database layer** (`packages/db`), brand assets, and design tokens live as first-class internal packages.
 
-Plus: ship a project-root `CLAUDE.md` so every contributor's Claude Code (and other AI coding assistants) session inherits project context, conventions, and scope guards.
+Why now: the current product focus is the **mobile-first web app**, and the next deep iteration is designing the **entity detection + search/recall algorithms**. Both efforts iterate fastest when `extractor` and `db` are isolated packages with their own test boundaries, eval fixtures, and clean import surfaces — not when they live tangled inside `apps/web/lib/`.
+
+Plus: ship a project-root `CLAUDE.md` so every contributor's Claude Code session inherits project context, conventions, and scope guards.
 
 ## Non-goals
 
-- Publishing any package to npm (defer until v0.4 ships `@wingmic/mcp-server`).
-- Native iOS app, browser extension, CLI, Raycast, Obsidian — none of these are on the roadmap, do not engineer the workspace for them yet.
+- Publishing any package to npm.
+- Adding new apps. The only app is `apps/web`.
 - Switching from Bun to pnpm/Yarn (Bun stays).
 - Replacing tRPC, Drizzle, BetterAuth, AI SDK, Cloudflare Workers — see eng-review lock.
 - Solving the OpenNext + libSQL Cloudflare bundling issue here — that's [#7](https://github.com/Ayaan2907/wingmic/issues/7), separate PR. This restructure must NOT regress that path further; we mitigate by extending the post-build bundle script's `nodePaths`.
@@ -28,15 +30,15 @@ Plus: ship a project-root `CLAUDE.md` so every contributor's Claude Code (and ot
 ```
 wingmic/
   apps/
-    web/                              ← Next.js homepage + product app
-    mcp-server/                       ← v0.4 placeholder, package.json + tsup skeleton
+    web/                              ← the only app: mobile-first web app
   packages/
     brand/                            ← icon.svg, icon-tile.svg, icon-mono.svg, og-image.*,
                                         manifest.webmanifest, scripts/generate-icons.ts, README
     design-tokens/                    ← TS exports of design.md tokens + Tailwind preset
     db/                               ← Drizzle schema + libSQL client + migrations + drizzle.config + migrate.ts
-    extractor/                        ← Zod schema + Claude prompt + AI SDK client + embeddings + resolution + eval
-    types/                            ← shared TS re-exports from db + extractor
+    extractor/                        ← entity-detection pipeline:
+                                        Zod schema, Claude prompt, AI SDK client, embeddings,
+                                        resolution, search/recall algorithms, eval harness
     logger/                           ← (issue #12) Logger class + subscribe seam — placeholder dir for now
     env/                              ← (issue #12) Zod-validated env loader — placeholder dir for now
     config/
@@ -51,7 +53,9 @@ wingmic/
   bun.lock
 ```
 
-Naming: `@wingmic/<name>` for all packages. All `private: true` until v0.4 npm publish.
+Naming: `@wingmic/<name>` for all packages. All `private: true`. No npm publish planned.
+
+**Why `packages/extractor` is the centerpiece.** The next deep product iteration is designing the entity-detection + search algorithms. That package becomes the experimental surface: prompt versions, resolution heuristics, embedding strategies, recall ranking — all iterated with the fixture-driven eval harness as a regression gate. Pulling it out of `apps/web/lib/` lets us own its own tsconfig, vitest setup, and CI lane.
 
 ---
 
@@ -112,12 +116,10 @@ brand · design-tokens · db
    ↓
 extractor (depends on db)
    ↓
-types (re-exports types from db + extractor — type-only, no build step)
-   ↓
-apps/web · apps/mcp-server (depend on everything above)
+apps/web (depends on brand, design-tokens, db, extractor)
 ```
 
-**No circular deps.** Extractor exports its own schema types directly via `./schema` subpath. `packages/types` is a downstream type-only convenience package that re-exports for consumers who want one import surface. Extractor does NOT depend on types.
+Extractor exports its own schema types directly via the `./schema` subpath. No circular deps.
 
 ---
 
@@ -157,23 +159,7 @@ packages/config/vitest/
 
 `apps/web/tsconfig.json` switches from inline to `"extends": "@wingmic/config-tsconfig/nextjs.json"`. Same for ESLint + Vitest configs.
 
-### 3.3 — Create `packages/types` (zero own logic, builds last)
-
-```ts
-// packages/types/src/index.ts
-export type {
-  User, NewUser, Entity, NewEntity, Company, Event, Topic,
-  Interaction, NewInteraction, EntityFact, EntityNote,
-} from '@wingmic/db/schema';
-export type {
-  ExtractionResult, PersonCandidate, CompanyCandidate,
-  EventCandidate, ActionCandidate,
-} from '@wingmic/extractor/schema';
-```
-
-Consumers: `import type { Entity } from '@wingmic/types'`.
-
-### 3.4 — Hoist `packages/brand`
+### 3.3 — Hoist `packages/brand`
 
 ```
 packages/brand/
@@ -227,7 +213,7 @@ git rm apps/web/public/icon.svg apps/web/public/icon-tile.svg apps/web/public/ic
 
 Add `apps/web/public/` to `.gitignore`. Add `apps/web/public/.gitkeep` to preserve directory.
 
-### 3.5 — Hoist `packages/design-tokens`
+### 3.4 — Hoist `packages/design-tokens`
 
 ```
 packages/design-tokens/
@@ -251,7 +237,7 @@ export default { presets: [wingmicPreset], content: ['./app/**/*.{ts,tsx}'] };
 
 `apps/web/app/globals.css` keeps CSS vars; values come from `@wingmic/design-tokens` via the Tailwind preset.
 
-### 3.6 — Hoist `packages/db`
+### 3.5 — Hoist `packages/db`
 
 ```
 packages/db/
@@ -273,11 +259,11 @@ packages/db/
 - `apps/web/lib/trpc/context.ts`
 - `apps/web/lib/trpc/routers/capture.ts`
 - `apps/web/lib/trpc/routers/recall.ts`
-- `apps/web/lib/extractor/resolution.ts` (until 3.7 also moves it)
+- `apps/web/lib/extractor/resolution.ts` (until 3.6 also moves it)
 
 Local SQLite file moves: `apps/web/local.db` → `packages/db/local.db`. Update `.gitignore` glob — already covers `*.db` globally, no change.
 
-### 3.7 — Hoist `packages/extractor`
+### 3.6 — Hoist `packages/extractor`
 
 ```
 packages/extractor/
@@ -307,19 +293,7 @@ packages/extractor/
 - `apps/web/lib/trpc/routers/capture.ts`
 - `apps/web/lib/trpc/routers/recall.ts`
 
-### 3.8 — Stub `apps/mcp-server` + `packages/mcp-server`
-
-```
-apps/mcp-server/
-  package.json (tsup build, scripts to run stdio + http transports)
-  src/
-    index.ts (placeholder: console.log + exit 0)
-  README.md (v0.4 milestone, see issues #11 epic)
-```
-
-Add `apps/mcp-server` to workspace via root `package.json` `workspaces` field.
-
-### 3.9 — Update `.github/workflows/ci.yml`
+### 3.7 — Update `.github/workflows/ci.yml`
 
 ```yaml
 - run: bun install --frozen-lockfile
@@ -340,11 +314,11 @@ Add Turborepo cache step (opt-in via env, no-op without token):
     restore-keys: turbo-${{ runner.os }}-
 ```
 
-### 3.10 — Write `CLAUDE.md` + update README + docs
+### 3.8 — Write `CLAUDE.md` + update README + docs
 
 Per §4 + §5 below.
 
-### 3.11 — Cloudflare bundling tweak (mitigates regression of issue #7)
+### 3.9 — Cloudflare bundling tweak (mitigates regression of issue #7)
 
 Update `apps/web/scripts/bundle-libsql.ts` (lands in v0.1.1 Task 8) to extend `nodePaths`:
 
@@ -358,7 +332,7 @@ nodePaths: [
 
 If Task 8 has not landed yet, defer this to that task; this PR does not regress Cloudflare deploy because cf:build still fails the same way it does today — fixing it is issue #7's job.
 
-### 3.12 — Verify + commit + open PR
+### 3.10 — Verify + commit + open PR
 
 Per §6 below.
 
@@ -400,13 +374,11 @@ deployed on Cloudflare Workers + libSQL/Turso.
 
 ```
 
-apps/web              ← Next.js homepage + product
-apps/mcp-server       ← v0.4 placeholder
+apps/web              ← mobile-first web app (the only app)
 packages/brand        ← logos, favicons, OG, manifest
 packages/design-tokens
 packages/db           ← Drizzle schema + libSQL client + migrations
-packages/extractor    ← Claude prompt + Zod + resolution + eval
-packages/types        ← shared TS re-exports
+packages/extractor    ← entity-detection pipeline: prompt + Zod + resolution + search/recall + eval
 packages/logger       ← (issue #12) Logger with analytics seam
 packages/env          ← (issue #12) Zod-validated env
 packages/config/*     ← tsconfig + eslint + vitest presets
@@ -520,7 +492,7 @@ Targeted edits, not full rewrites. Each file gets the smallest change that refle
 
 ### NEW: `docs/packages.md`
 
-One-page guide on how to add a new package: required files, naming, tsup config, version pinning (`"workspace:*"` until first npm publish at v0.4), Vitest setup, ESLint preset extension, how to test it locally via `bun --filter @wingmic/<name> ...`.
+One-page guide on how to add a new package: required files, naming, tsup config, version pinning (`"workspace:*"`), Vitest setup, ESLint preset extension, how to test it locally via `bun --filter @wingmic/<name> ...`.
 
 ---
 
@@ -581,8 +553,8 @@ act -j build               # → green
 
 | Risk | Likelihood | Mitigation |
 |---|---|---|
-| Type resolution breaks during 3.6 db hoist (apps/web imports go red mid-PR) | High | Sequence step 3.6 + 3.7 as paired commits. CI gates each. Local `bun run typecheck` between every commit. |
-| Cloudflare libSQL bundling regresses harder | Medium | §3.11 extends `nodePaths` in the post-build script. Task 8 of v0.1.1 plan is the canonical fix; this PR pre-stages the path additions. |
+| Type resolution breaks during 3.5 db hoist (apps/web imports go red mid-PR) | High | Sequence step 3.5 + 3.6 as paired commits. CI gates each. Local `bun run typecheck` between every commit. |
+| Cloudflare libSQL bundling regresses harder | Medium | §3.9 extends `nodePaths` in the post-build script. Task 8 of v0.1.1 plan is the canonical fix; this PR pre-stages the path additions. |
 | Stale Turborepo cache produces phantom failures | Medium | Add `rm -rf .turbo` to docs/deploy.md troubleshooting. CI cache step uses `restore-keys` with prefix match — bad entry never reused after invalidation. |
 | `apps/web/public/` gitignore breaks GitHub Pages auto-deploy if anyone wires that up | Low | Cloudflare deploy uses build-time prebuild; pages auto-deploy is not the path. Note in docs/deploy.md. |
 | Eval fixtures path change orphans the v0.1.1 Task 1 integration test | Medium | Bake import-path update into the same PR; integration.test.ts imports go through `@wingmic/extractor`. |
@@ -592,8 +564,8 @@ act -j build               # → green
 
 ## Out of scope (this spec)
 
-- Publishing any `@wingmic/*` to npm (defer to v0.4 milestone)
-- iOS / browser-extension / CLI / Raycast / Obsidian packages (not on the roadmap)
+- Publishing any `@wingmic/*` to npm
+- Adding new apps of any kind — `apps/web` is the only app
 - Pinning specific package versions in `package.json` (workspace ranges only)
 - Switching from `tsup` to another bundler
 - Adding Storybook or component-library tooling
@@ -609,15 +581,15 @@ act -j build               # → green
 | Library bundler per package | tsup (esm only, dts) |
 | Workspace manager | Bun 1.3 (continued) |
 | Package naming | `@wingmic/<name>` |
-| Visibility | All `private: true` until v0.4 |
+| Visibility | All `private: true` (no npm publish planned) |
 | `apps/web/public/` source | Generated at prebuild from `packages/brand/src/` |
 | `CLAUDE.md` location | Repo root, pushed to GitHub |
 | Project-level `CLAUDE.md` overlaps with user global | Only the no-AI-co-author rule (it is project policy AND user preference) |
-| Shared types path | `@wingmic/types` re-exports from `@wingmic/db/schema` + `@wingmic/extractor/schema` |
+| Shared types path | Consumers import from `@wingmic/db/schema` + `@wingmic/extractor/schema` directly. No separate types package. |
 | Eval fixtures path | `packages/extractor/src/eval/fixtures.json` |
-| Cf bundle script | Extend `nodePaths` per §3.11 |
+| Cf bundle script | Extend `nodePaths` per §3.9 |
 | ci.yml changes | Root-level turbo commands + opt-in cache step |
-| Empty placeholders ok? | Yes for `packages/logger` + `packages/env` (issue #12) + `apps/mcp-server` (v0.4) — they get just a `package.json` + `src/index.ts` stub |
+| Empty placeholders ok? | Yes for `packages/logger` + `packages/env` (issue #12 lands those properly) — they get just a `package.json` + `src/index.ts` stub for now |
 
 ---
 
@@ -625,9 +597,9 @@ act -j build               # → green
 
 This spec is the authoritative source for the plan. The plan will:
 
-1. Decompose §3.1–§3.12 into TDD-style bite-sized tasks
+1. Decompose §3.1–§3.10 into TDD-style bite-sized tasks
 2. Each task: files / failing test (where applicable) / minimal change / run / commit
-3. Maintain ordering: 3.1 → 3.2 → 3.3 → 3.4 → 3.5 → 3.6 → 3.7 → 3.8 → 3.9 → 3.10 → 3.11 → 3.12
+3. Maintain ordering: 3.1 → 3.2 → 3.3 → 3.4 → 3.5 → 3.6 → 3.7 → 3.8 → 3.9 → 3.10
 4. Each commit keeps `bun run typecheck` + `bun run build` green
 5. Final task = run §6 verification + open PR
 
