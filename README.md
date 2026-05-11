@@ -1,8 +1,10 @@
 <div align="center">
 
-<img src="design/screenshots/01-hero.png" alt="wingmic.xyz hero — you met twelve people this week. Wingmic remembers everyone." width="800" />
+<img src="design/brand/mark-512.png" alt="wingmic logo" width="120" />
 
 # wingmic
+
+<img src="design/screenshots/01-hero.png" alt="wingmic.xyz hero — you met twelve people this week. Wingmic remembers everyone." width="800" />
 
 **voice-first networking memory · open source · MIT**
 
