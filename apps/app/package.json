@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@wingmic/brand": "workspace:*",
+    "@wingmic/design-tokens": "workspace:*",
     "@ai-sdk/anthropic": "^3.0.74",
     "@ai-sdk/openai": "^3.0.58",
     "@libsql/client": "^0.17.3",

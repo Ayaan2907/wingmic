@@ -26,6 +26,7 @@
         "@trpc/react-query": "^11.17.0",
         "@trpc/server": "^11.17.0",
         "@wingmic/brand": "workspace:*",
+        "@wingmic/design-tokens": "workspace:*",
         "ai": "^6.0.174",
         "better-auth": "^1.6.9",
         "drizzle-orm": "^0.45.2",
@@ -69,6 +70,7 @@
       "version": "0.1.0-beta.0",
       "dependencies": {
         "@wingmic/brand": "workspace:*",
+        "@wingmic/design-tokens": "workspace:*",
         "next": "^15.0.3",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
@@ -108,6 +110,17 @@
     "packages/config/vitest": {
       "name": "@wingmic/config-vitest",
       "version": "0.0.0",
+    },
+    "packages/design-tokens": {
+      "name": "@wingmic/design-tokens",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@types/node": "^22.9.0",
+        "@wingmic/config-tsconfig": "workspace:*",
+        "tailwindcss": "^3.4.14",
+        "tsup": "^8.0.0",
+        "typescript": "^5.6.3",
+      },
     },
   },
   "packages": {
@@ -922,6 +935,8 @@
     "@wingmic/config-tsconfig": ["@wingmic/config-tsconfig@workspace:packages/config/tsconfig"],
 
     "@wingmic/config-vitest": ["@wingmic/config-vitest@workspace:packages/config/vitest"],
+
+    "@wingmic/design-tokens": ["@wingmic/design-tokens@workspace:packages/design-tokens"],
 
     "@wingmic/web": ["@wingmic/web@workspace:apps/web"],
 

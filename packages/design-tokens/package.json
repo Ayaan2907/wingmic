@@ -1,0 +1,25 @@
+{
+  "name": "@wingmic/design-tokens",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "src", "tailwind-preset.ts"],
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./tailwind-preset": "./tailwind-preset.ts"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --sourcemap",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@wingmic/config-tsconfig": "workspace:*",
+    "tailwindcss": "^3.4.14",
+    "tsup": "^8.0.0",
+    "typescript": "^5.6.3"
+  }
+}
