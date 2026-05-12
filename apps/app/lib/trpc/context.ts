@@ -1,5 +1,5 @@
 import { auth } from '@/lib/auth';
-import { db } from '@/lib/db/client';
+import { db } from '@wingmic/db';
 
 /**
  * tRPC context. Created per request. Includes the resolved auth session

@@ -26,6 +26,7 @@
         "@trpc/react-query": "^11.17.0",
         "@trpc/server": "^11.17.0",
         "@wingmic/brand": "workspace:*",
+        "@wingmic/db": "workspace:*",
         "@wingmic/design-tokens": "workspace:*",
         "ai": "^6.0.174",
         "better-auth": "^1.6.9",
@@ -110,6 +111,22 @@
     "packages/config/vitest": {
       "name": "@wingmic/config-vitest",
       "version": "0.0.0",
+    },
+    "packages/db": {
+      "name": "@wingmic/db",
+      "version": "0.0.0",
+      "dependencies": {
+        "@libsql/client": "^0.17.3",
+        "@paralleldrive/cuid2": "^3.3.0",
+        "drizzle-orm": "^0.45.2",
+      },
+      "devDependencies": {
+        "@types/node": "^22.9.0",
+        "@wingmic/config-tsconfig": "workspace:*",
+        "drizzle-kit": "^0.31.10",
+        "tsup": "^8.0.0",
+        "typescript": "^5.6.3",
+      },
     },
     "packages/design-tokens": {
       "name": "@wingmic/design-tokens",
@@ -935,6 +952,8 @@
     "@wingmic/config-tsconfig": ["@wingmic/config-tsconfig@workspace:packages/config/tsconfig"],
 
     "@wingmic/config-vitest": ["@wingmic/config-vitest@workspace:packages/config/vitest"],
+
+    "@wingmic/db": ["@wingmic/db@workspace:packages/db"],
 
     "@wingmic/design-tokens": ["@wingmic/design-tokens@workspace:packages/design-tokens"],
 

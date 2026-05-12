@@ -11,7 +11,7 @@
 import { createClient } from '@libsql/client';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import { drizzle } from 'drizzle-orm/libsql';
-import { env } from '../lib/config/env';
+import { env } from '../../../apps/app/lib/config/env';
 
 async function main() {
   const client = createClient({

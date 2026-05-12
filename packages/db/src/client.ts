@@ -1,6 +1,6 @@
 import { createClient, type Client } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
-import { env } from '../config/env';
+import { env } from '../../../apps/app/lib/config/env';
 import * as schema from './schema';
 
 declare global {

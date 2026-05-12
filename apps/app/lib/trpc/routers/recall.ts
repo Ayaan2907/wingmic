@@ -3,7 +3,7 @@ import { eq, inArray, desc } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc';
 import { embedText, cosine, EmbeddingError } from '@/lib/extractor/embeddings';
 import { TRPCError } from '@trpc/server';
-import * as schema from '@/lib/db/schema';
+import * as schema from '@wingmic/db/schema';
 
 export const recallRouter = router({
   /**

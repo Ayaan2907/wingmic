@@ -1,8 +1,8 @@
 import { defineConfig } from 'drizzle-kit';
-import { env } from './lib/config/env';
+import { env } from '../../apps/app/lib/config/env';
 
 export default defineConfig({
-  schema: './lib/db/schema.ts',
+  schema: './src/schema.ts',
   out: './drizzle',
   dialect: 'turso',
   dbCredentials: {
