@@ -15,13 +15,19 @@
     "packages/config/*"
   ],
   "scripts": {
-    "dev":          "turbo dev --filter=@wingmic/web",
+    "dev":          "turbo dev",
+    "dev:web":      "turbo dev --filter=@wingmic/web",
+    "dev:app":      "turbo dev --filter=@wingmic/app",
     "build":        "turbo build",
     "test":         "turbo test",
     "lint":         "turbo lint",
     "typecheck":    "turbo typecheck",
     "format":       "prettier --write \"**/*.{ts,tsx,md,json}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\""
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\"",
+    "db:generate":  "bun --filter=@wingmic/app db:generate",
+    "db:apply":     "bun --filter=@wingmic/app db:apply",
+    "db:studio":    "bun --filter=@wingmic/app db:studio",
+    "extract:eval": "bun --filter=@wingmic/app extract:eval"
   },
   "devDependencies": {
     "prettier": "^3.3.3",

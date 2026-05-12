@@ -23,6 +23,8 @@ import {
   LiveFeed,
 } from './_components/marketing-ui';
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3211';
+
 const TWEAK_DEFAULTS = {
   "accentColor": "#FFC452",
   "secondColor": "#86efac",

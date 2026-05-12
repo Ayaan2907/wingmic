@@ -32,12 +32,16 @@ jobs:
         run: bun run typecheck
 
       - name: lint
-        run: bun --filter '@wingmic/web' lint
+        run: bun run --filter '@wingmic/web' lint && bun run --filter '@wingmic/app' lint
 
       - name: vitest
-        working-directory: apps/web
+        working-directory: apps/app
         run: bun run test
 
-      - name: build
+      - name: build (web — static export)
         working-directory: apps/web
+        run: bun run build
+
+      - name: build (app — dynamic)
+        working-directory: apps/app
         run: bun run build
