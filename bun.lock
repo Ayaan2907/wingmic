@@ -38,7 +38,6 @@
         "zustand": "^5.0.12",
       },
       "devDependencies": {
-        "@eslint/eslintrc": "^3.3.5",
         "@opennextjs/cloudflare": "^1.19.5",
         "@playwright/test": "^1.59.1",
         "@resvg/resvg-js": "^2.6.2",
@@ -48,8 +47,8 @@
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
         "@vitejs/plugin-react": "^6.0.1",
-        "@wingmic/config-eslint": "*",
-        "@wingmic/config-tsconfig": "*",
+        "@wingmic/config-eslint": "workspace:*",
+        "@wingmic/config-tsconfig": "workspace:*",
         "autoprefixer": "^10.4.20",
         "drizzle-kit": "^0.31.10",
         "eslint": "^9.14.0",
