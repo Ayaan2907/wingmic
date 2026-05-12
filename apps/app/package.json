@@ -9,6 +9,8 @@
     "start": "next start --port 3211",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "prebuild": "cp -r ../../packages/brand/src/*.{svg,png,webmanifest,ico} public/ 2>/dev/null || true",
+    "predev":   "cp -r ../../packages/brand/src/*.{svg,png,webmanifest,ico} public/ 2>/dev/null || true",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
@@ -23,6 +25,7 @@
     "cf:upload": "bunx opennextjs-cloudflare upload"
   },
   "dependencies": {
+    "@wingmic/brand": "workspace:*",
     "@ai-sdk/anthropic": "^3.0.74",
     "@ai-sdk/openai": "^3.0.58",
     "@libsql/client": "^0.17.3",

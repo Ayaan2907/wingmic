@@ -9,10 +9,11 @@
     "start": "next start --port 3210",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "prebuild": "cp -r ../../packages/brand/src/*.{svg,png,webmanifest} public/ 2>/dev/null || true",
-    "predev":   "cp -r ../../packages/brand/src/*.{svg,png,webmanifest} public/ 2>/dev/null || true"
+    "prebuild": "cp -r ../../packages/brand/src/*.{svg,png,webmanifest,ico} public/ 2>/dev/null || true",
+    "predev":   "cp -r ../../packages/brand/src/*.{svg,png,webmanifest,ico} public/ 2>/dev/null || true"
   },
   "dependencies": {
+    "@wingmic/brand": "workspace:*",
     "next": "^15.0.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
