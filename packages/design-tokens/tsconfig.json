@@ -1,0 +1,10 @@
+{
+  "extends": "@wingmic/config-tsconfig/node.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "noEmit": false,
+    "incremental": false
+  },
+  "include": ["src/**/*"]
+}
