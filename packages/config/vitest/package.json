@@ -2,6 +2,11 @@
   "name": "@wingmic/config-vitest",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "main": "./base.config.ts",
-  "files": ["*.ts"]
+  "files": ["*.ts"],
+  "exports": {
+    "./base.config": "./base.config.ts",
+    ".": "./base.config.ts"
+  }
 }

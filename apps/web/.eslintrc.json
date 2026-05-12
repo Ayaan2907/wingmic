@@ -7,5 +7,5 @@
     "react/no-unescaped-entities": "off",
     "react-hooks/exhaustive-deps": "off"
   },
-  "ignorePatterns": [".next", "out", "node_modules"]
+  "ignorePatterns": [".next", "out", "node_modules", ".open-next", ".turbo", "drizzle"]
 }

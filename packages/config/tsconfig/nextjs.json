@@ -4,10 +4,6 @@
   "compilerOptions": {
     "lib": ["dom", "dom.iterable", "ES2022"],
     "jsx": "preserve",
-    "allowJs": true,
-    "plugins": [{ "name": "next" }],
-    "paths": {
-      "@/*": ["./*"]
-    }
+    "allowJs": true
   }
 }
