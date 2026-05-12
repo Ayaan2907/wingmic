@@ -9,8 +9,8 @@
     "start": "next start --port 3210",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "prebuild": "cp -r ../../packages/brand/src/*.{svg,png,webmanifest,ico} public/ 2>/dev/null || true",
-    "predev":   "cp -r ../../packages/brand/src/*.{svg,png,webmanifest,ico} public/ 2>/dev/null || true"
+    "prebuild": "cp ../../packages/brand/src/*.svg ../../packages/brand/src/*.png ../../packages/brand/src/*.webmanifest public/",
+    "predev":   "cp ../../packages/brand/src/*.svg ../../packages/brand/src/*.png ../../packages/brand/src/*.webmanifest public/"
   },
   "dependencies": {
     "@wingmic/brand": "workspace:*",

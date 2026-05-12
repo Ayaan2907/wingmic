@@ -15,7 +15,6 @@ those directories are gitignored and regenerated.
 - `src/icon-{16,32,64,192,512}.png` — favicon rasters
 - `src/apple-touch-icon.png` — 180x180 iOS home-screen
 - `src/manifest.webmanifest` — PWA manifest
-- `src/favicon.ico` — multi-resolution legacy favicon
 
 ## generation
 
