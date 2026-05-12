@@ -1,0 +1,25 @@
+{
+  "name": "@wingmic/brand",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "src", "scripts"],
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./assets/*": "./src/*"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --sourcemap",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "typecheck": "tsc --noEmit",
+    "generate-icons": "bun run scripts/generate-icons.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@wingmic/config-tsconfig": "workspace:*",
+    "tsup": "^8.0.0",
+    "typescript": "^5.6.3"
+  }
+}

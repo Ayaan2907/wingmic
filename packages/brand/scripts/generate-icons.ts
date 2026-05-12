@@ -9,7 +9,7 @@ import { Resvg } from '@resvg/resvg-js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const publicDir = resolve(__dirname, '../public');
+const srcDir = resolve(__dirname, '../src');
 
 interface Render {
   source: string;
@@ -35,13 +35,13 @@ const renders: Render[] = [
 ];
 
 for (const r of renders) {
-  const svg = readFileSync(resolve(publicDir, r.source), 'utf-8');
+  const svg = readFileSync(resolve(srcDir, r.source), 'utf-8');
   const resvg = new Resvg(svg, {
     fitTo: { mode: 'width', value: r.width },
     font: { loadSystemFonts: true },
   });
   const png = resvg.render().asPng();
-  writeFileSync(resolve(publicDir, r.output), png);
+  writeFileSync(resolve(srcDir, r.output), png);
   console.log(`✓ ${r.output}  ${r.width}px  ${png.byteLength.toLocaleString()} bytes`);
 }
 

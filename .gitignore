@@ -53,3 +53,10 @@ prisma/dev.db*
 # OpenNext / Cloudflare adapter output
 .open-next/
 .vercel/
+
+# Brand assets copied at prebuild from packages/brand/src/
+apps/web/public/*
+!apps/web/public/.gitkeep
+apps/app/public/*
+!apps/app/public/.gitkeep
+
