@@ -128,29 +128,30 @@ Roadmap and milestone progress live on the [project board](https://github.com/Ay
 ## monorepo layout
 
 ```
-wingmic/
-  apps/
-    web/                          ← Next.js homepage + product app
-      app/                        ← App Router routes
-        page.tsx                  ← homepage (HomeClient.tsx is the canvas + sections)
-        signin/                   ← magic-link sign-in
-        capture/                  ← voice → extract → graph
-        recall/                   ← NL search across the graph
-        api/auth/[...all]/        ← BetterAuth handler
-        api/trpc/[trpc]/          ← tRPC handler
-      lib/
-        db/                       ← Drizzle schema + libSQL client
-        auth.ts, auth-client.ts   ← BetterAuth wiring
-        trpc/                     ← typed routers (capture, recall)
-        extractor/                ← Zod schema + Claude prompts + resolution + eval
-      drizzle/                    ← migrations
-      e2e/                        ← Playwright specs
-      scripts/                    ← migrate.ts (programmatic libSQL migrator)
-  packages/                       ← (placeholder; promotion-on-demand)
-    ui/  extractor/  db/
-  design/                         ← canonical handoff: design-system.md, homepage-v2.html, video-v6.html
-  docs/                           ← deploy.md, architecture.md
+apps/web              ← static landing → wingmic.xyz (Cloudflare Pages)
+apps/app              ← dynamic product → app.wingmic.xyz (Cloudflare Workers)
+packages/
+  brand               ← logos, favicons, OG, manifest
+  design-tokens       ← Tailwind preset + token TS exports
+  db                  ← Drizzle schema + libSQL + migrations
+  extractor           ← entity-detection pipeline + eval harness
+  config/{tsconfig,eslint,vitest}
+design/               ← canonical mocks (read-only)
+docs/                 ← architecture.md, deploy.md, packages.md, superpowers/
+CLAUDE.md             ← Claude Code project context
+turbo.json
 ```
+
+Built as a Turborepo monorepo. See [`docs/architecture.md`](docs/architecture.md) § 0 for the full map.
+
+## two deploy targets
+
+| Surface | Source | Hosting | URL |
+|---|---|---|---|
+| **Landing** (static) | `apps/web` → `next export` | Cloudflare Pages | `wingmic.xyz` |
+| **Product** (dynamic) | `apps/app` → @opennextjs/cloudflare | Cloudflare Workers | `app.wingmic.xyz` |
+
+Operator runbook: [`docs/deploy.md`](docs/deploy.md).
 
 ---
 
@@ -202,14 +203,14 @@ git clone https://github.com/Ayaan2907/wingmic.git
 cd wingmic
 bun install
 
-cp apps/web/.env.example apps/web/.env.local
+cp apps/app/.env.example apps/app/.env.local
 # Fill in ANTHROPIC_API_KEY and OPENAI_API_KEY at minimum.
-# See docs/deploy.md § 2 for how to acquire each.
+# See docs/deploy.md for how to acquire each.
 
-cd apps/web && bun run db:apply
-cd -
+bun --filter=@wingmic/app db:apply
 
-bun run dev   # → http://localhost:3210
+bun run dev:app   # → http://localhost:3211 (product)
+# or: bun run dev:web  # → http://localhost:3210 (landing)
 ```
 
 Sign in: type any email at `/signin`. The magic link is logged to the dev console since `RESEND_API_KEY` isn't set locally.
@@ -251,32 +252,22 @@ them as separate issues — don't pile them into the PR.
 
 ---
 
-## scripts
-
-From the repo root:
+## scripts (workspace root)
 
 ```bash
-bun run dev            # start dev server (apps/web on :3210)
-bun run typecheck      # tsc --noEmit across workspaces
-bun run build          # next build
-bun run lint           # next lint
-bun run format         # prettier --write
-bun run format:check   # prettier --check (CI gate)
+bun run dev          # turbo dev — defaults to apps/web; use dev:app for product
+bun run dev:web      # apps/web on :3210
+bun run dev:app      # apps/app on :3211
+bun run typecheck    # all workspaces
+bun run lint         # all workspaces
+bun run test         # all workspaces
+bun run build        # apps/web (next export) + apps/app (next build)
+bun run db:apply     # apply migrations against TURSO_DB_URL or local file
+bun run db:studio    # open Drizzle Studio
+bun run extract:eval # run canonical 50-fixture extractor accuracy suite
 ```
 
-From `apps/web/`:
-
-```bash
-bun run db:generate    # drizzle-kit generate (after schema edits)
-bun run db:apply       # apply migrations to current TURSO_DB_URL or local file
-bun run db:studio      # open Drizzle Studio in the browser
-bun run extract:eval   # run the canonical 5-fixture extractor accuracy suite
-bun run test           # vitest run
-bun run test:watch     # vitest watch
-bun run test:e2e       # playwright (run `bunx playwright install` once first)
-bun run cf:build       # opennextjs-cloudflare build (see docs/deploy.md for known issue)
-bun run cf:deploy      # wrangler deploy
-```
+Filter to one workspace: `bun --filter=@wingmic/<name> <script>`.
 
 ---
 
@@ -289,6 +280,18 @@ Status:
 - **v0.1.1** — manual self-host works today (clone, fill env, deploy to your provider). Documented in [docs/deploy.md](docs/deploy.md).
 - **v0.5** — single-command `docker-compose up` with BYO API keys is on the roadmap.
 
+From the workspace root:
+
+```bash
+# Landing (static, no secrets)
+bun --filter=@wingmic/web build
+bunx wrangler pages deploy apps/web/out --project-name=wingmic-landing
+
+# Product (dynamic, 8 secrets)
+bun --filter=@wingmic/app cf:build
+bun --filter=@wingmic/app cf:deploy
+```
+
 The hosted `wingmic.xyz` and the self-host code are **identical** — same repo, same migrations, same secrets. We don't keep a paid SaaS-only fork.
 
 ---
@@ -297,7 +300,7 @@ The hosted `wingmic.xyz` and the self-host code are **identical** — same repo,
 
 - **People are private.** Captured people stay scoped to your user. Never shared, never used to enrich anyone else's graph.
 - **Companies / events / topics are public facts.** Acme is Acme regardless of who knows about it. The canonical layer is shared across users with no consent surface (because it doesn't need one).
-- **Voice transcripts** are sent to Anthropic for extraction. We disclose this in the UI before first capture; you can review the [exact prompt](apps/web/lib/extractor/prompt.ts).
+- **Voice transcripts** are sent to Anthropic for extraction. We disclose this in the UI before first capture; you can review the [exact prompt](packages/extractor/src/prompt.ts).
 - **Embeddings** are sent to OpenAI (text-embedding-3-small). 1536-d float vectors, no metadata.
 - **No analytics on the homepage** by default. Self-host to verify.
 - **Magic links** are short-lived (10 min) and single-use.

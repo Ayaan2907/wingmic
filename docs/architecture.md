@@ -6,6 +6,7 @@ How wingmic actually works under the hood. Read this before touching the schema,
 
 ## table of contents
 
+0. [Monorepo layout](#-0-monorepo-layout)
 1. [The mental model](#1-the-mental-model)
 2. [Framing D: the identity model](#2-framing-d-the-identity-model)
 3. [Schema map](#3-schema-map)
@@ -14,6 +15,30 @@ How wingmic actually works under the hood. Read this before touching the schema,
 6. [Resolution: confidence + lazy promotion](#6-resolution-confidence--lazy-promotion)
 7. [Failure modes](#7-failure-modes)
 8. [Why these choices](#8-why-these-choices)
+
+---
+
+## § 0 monorepo layout
+
+Wingmic is a Turborepo monorepo with two Next.js apps and shared packages.
+
+```
+apps/
+  web/                ← static landing → wingmic.xyz
+  app/                ← dynamic product → app.wingmic.xyz
+packages/
+  brand               ← brand assets (logos, favicons, OG, manifest)
+  design-tokens       ← Tailwind preset + token TS
+  db                  ← Drizzle + libSQL + migrations + client
+  extractor           ← entity-detection: Zod schema + Claude prompt + embeddings + resolution + eval
+  config/             ← shared tsconfig, eslint, vitest presets
+```
+
+`apps/web` is pure-static — no DB import, no auth code, no API routes. It deploys to Cloudflare Pages as static assets, accepts zero secrets.
+
+`apps/app` is dynamic — runs on Cloudflare Workers via @opennextjs/cloudflare. Handles authentication (BetterAuth + Resend magic link, cookie scoped to `app.wingmic.xyz`), capture, recall, dashboard, tRPC API.
+
+Shared code lives in `packages/*` and is consumed by `apps/app`. `apps/web` only consumes `@wingmic/brand` and `@wingmic/design-tokens` — never `@wingmic/db` or `@wingmic/extractor` (would defeat the static promise).
 
 ---
 
@@ -78,7 +103,7 @@ This means v0.1.1 is **user-facing identical to Framing A** — every user just 
 
 ## 3. schema map
 
-Full schema lives in [`apps/web/lib/db/schema.ts`](../apps/web/lib/db/schema.ts). 17 tables.
+Full schema lives in [`packages/db/src/schema.ts`](../packages/db/src/schema.ts) (exported via `@wingmic/db`). 17 tables.
 
 ### user layer (BetterAuth-managed core + wingmic identity)
 
@@ -126,6 +151,8 @@ Full schema lives in [`apps/web/lib/db/schema.ts`](../apps/web/lib/db/schema.ts)
 
 ## 4. capture flow
 
+All capture stages run inside `apps/app` (the dynamic product on Workers); `apps/web` is static landing only.
+
 ```
  voice
    │
@@ -133,19 +160,19 @@ Full schema lives in [`apps/web/lib/db/schema.ts`](../apps/web/lib/db/schema.ts)
  ┌──────────────────────────────────────────────────┐
  │  Browser SpeechRecognition (or BYO STT in v0.1.2)│
  │  Continuous mode, interim + final result paths   │
- │  apps/web/app/capture/_components/useSpeechRecognition.ts
+ │  apps/app/app/capture/_components/useSpeechRecognition.ts
  └─────────────────┬────────────────────────────────┘
                    │ transcript (string)
                    ▼
  ┌──────────────────────────────────────────────────┐
  │  trpc capture.commit (protected procedure)       │
- │  apps/web/lib/trpc/routers/capture.ts            │
+ │  apps/app/lib/trpc/routers/capture.ts            │
  └─────────────────┬────────────────────────────────┘
                    │
                    ▼
  ┌──────────────────────────────────────────────────┐
  │  extract(transcript)                             │
- │  apps/web/lib/extractor/client.ts                │
+ │  @wingmic/extractor → src/client.ts              │
  │   • Vercel AI SDK generateObject                 │
  │   • Anthropic Claude Sonnet 4.6                  │
  │   • Zod schema (ExtractionResult)                │
@@ -157,14 +184,15 @@ Full schema lives in [`apps/web/lib/db/schema.ts`](../apps/web/lib/db/schema.ts)
  ┌──────────────────────────────────────────────────┐
  │  embedTexts(personDescriptors) +                 │
  │  embedText(transcript)                           │
- │  apps/web/lib/extractor/embeddings.ts            │
+ │  @wingmic/extractor → src/embeddings.ts          │
  │   • OpenAI text-embedding-3-small (1536-d)       │
  └─────────────────┬────────────────────────────────┘
                    │
                    ▼
  ┌──────────────────────────────────────────────────┐
  │  commit(extracted, ctx)                          │
- │  apps/web/lib/extractor/resolution.ts            │
+ │  @wingmic/extractor → src/resolution.ts          │
+ │  (writes via @wingmic/db client)                  │
  │                                                   │
  │  1. upsert canonical Company (slug + domain)      │
  │     observed_count++; promotedAt set at count≥2   │
@@ -190,13 +218,15 @@ Full schema lives in [`apps/web/lib/db/schema.ts`](../apps/web/lib/db/schema.ts)
 
 ## 5. recall flow
 
+Runs in `apps/app`, same as capture.
+
 ```
  user types: "who at acme works on rust?"
    │
    ▼
  ┌──────────────────────────────────────────────────┐
  │  trpc recall.query                               │
- │  apps/web/lib/trpc/routers/recall.ts             │
+ │  apps/app/lib/trpc/routers/recall.ts             │
  └─────────────────┬────────────────────────────────┘
                    │
                    ▼
@@ -283,7 +313,7 @@ We trace these explicitly so the team knows where to look when something breaks.
 |---|---|---|
 | Browser SpeechRecognition silently fails on iOS Safari | 5s timeout with no result event | Show "type instead" toast; reveal text fallback (planned v0.1.2) |
 | Anthropic 429 rate limit | TRPCError caught in `capture.commit` | Save raw transcript to `interaction`, surface "saved as draft, will retry" (planned v0.1.2) |
-| Zod schema rejection on Claude output | `ExtractionError` from `client.ts` | Caller retries once with stricter prompt; if still bad, save transcript only |
+| Zod schema rejection on Claude output | `ExtractionError` from `@wingmic/extractor` | Caller retries once with stricter prompt; if still bad, save transcript only |
 | Turso replica lag | Read returns stale rows | Default to primary for 30s after writes (planned v0.1.2) |
 | Magic link expired mid-capture | tRPC UNAUTHORIZED on commit | Stash transcript in localStorage, prompt re-auth, replay after (planned v0.1.2) |
 
