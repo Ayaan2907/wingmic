@@ -1,0 +1,35 @@
+{
+  "name": "@wingmic/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "src", "drizzle", "drizzle.config.ts", "scripts"],
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./schema": { "types": "./dist/schema.d.ts", "import": "./dist/schema.js" },
+    "./client": { "types": "./dist/client.d.ts", "import": "./dist/client.js" }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts src/schema.ts src/client.ts --format esm --dts --clean --sourcemap",
+    "dev": "tsup src/index.ts src/schema.ts src/client.ts --format esm --dts --watch",
+    "typecheck": "tsc --noEmit",
+    "generate": "drizzle-kit generate",
+    "push": "drizzle-kit push",
+    "studio": "drizzle-kit studio",
+    "apply": "bun run scripts/migrate.ts"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.3",
+    "@paralleldrive/cuid2": "^3.3.0",
+    "drizzle-orm": "^0.45.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@wingmic/config-tsconfig": "workspace:*",
+    "drizzle-kit": "^0.31.10",
+    "tsup": "^8.0.0",
+    "typescript": "^5.6.3"
+  }
+}

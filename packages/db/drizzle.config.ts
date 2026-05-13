@@ -1,8 +1,9 @@
 import { defineConfig } from 'drizzle-kit';
-import { env } from './lib/config/env';
+// TODO(#12): hoist env to @wingmic/env so packages/db doesn't reach into apps/app
+import { env } from '../../apps/app/lib/config/env';
 
 export default defineConfig({
-  schema: './lib/db/schema.ts',
+  schema: './src/schema.ts',
   out: './drizzle',
   dialect: 'turso',
   dbCredentials: {

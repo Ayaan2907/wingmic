@@ -3,9 +3,9 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { magicLink } from 'better-auth/plugins';
 import { Resend } from 'resend';
 import { env } from './config/env';
-import { db } from './db/client';
+import { db } from '@wingmic/db';
 import { sendMagicLinkEmail } from './email/magic-link';
-import * as schema from './db/schema';
+import * as schema from '@wingmic/db/schema';
 
 const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
 

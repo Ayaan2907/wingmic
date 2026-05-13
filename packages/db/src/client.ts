@@ -1,6 +1,7 @@
 import { createClient, type Client } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
-import { env } from '../config/env';
+// TODO(#12): hoist env to @wingmic/env so packages/db doesn't reach into apps/app
+import { env } from '../../../apps/app/lib/config/env';
 import * as schema from './schema';
 
 declare global {

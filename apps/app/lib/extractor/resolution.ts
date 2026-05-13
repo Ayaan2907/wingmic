@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import type { DB } from '@/lib/db/client';
-import * as schema from '@/lib/db/schema';
+import type { DB } from '@wingmic/db';
+import * as schema from '@wingmic/db/schema';
 import {
   ExtractionResult,
   type CompanyCandidate,
