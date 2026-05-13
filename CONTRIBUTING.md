@@ -8,6 +8,7 @@ This guide covers everything you need to ship a clean PR.
 
 ## ground rules
 
+0. **Read `CLAUDE.md`.** It tells Claude Code (and you) the conventions enforced on this repo. AI coding assistants auto-load it on session start.
 1. **Be excellent.** Read the [Code of Conduct](CODE_OF_CONDUCT.md). Discuss the code, not the person.
 2. **One change per PR.** Smaller PRs review faster and ship faster. Big idea? Open an issue or discussion first so we can split it up.
 3. **Ship the test.** New code path → new test. Bug fix → regression test. Vitest for units, Playwright for E2E.
