@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cosine } from './embeddings';
+import { cosine } from '../embeddings';
 
 describe('cosine', () => {
   it('returns 1 for identical vectors', () => {

@@ -1,0 +1,39 @@
+{
+  "name": "@wingmic/extractor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "src"],
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./schema": { "types": "./dist/schema.d.ts", "import": "./dist/schema.js" },
+    "./embeddings": { "types": "./dist/embeddings.d.ts", "import": "./dist/embeddings.js" },
+    "./slug": { "types": "./dist/slug.d.ts", "import": "./dist/slug.js" }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts src/schema.ts src/embeddings.ts src/slug.ts --format esm --dts --clean --sourcemap",
+    "dev": "tsup src/index.ts src/schema.ts src/embeddings.ts src/slug.ts --format esm --dts --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "eval": "bun run src/eval/runner.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.74",
+    "@ai-sdk/openai": "^3.0.58",
+    "@wingmic/db": "workspace:*",
+    "ai": "^6.0.174",
+    "drizzle-orm": "^0.45.2",
+    "zod": "^4.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@wingmic/config-tsconfig": "workspace:*",
+    "@wingmic/config-vitest": "workspace:*",
+    "tsup": "^8.0.0",
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.5"
+  }
+}

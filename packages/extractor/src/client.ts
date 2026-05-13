@@ -1,6 +1,6 @@
 import { anthropic } from '@ai-sdk/anthropic';
 import { generateObject } from 'ai';
-import { env } from '../config/env';
+import { env } from '../../../apps/app/lib/config/env';
 import { ExtractionResult } from './schema';
 import { SYSTEM_PROMPT, userPrompt } from './prompt';
 
