@@ -5,12 +5,13 @@
  * Production:         writes to TURSO_DB_URL with TURSO_AUTH_TOKEN
  *
  * Usage:
- *   bun run apps/web/scripts/migrate.ts
+ *   bun run --filter=@wingmic/db apply
  *   or via package.json: bun run db:apply
  */
 import { createClient } from '@libsql/client';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import { drizzle } from 'drizzle-orm/libsql';
+// TODO(#12): hoist env to @wingmic/env so packages/db doesn't reach into apps/app
 import { env } from '../../../apps/app/lib/config/env';
 
 async function main() {

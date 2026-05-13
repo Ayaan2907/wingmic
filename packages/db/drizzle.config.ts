@@ -1,4 +1,5 @@
 import { defineConfig } from 'drizzle-kit';
+// TODO(#12): hoist env to @wingmic/env so packages/db doesn't reach into apps/app
 import { env } from '../../apps/app/lib/config/env';
 
 export default defineConfig({
