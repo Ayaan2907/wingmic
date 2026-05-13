@@ -27,7 +27,7 @@
     "db:generate":  "bun --filter=@wingmic/db generate",
     "db:apply":     "bun --filter=@wingmic/db apply",
     "db:studio":    "bun --filter=@wingmic/db studio",
-    "extract:eval": "bun --filter=@wingmic/app extract:eval"
+    "extract:eval": "bun --filter=@wingmic/extractor eval"
   },
   "devDependencies": {
     "prettier": "^3.3.3",

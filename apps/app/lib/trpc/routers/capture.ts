@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc';
-import { extract, commit, ExtractionError, EmbeddingError } from '@/lib/extractor';
+import { extract, commit, ExtractionError, EmbeddingError } from '@wingmic/extractor';
 import { TRPCError } from '@trpc/server';
 
 export const captureRouter = router({

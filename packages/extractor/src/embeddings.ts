@@ -1,6 +1,6 @@
 import { openai } from '@ai-sdk/openai';
 import { embed, embedMany } from 'ai';
-import { env } from '../config/env';
+import { env } from '../../../apps/app/lib/config/env';
 
 const MODEL = openai.textEmbeddingModel(env.OPENAI_EMBEDDING_MODEL);
 

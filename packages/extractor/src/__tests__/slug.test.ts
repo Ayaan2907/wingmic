@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { slugify, nameSimilarity } from './slug';
+import { slugify, nameSimilarity } from '../slug';
 
 describe('slugify', () => {
   it('lowercases and hyphenates', () => {
