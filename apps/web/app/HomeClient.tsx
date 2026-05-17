@@ -23,17 +23,25 @@ import {
   LiveFeed,
 } from './_components/marketing-ui';
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3211';
+
 const TWEAK_DEFAULTS = {
   "accentColor": "#FFC452",
   "secondColor": "#86efac",
   "thirdColor": "#FF8FAB"
 } ;
 
+// Waitlist endpoint — Formspree. Public by design (endpoint IDs are not secret).
+// If you fork wingmic, swap this for your own Formspree / equivalent endpoint.
+const WAITLIST_ENDPOINT = 'https://formspree.io/f/meenaaqb';
+
 function App() {
   const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
   const [tweaksOpen, setTweaksOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const accent = tweaks.accentColor;
   const second = tweaks.secondColor;
   const third = tweaks.thirdColor;
@@ -53,9 +61,26 @@ function App() {
     window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [key]: val } }, '*');
   };
 
-  const submitWaitlist = () => {
-    if (!email.includes('@')) return;
-    setSubmitted(true);
+  const submitWaitlist = async () => {
+    if (!email.includes('@')) {
+      setErrorMsg('that does not look like a real email.');
+      return;
+    }
+    setPending(true);
+    setErrorMsg('');
+    try {
+      const res = await fetch(WAITLIST_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ email, source: 'wingmic.xyz/waitlist' })
+      });
+      if (!res.ok) throw new Error(`formspree returned ${res.status}`);
+      setSubmitted(true);
+    } catch (err) {
+      setErrorMsg('could not reach the waitlist. try again in a moment.');
+    } finally {
+      setPending(false);
+    }
   };
 
   const reviews = [
@@ -1223,13 +1248,15 @@ function App() {
                 color: '#fff', fontSize: 15, outline: 'none', fontFamily: 'inherit'
               }} />
             
-              <button type="submit" style={{
+              <button type="submit" disabled={pending} style={{
               padding: '14px 26px', borderRadius: 8, background: accent, color: '#000',
-              fontSize: 14, fontWeight: 700, border: 'none', cursor: 'pointer',
+              fontSize: 14, fontWeight: 700, border: 'none',
+              cursor: pending ? 'wait' : 'pointer',
+              opacity: pending ? 0.6 : 1,
               fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6
             }}>
-                Request access
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7h12m0 0L8 2m5 5l-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+                {pending ? 'Sending…' : 'Request access'}
+                {!pending && <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7h12m0 0L8 2m5 5l-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>}
               </button>
             </form> :
 
@@ -1245,6 +1272,14 @@ function App() {
               </div>
             </div>
           }
+
+          {errorMsg &&
+          <div className="mono" style={{
+            fontSize: 12, color: '#FF6B6B', marginTop: 14, letterSpacing: 0.5,
+            maxWidth: 500, marginLeft: 'auto', marginRight: 'auto', textAlign: 'center'
+          }}>
+              {errorMsg}
+            </div>}
 
           <div className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 24, letterSpacing: 1, textTransform: 'uppercase' }}>
             no spam · unsubscribe in one click · MIT-licensed @ GA

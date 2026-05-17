@@ -11,19 +11,29 @@
   },
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "packages/config/*"
   ],
   "scripts": {
-    "dev": "bun run --filter '@wingmic/web' dev",
-    "build": "bun run --filter '*' build",
-    "lint": "bun run --filter '*' lint",
-    "typecheck": "bun run --filter '*' typecheck",
-    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\""
+    "dev":          "turbo dev",
+    "dev:web":      "turbo dev --filter=@wingmic/web",
+    "dev:app":      "turbo dev --filter=@wingmic/app",
+    "build":        "turbo build",
+    "test":         "turbo test",
+    "lint":         "turbo lint",
+    "typecheck":    "turbo typecheck",
+    "format":       "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\"",
+    "db:generate":  "bun --filter=@wingmic/db generate",
+    "db:apply":     "bun --filter=@wingmic/db apply",
+    "db:studio":    "bun --filter=@wingmic/db studio",
+    "extract:eval": "bun --filter=@wingmic/extractor eval"
   },
   "devDependencies": {
     "prettier": "^3.3.3",
     "prettier-plugin-tailwindcss": "^0.6.8",
+    "tsup": "^8.5.1",
+    "turbo": "^2.9.12",
     "typescript": "^5.6.3"
   },
   "engines": {

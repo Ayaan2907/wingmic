@@ -4,7 +4,9 @@ import path from 'node:path';
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  typedRoutes: true,
+  output: 'export',
+  images: { unoptimized: true },
+  trailingSlash: true,
   outputFileTracingRoot: path.join(__dirname, '../..'),
 };
 
