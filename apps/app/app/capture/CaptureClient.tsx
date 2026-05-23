@@ -26,6 +26,25 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { useAudioRecorder, type RecorderStatus } from './_components/useAudioRecorder';
 
+// ── Constants ───────────────────────────────────────────────────────────
+const HOLD_THRESHOLDS = {
+  /** Pixels finger must travel from origin to ARM lock / discard (visual hint only) */
+  armPx: 40,
+  /** Pixels finger must travel from origin to COMMIT lock / discard */
+  commitPx: 80,
+} as const;
+
+/** Soft-delete grace window before the memo is permanently dropped. */
+const UNDO_WINDOW_MS = 30_000;
+/** Vertical offset the dock button floats above the tab bar. */
+const BUTTON_FLOAT_ABOVE_PX = 24;
+/** Bottom-nav height — kept in sync with BottomTabBar style.height. */
+const TAB_BAR_HEIGHT_PX = 56;
+/** PrivacyAmbientLine sits above the dock button (88 = button height + breathing). */
+const PRIVACY_LINE_BOTTOM_PX = TAB_BAR_HEIGHT_PX + BUTTON_FLOAT_ABOVE_PX + 88;
+/** Watchdog: force-stop the recorder if no pointerup event arrives within 60s. */
+const POINTER_WATCHDOG_MS = 60_000;
+
 // ── Tokens ──────────────────────────────────────────────────────────────
 const accent = '#FFC452';
 const second = '#86efac';
@@ -117,8 +136,25 @@ export default function CaptureClient({ userName }: { userName: string | null })
   const [pasteDraft, setPasteDraft] = useState('');
   const activeIdRef = useRef<string | null>(null);
   const threadEndRef = useRef<HTMLDivElement | null>(null);
+  /** AbortController per in-flight pipeline (keyed by bubble id). */
+  const pipelineControllersRef = useRef<Map<string, AbortController>>(new Map());
+  /** setTimeout handles for soft-delete grace windows (keyed by bubble id). */
+  const undoTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const commitMutation = trpc.capture.commit.useMutation();
+
+  // Clear any pending soft-delete timers on unmount so they don't fire
+  // after the component is gone (React warning + ghost state writes).
+  useEffect(() => {
+    const timers = undoTimersRef.current;
+    const controllers = pipelineControllersRef.current;
+    return () => {
+      for (const t of timers.values()) clearTimeout(t);
+      timers.clear();
+      for (const c of controllers.values()) c.abort();
+      controllers.clear();
+    };
+  }, []);
 
   // mutate helpers
   const patch = useCallback((id: string, p: Partial<ThreadMessage>) => {
@@ -192,6 +228,18 @@ export default function CaptureClient({ userName }: { userName: string | null })
   }, [recorder.status]);
 
   async function runCapturePipeline(id: string, blob: Blob, recordingDuration: number) {
+    // Each pipeline owns an AbortController so discardBubble() can cancel
+    // the transcribe fetch + commit mutation mid-flight, sparing the paid
+    // AssemblyAI call AND any silent backend writes.
+    const controller = new AbortController();
+    pipelineControllersRef.current.set(id, controller);
+    const signal = controller.signal;
+    const cleanupController = () => {
+      if (pipelineControllersRef.current.get(id) === controller) {
+        pipelineControllersRef.current.delete(id);
+      }
+    };
+
     patch(id, {
       status: 'uploading',
       audioBlob: blob,
@@ -208,13 +256,18 @@ export default function CaptureClient({ userName }: { userName: string | null })
     let transcribeMs = 0;
     try {
       patch(id, { status: 'transcribing', transcribingStartedAt: performance.now() });
-      const res = await fetch('/api/capture/transcribe', { method: 'POST', body: fd });
+      const res = await fetch('/api/capture/transcribe', {
+        method: 'POST',
+        body: fd,
+        signal,
+      });
       transcribeMs = Math.round(performance.now() - t0);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         const code = (body?.error?.code ?? 'provider_error') as FailureCode;
         const message = body?.error?.message ?? 'transcribe failed upstream.';
         patch(id, { status: 'failed', transcribeMs, error: { code, message } });
+        cleanupController();
         return;
       }
       const body = (await res.json()) as { transcript: string; durationMs?: number };
@@ -225,14 +278,28 @@ export default function CaptureClient({ userName }: { userName: string | null })
           transcribeMs,
           error: { code: 'transcript_empty', message: 'mic didnt catch you. try again closer.' },
         });
+        cleanupController();
         return;
       }
-    } catch {
+    } catch (err) {
+      // Swallow AbortError silently — discardBubble already removed the row.
+      if (err instanceof Error && err.name === 'AbortError') {
+        cleanupController();
+        return;
+      }
       patch(id, {
         status: 'failed',
         transcribeMs: Math.round(performance.now() - t0),
         error: { code: 'network', message: 'the upload didnt finish. check your connection.' },
       });
+      cleanupController();
+      return;
+    }
+
+    // Check after async boundary: discard may have fired between fetch.json()
+    // resolving and us reaching the commit call.
+    if (signal.aborted) {
+      cleanupController();
       return;
     }
 
@@ -241,19 +308,34 @@ export default function CaptureClient({ userName }: { userName: string | null })
     // 2) tRPC commit
     const c0 = performance.now();
     try {
-      const result = await commitMutation.mutateAsync({ transcript });
+      // tRPC v11 forwards `signal` through to the underlying fetch link;
+      // even if the lib doesn't, we re-check aborted state after.
+      const result = await commitMutation.mutateAsync(
+        { transcript },
+        { signal } as unknown as Parameters<typeof commitMutation.mutateAsync>[1],
+      );
+      if (signal.aborted) {
+        cleanupController();
+        return;
+      }
       patch(id, {
         status: 'committed',
         commitMs: Math.round(performance.now() - c0),
         graphResult: result as GraphResult,
       });
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        cleanupController();
+        return;
+      }
       const message = err instanceof Error ? err.message : 'commit failed.';
       patch(id, {
         status: 'failed',
         commitMs: Math.round(performance.now() - c0),
         error: { code: 'commit_failed', message },
       });
+    } finally {
+      cleanupController();
     }
   }
 
@@ -331,6 +413,13 @@ export default function CaptureClient({ userName }: { userName: string | null })
   }
 
   function discardBubble(id: string) {
+    // Abort BEFORE the state filter so the in-flight transcribe fetch +
+    // commit mutation reject cleanly with AbortError (handled in pipeline).
+    const controller = pipelineControllersRef.current.get(id);
+    if (controller) {
+      controller.abort();
+      pipelineControllersRef.current.delete(id);
+    }
     setMessages((prev) => prev.filter((m) => m.id !== id));
   }
 
@@ -339,15 +428,28 @@ export default function CaptureClient({ userName }: { userName: string | null })
 
   function softDelete(id: string) {
     patch(id, { status: 'deleted' });
-    const until = Date.now() + 30_000;
+    const until = Date.now() + UNDO_WINDOW_MS;
     setUndoQueue((q) => [...q, { id, until }]);
-    setTimeout(() => {
+    // Track the timer id so we can clear it on unmount or undo —
+    // otherwise the callback fires after unmount and warns about
+    // state updates on an unmounted component.
+    const t = setTimeout(() => {
+      undoTimersRef.current.delete(id);
       setUndoQueue((q) => q.filter((u) => u.id !== id || u.until !== until));
       // local-only soft delete for v0.1.1a — no backend cascade yet (v0.1.1b)
-    }, 30_000);
+    }, UNDO_WINDOW_MS);
+    // If a previous timer existed for this id (unlikely), clear it.
+    const prev = undoTimersRef.current.get(id);
+    if (prev) clearTimeout(prev);
+    undoTimersRef.current.set(id, t);
   }
 
   function undoDelete(id: string) {
+    const t = undoTimersRef.current.get(id);
+    if (t) {
+      clearTimeout(t);
+      undoTimersRef.current.delete(id);
+    }
     patch(id, { status: 'committed' });
     setUndoQueue((q) => q.filter((u) => u.id !== id));
   }
@@ -1354,7 +1456,13 @@ function Dock({
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const originRef = useRef<{ x: number; y: number } | null>(null);
   const movedRef = useRef(false);
+  /** Currently-tracked primary pointer id — guards against second-finger touch. */
   const pointerIdRef = useRef<number | null>(null);
+  /** Window-level pointerup/cancel fallback listeners (used if setPointerCapture fails). */
+  const fallbackUpRef = useRef<((ev: PointerEvent) => void) | null>(null);
+  const fallbackCancelRef = useRef<((ev: PointerEvent) => void) | null>(null);
+  /** Watchdog timer — force-stops recorder if no release event arrives. */
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // helper: haptic
   function vibrate(pattern: number | number[]) {
@@ -1372,9 +1480,28 @@ function Dock({
     await onStart();
   }, [onStart]);
 
+  function clearFallbackListeners() {
+    if (fallbackUpRef.current) {
+      window.removeEventListener('pointerup', fallbackUpRef.current);
+      fallbackUpRef.current = null;
+    }
+    if (fallbackCancelRef.current) {
+      window.removeEventListener('pointercancel', fallbackCancelRef.current);
+      fallbackCancelRef.current = null;
+    }
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+  }
+
   // pointer events
   function onPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
     if (!isIdle) return;
+    // Reject second-finger touches mid-record. Without this guard the second
+    // pointerdown overwrites pointerIdRef + activeIdRef and the first
+    // capture's blob lands in the wrong bubble.
+    if (pointerIdRef.current !== null) return;
     originRef.current = { x: e.clientX, y: e.clientY };
     movedRef.current = false;
     pointerIdRef.current = e.pointerId;
@@ -1382,34 +1509,67 @@ function Dock({
       try {
         e.currentTarget.setPointerCapture(e.pointerId);
       } catch {
-        // jsdom etc.
+        // jsdom etc. — fall through; window fallback handles release.
       }
     }
+    // Window-level release fallback. If the finger lifts outside the button
+    // bounds (or setPointerCapture failed), the button's onPointerUp never
+    // fires and the mic would stay hot. These listeners cover that case and
+    // remove themselves once they trigger.
+    const onWinUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerIdRef.current) return;
+      clearFallbackListeners();
+      handleRelease('up');
+    };
+    const onWinCancel = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerIdRef.current) return;
+      clearFallbackListeners();
+      handleRelease('cancel');
+    };
+    fallbackUpRef.current = onWinUp;
+    fallbackCancelRef.current = onWinCancel;
+    window.addEventListener('pointerup', onWinUp);
+    window.addEventListener('pointercancel', onWinCancel);
+    // 60s watchdog — if neither button nor window release fires, force-stop.
+    watchdogRef.current = setTimeout(() => {
+      clearFallbackListeners();
+      if (
+        recorder.status === 'recording' ||
+        recorder.status === 'lock_armed' ||
+        recorder.status === 'cancel_armed' ||
+        recorder.status === 'arming'
+      ) {
+        recorder.stop();
+      }
+      pointerIdRef.current = null;
+      originRef.current = null;
+    }, POINTER_WATCHDOG_MS);
     void beginHold();
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLButtonElement>) {
     if (!originRef.current) return;
+    if (e.pointerId !== pointerIdRef.current) return;
     const dx = e.clientX - originRef.current.x;
     const dy = e.clientY - originRef.current.y;
     movedRef.current = true;
 
-    if (dy < -80) {
+    if (dy < -HOLD_THRESHOLDS.commitPx) {
       vibrate([15, 40, 15]);
       recorder.lock();
       originRef.current = null;
       return;
     }
-    if (dx < -80) {
+    if (dx < -HOLD_THRESHOLDS.commitPx) {
       vibrate([30, 20, 30]);
       recorder.discard();
       originRef.current = null;
       return;
     }
-    if (dy < -40) {
+    if (dy < -HOLD_THRESHOLDS.armPx) {
       recorder.setLockArmed(true);
       recorder.setCancelArmed(false);
-    } else if (dx < -40) {
+    } else if (dx < -HOLD_THRESHOLDS.armPx) {
       recorder.setCancelArmed(true);
       recorder.setLockArmed(false);
     } else {
@@ -1418,45 +1578,66 @@ function Dock({
     }
   }
 
-  function onPointerUp() {
-    if (!originRef.current && recorder.status !== 'locked') {
-      // already handled by lock/discard via threshold cross
-      return;
-    }
-    const wasCancelArmed = recorder.status === 'cancel_armed';
-    const wasLockArmed = recorder.status === 'lock_armed';
+  // Shared release logic — invoked by button-bound pointer events AND the
+  // window-level fallback listeners. Idempotent: clears pointer state first.
+  function handleRelease(kind: 'up' | 'cancel') {
+    const status = recorder.status;
+    const wasCancelArmed = status === 'cancel_armed';
+    const wasLockArmed = status === 'lock_armed';
     originRef.current = null;
     pointerIdRef.current = null;
+    if (kind === 'cancel') {
+      if (
+        status === 'recording' ||
+        status === 'lock_armed' ||
+        status === 'cancel_armed' ||
+        status === 'arming'
+      ) {
+        recorder.discard();
+      }
+      return;
+    }
+    // up
     if (wasCancelArmed) {
       vibrate([30, 20, 30]);
       recorder.discard();
       return;
     }
-    if (wasLockArmed || recorder.status === 'locked') {
+    if (wasLockArmed || status === 'locked') {
       // keep recording — user must tap stop pill
       return;
     }
-    if (
-      recorder.status === 'recording' ||
-      recorder.status === 'arming'
-    ) {
+    if (status === 'recording' || status === 'arming') {
       vibrate(12);
       recorder.stop();
     }
   }
 
-  function onPointerCancel() {
-    originRef.current = null;
-    pointerIdRef.current = null;
-    if (
-      recorder.status === 'recording' ||
-      recorder.status === 'lock_armed' ||
-      recorder.status === 'cancel_armed' ||
-      recorder.status === 'arming'
-    ) {
-      recorder.discard();
+  function onPointerUp(e: React.PointerEvent<HTMLButtonElement>) {
+    if (e.pointerId !== pointerIdRef.current) return;
+    if (!originRef.current && recorder.status !== 'locked') {
+      // already handled by lock/discard via threshold cross
+      pointerIdRef.current = null;
+      clearFallbackListeners();
+      return;
     }
+    clearFallbackListeners();
+    handleRelease('up');
   }
+
+  function onPointerCancel(e: React.PointerEvent<HTMLButtonElement>) {
+    if (e.pointerId !== pointerIdRef.current) return;
+    clearFallbackListeners();
+    handleRelease('cancel');
+  }
+
+  // Cleanup any dangling listeners + watchdog on unmount.
+  useEffect(() => {
+    return () => {
+      clearFallbackListeners();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // — keyboard equivalent: Space hold-to-talk + Escape discard —
   useEffect(() => {
@@ -1522,7 +1703,7 @@ function Dock({
           position: 'fixed',
           left: 0,
           right: 0,
-          bottom: 56,
+          bottom: TAB_BAR_HEIGHT_PX,
           paddingBottom: 'env(safe-area-inset-bottom)',
           display: 'flex',
           justifyContent: 'center',
@@ -1547,7 +1728,7 @@ function Dock({
               border: '1.5px solid #000',
               boxShadow: '4px 4px 0 #000',
               cursor: 'pointer',
-              transform: 'translateY(-24px)',
+              transform: `translateY(-${BUTTON_FLOAT_ABOVE_PX}px)`,
             }}
           >
             ■
@@ -1582,7 +1763,7 @@ function Dock({
               textTransform: 'uppercase',
               transition: 'width 0.18s ease-out, height 0.18s ease-out, box-shadow 0.18s ease-out',
               touchAction: 'none',
-              transform: 'translateY(-24px)',
+              transform: `translateY(-${BUTTON_FLOAT_ABOVE_PX}px)`,
             }}
           >
             {isActive ? 'release' : 'hold'}
@@ -1600,7 +1781,7 @@ function PrivacyAmbientLine() {
         position: 'fixed',
         left: 0,
         right: 0,
-        bottom: 168,
+        bottom: PRIVACY_LINE_BOTTOM_PX,
         textAlign: 'center',
         pointerEvents: 'none',
         zIndex: 40,
@@ -1644,7 +1825,7 @@ function BottomTabBar({ active }: { active: 'capture' | 'recall' | 'history' | '
         left: 0,
         right: 0,
         bottom: 0,
-        height: 56,
+        height: TAB_BAR_HEIGHT_PX,
         paddingBottom: 'env(safe-area-inset-bottom)',
         background: 'rgba(10,10,10,0.92)',
         backdropFilter: 'blur(20px)',

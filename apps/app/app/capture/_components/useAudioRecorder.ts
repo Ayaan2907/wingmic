@@ -100,6 +100,8 @@ export function useAudioRecorder(): UseAudioRecorder {
   const reducedMotionRef = useRef<boolean>(prefersReducedMotion());
   const discardedRef = useRef<boolean>(false);
   const hardCapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Set true when discard()/reset() is called mid-arming; checked after getUserMedia resolves. */
+  const armingAbortedRef = useRef<boolean>(false);
 
   useEffect(() => {
     return () => {
@@ -150,12 +152,26 @@ export function useAudioRecorder(): UseAudioRecorder {
       audioCtxRef.current = ctx;
       analyserRef.current = analyser;
       const data = new Uint8Array(analyser.frequencyBinCount);
+      // Throttle setLevel to ~20fps (50ms). RAF fires at ~60Hz but a 22-bar
+      // meter doesn't read smoother above 20fps, and parent re-renders at
+      // 60Hz tank mid-range Android during recording.
+      const EMIT_INTERVAL_MS = 50;
+      let lastEmit = 0;
       const tick = () => {
         if (!analyserRef.current) return;
         if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
           rafRef.current = requestAnimationFrame(tick);
           return;
         }
+        const now =
+          typeof performance !== 'undefined' && typeof performance.now === 'function'
+            ? performance.now()
+            : Date.now();
+        if (now - lastEmit < EMIT_INTERVAL_MS) {
+          rafRef.current = requestAnimationFrame(tick);
+          return;
+        }
+        lastEmit = now;
         analyserRef.current.getByteFrequencyData(data);
         const next: number[] = new Array(BARS);
         const stride = data.length / BARS;
@@ -189,6 +205,7 @@ export function useAudioRecorder(): UseAudioRecorder {
     setAudioBlob(null);
     chunksRef.current = [];
     discardedRef.current = false;
+    armingAbortedRef.current = false;
     setDuration(0);
     setStatus('arming');
 
@@ -206,6 +223,14 @@ export function useAudioRecorder(): UseAudioRecorder {
           : 'mic unavailable. plug one in or type the memo.';
       setError({ code, message });
       setStatus('error');
+      return;
+    }
+    // discard()/reset() may have fired while getUserMedia was in flight.
+    // If so, kill the freshly-granted stream before it goes hot.
+    if (armingAbortedRef.current) {
+      stream.getTracks().forEach((t) => t.stop());
+      armingAbortedRef.current = false;
+      setStatus('idle');
       return;
     }
     streamRef.current = stream;
@@ -316,6 +341,9 @@ export function useAudioRecorder(): UseAudioRecorder {
   }, [status]);
 
   const discard = useCallback(() => {
+    // If discard runs mid-arming, signal the in-flight getUserMedia handler
+    // to drop the stream when it resolves.
+    armingAbortedRef.current = true;
     stopInternal('idle');
   }, []);
 
@@ -347,6 +375,8 @@ export function useAudioRecorder(): UseAudioRecorder {
   );
 
   const reset = useCallback(() => {
+    // Same race as discard(): reset may fire mid-arming.
+    armingAbortedRef.current = true;
     cleanup();
     chunksRef.current = [];
     discardedRef.current = false;

@@ -173,6 +173,51 @@ describe('useAudioRecorder', () => {
     expect(result.current.level.every((v) => v === 0.5)).toBe(true);
   });
 
+  it('discard during arming kills the mic stream when getUserMedia resolves late', async () => {
+    // Deferred getUserMedia: we control when it resolves. The test calls
+    // start(), then discard() before the promise resolves, then resolves
+    // it. The track's stop() must have been invoked and recorder must
+    // remain idle with no MediaRecorder constructed.
+    let resolveGum: (s: MediaStream) => void = () => {};
+    const trackStop = vi.fn();
+    const fakeStream = {
+      getTracks: () => [{ stop: trackStop }],
+    } as unknown as MediaStream;
+    const gumMock = vi.fn(
+      () =>
+        new Promise<MediaStream>((resolve) => {
+          resolveGum = resolve;
+        }),
+    );
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: gumMock },
+    });
+
+    const { result } = renderHook(() => useAudioRecorder());
+    // Kick off start; do NOT await — we want the arming state mid-flight.
+    let startPromise!: Promise<void>;
+    act(() => {
+      startPromise = result.current.start();
+    });
+    // status should be arming while gum hangs
+    expect(result.current.status).toBe('arming');
+
+    // user discards mid-arming
+    act(() => {
+      result.current.discard();
+    });
+
+    // now resolve getUserMedia AFTER discard
+    await act(async () => {
+      resolveGum(fakeStream);
+      await startPromise;
+    });
+
+    expect(trackStop).toHaveBeenCalled();
+    expect(result.current.status).toBe('idle');
+  });
+
   it('reports mic-denied as an error state', async () => {
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
