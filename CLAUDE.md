@@ -93,5 +93,26 @@ docs/                 ← architecture.md, deploy.md, superpowers/
 - `gh issue list --label "wedge:<name>"` — work for one wedge
 - `bun run db:studio` — open Drizzle Studio
 - `bun --filter @wingmic/extractor test` — run extractor unit tests only
-- `bun --filter @wingmic/web dev` — start web app
+- `bun --filter @wingmic/app dev` — start product app (port 3211)
+- `bun --filter @wingmic/web dev` — start landing app (port 3210)
 - `bun run extract:eval` — run extraction-accuracy harness (gate for releases)
+
+## current blockers & plans
+
+**v0.1.1 GA** (8 tasks, 0 checked):
+- Task 1: capture → resolution → recall integration test (#8)
+- Task 2: lazy-promotion (Company/Event union) (#2)
+- Task 3: modularize HomeClient.tsx (#1)
+- Task 4: text-input fallback (#5)
+- Task 5: confidence-prompt UI for 0.5–0.85 (#3)
+- Task 6: iOS Safari SpeechRecognition chunking (#4)
+- Task 7: Sentry + PostHog (#9, p2)
+- Task 8: OpenNext + libSQL bundling (#7, **p1 blocker**)
+
+**Critical blockers:**
+- **#7** (OpenNext bundling) — `bun run cf:build` fails, blocks `apps/app` Workers deploy
+- **#9** (Sentry/PostHog) — observability; p2, can slip to v0.1.2
+
+**Next upstream:**
+- v0.2: contact imports (#10)
+- v0.3: Acts agent (#11)
