@@ -36,7 +36,7 @@ packages/
 
 `apps/web` is pure-static — no DB import, no auth code, no API routes. It deploys to Cloudflare Pages as static assets, accepts zero secrets.
 
-`apps/app` is dynamic — runs on Cloudflare Workers via @opennextjs/cloudflare. Handles authentication (BetterAuth + Resend magic link, cookie scoped to `app.wingmic.xyz`), capture, recall, dashboard, tRPC API.
+`apps/app` is dynamic — runs on Railway (Node.js, standard `next start`). Handles authentication (BetterAuth + Resend magic link, cookie scoped to `app.wingmic.xyz`), capture, recall, dashboard, tRPC API.
 
 Shared code lives in `packages/*` and is consumed by `apps/app`. `apps/web` only consumes `@wingmic/brand` and `@wingmic/design-tokens` — never `@wingmic/db` or `@wingmic/extractor` (would defeat the static promise).
 
@@ -151,7 +151,7 @@ Full schema lives in [`packages/db/src/schema.ts`](../packages/db/src/schema.ts)
 
 ## 4. capture flow
 
-All capture stages run inside `apps/app` (the dynamic product on Workers); `apps/web` is static landing only.
+All capture stages run inside `apps/app` (the dynamic product on Railway); `apps/web` is static landing only.
 
 ```
  voice
@@ -348,15 +348,16 @@ We trace these explicitly so the team knows where to look when something breaks.
 - **Inngest at v0.2** for durable Acts workflows ("draft email tomorrow at 9am") because Mastra's workflow primitives are not durable.
 - LangChain is overweight for our extraction-only v0.1.1 needs.
 
-### Why Cloudflare Workers (not Vercel)?
+### Why Railway (not Cloudflare Workers, not Vercel)?
 
-- **Edge globally.** Mobile p50 latency consistent worldwide.
-- **Pairs with Turso** (libSQL also lives on the edge).
-- **Self-host portability** preserved — no Vercel-specific image-optimization or ISR bindings.
-- (Caveat: the bun-workspaces + libSQL bundling has a known issue. See [`docs/deploy.md § 9`](deploy.md#9-known-issues).)
+- **Full Node.js runtime.** No edge-runtime constraints — every Next.js feature, every npm package, every native binary works. We previously targeted Cloudflare Workers via OpenNext but hit unresolved esbuild + libSQL bundling friction in a bun-workspaces monorepo (the original issue #7).
+- **Pairs with Turso replicas.** Latency stays good via Turso's regional read replicas; we don't need worker-edge to be fast.
+- **Vercel** is the obvious alternative, but Railway preserves self-host portability — a plain Dockerfile / Nixpacks build with no Vercel-specific image-optimization or ISR bindings means a contributor can run the same artifact on Fly, Render, or their own VPS.
+- **Static landing stays on Cloudflare Pages.** `apps/web` is pure-static export, zero secrets, zero runtime cost.
 
 ---
 
 ## change log for this doc
 
 - 2026-05-03 — initial version (v0.1.1 as shipped). Update when schema, flow, or framing changes.
+- 2026-05-23 — `apps/app` migrated from Cloudflare Workers (OpenNext) to Railway (Node.js). Issue #7 closed as obsolete.
