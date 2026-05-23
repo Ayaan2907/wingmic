@@ -7,14 +7,21 @@
  * OpenAI before the v0.1.1 pivot) would no longer be comparable to new query
  * embeddings (generated via OpenRouter), and recall would silently regress.
  *
- * This is a one-shot manual gate, not part of CI. Run before merging H1:
+ * This is a one-shot manual gate, NOT part of CI. To run, first transiently
+ * install @ai-sdk/openai (it was removed from project deps in H1), then:
  *
+ *   bun add -d @ai-sdk/openai
  *   OPENAI_API_KEY=sk-... OPENROUTER_API_KEY=sk-or-... \
  *     bun run packages/extractor/src/__tests__/embedding-equivalence.smoke.ts
+ *   bun remove @ai-sdk/openai
  *
  * Pass criterion: every pair-wise cosine ≥ 0.9999.
  * Fail action: keep embeddings on direct OpenAI as a special case, or wait
  * for OpenRouter to fix.
+ *
+ * Note: this file is excluded from typecheck via tsconfig.json `exclude`
+ * (the `*.smoke.ts` glob). Vitest's `include: ['*.test.ts']` also skips it.
+ * That's intentional — smoke tests run only when explicitly invoked.
  */
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { embed } from 'ai';
