@@ -6,18 +6,14 @@
   "scripts": {
     "dev": "next dev --port 3211",
     "build": "next build",
-    "start": "next start --port 3211",
+    "start": "next start -p ${PORT:-3211}",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "prebuild": "cp ../../packages/brand/src/*.svg ../../packages/brand/src/*.png ../../packages/brand/src/*.webmanifest public/",
     "predev":   "cp ../../packages/brand/src/*.svg ../../packages/brand/src/*.png ../../packages/brand/src/*.webmanifest public/",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
-    "cf:build": "bun run prebuild && bunx opennextjs-cloudflare build",
-    "cf:preview": "bunx opennextjs-cloudflare preview",
-    "cf:deploy": "bunx opennextjs-cloudflare deploy",
-    "cf:upload": "bunx opennextjs-cloudflare upload"
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@wingmic/brand": "workspace:*",
@@ -45,8 +41,6 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "*",
-    "@opennextjs/cloudflare": "^1.19.5",
     "@playwright/test": "^1.59.1",
     "@resvg/resvg-js": "^2.6.2",
     "@testing-library/dom": "^10.4.1",
@@ -65,7 +59,6 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.14",
     "typescript": "^5.6.3",
-    "vitest": "^4.1.5",
-    "wrangler": "^4.87.0"
+    "vitest": "^4.1.5"
   }
 }

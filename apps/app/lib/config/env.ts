@@ -30,7 +30,8 @@ const serverSchema = z.object({
 
   // ── Auth (BetterAuth) ─────────────────────────────────────────────────
   BETTER_AUTH_SECRET: z.string().min(32).optional(),
-  BETTER_AUTH_URL: z.string().url().default('http://localhost:3210'),
+  // Must match apps/app dev port (next dev --port 3211) or BetterAuth rejects Origin.
+  BETTER_AUTH_URL: z.string().url().default('http://localhost:3211'),
 
   // ── Email (Resend) — magic link delivery ──────────────────────────────
   RESEND_API_KEY: z.string().optional(),
@@ -52,7 +53,7 @@ const serverSchema = z.object({
 const clientSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
-  NEXT_PUBLIC_BETTER_AUTH_URL: z.string().url().default('http://localhost:3210'),
+  NEXT_PUBLIC_BETTER_AUTH_URL: z.string().url().default('http://localhost:3211'),
 });
 
 type ServerEnv = z.infer<typeof serverSchema>;
