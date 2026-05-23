@@ -1,0 +1,287 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, act, waitFor, cleanup } from '@testing-library/react';
+
+// ── Mock tRPC client ────────────────────────────────────────────────────
+const mutateAsyncMock = vi.fn();
+vi.mock('@/lib/trpc/client', () => ({
+  trpc: {
+    capture: {
+      commit: {
+        useMutation: () => ({
+          mutateAsync: mutateAsyncMock,
+          isPending: false,
+        }),
+      },
+    },
+  },
+}));
+
+// ── Mock useAudioRecorder so we can drive its state machine deterministically ──
+type FakeStatus =
+  | 'idle'
+  | 'arming'
+  | 'recording'
+  | 'cancel_armed'
+  | 'lock_armed'
+  | 'locked'
+  | 'encoding'
+  | 'ready'
+  | 'error';
+
+const fakeRecorder = {
+  status: 'idle' as FakeStatus,
+  duration: 0,
+  level: Array<number>(22).fill(0),
+  audioBlob: null as Blob | null,
+  error: null as { code: string; message: string } | null,
+  start: vi.fn(),
+  stop: vi.fn(),
+  discard: vi.fn(),
+  lock: vi.fn(),
+  setCancelArmed: vi.fn(),
+  setLockArmed: vi.fn(),
+  reset: vi.fn(),
+  supported: true,
+};
+
+let setStatusHook: ((s: FakeStatus) => void) | null = null;
+
+vi.mock('../_components/useAudioRecorder', () => {
+  const React = require('react') as typeof import('react');
+  return {
+    useAudioRecorder: () => {
+      const [status, setStatus] = React.useState<FakeStatus>(fakeRecorder.status);
+      const [audioBlob, setAudioBlob] = React.useState<Blob | null>(fakeRecorder.audioBlob);
+      setStatusHook = (s) => {
+        fakeRecorder.status = s;
+        setStatus(s);
+        if (s === 'ready') setAudioBlob(fakeRecorder.audioBlob);
+      };
+      return {
+        ...fakeRecorder,
+        status,
+        audioBlob,
+        start: async () => {
+          fakeRecorder.start();
+          fakeRecorder.status = 'recording';
+          setStatus('recording');
+        },
+      };
+    },
+  };
+});
+
+import CaptureClient from '../CaptureClient';
+
+function resetFakeRecorder() {
+  fakeRecorder.status = 'idle';
+  fakeRecorder.duration = 0;
+  fakeRecorder.audioBlob = null;
+  fakeRecorder.error = null;
+  for (const fn of [
+    fakeRecorder.start,
+    fakeRecorder.stop,
+    fakeRecorder.discard,
+    fakeRecorder.lock,
+    fakeRecorder.setCancelArmed,
+    fakeRecorder.setLockArmed,
+    fakeRecorder.reset,
+  ]) {
+    fn.mockClear?.();
+  }
+}
+
+describe('CaptureClient', () => {
+  beforeEach(() => {
+    resetFakeRecorder();
+    mutateAsyncMock.mockReset();
+    // fetch is replaced per test
+    (globalThis as { fetch?: unknown }).fetch = vi.fn();
+  });
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('renders empty thread + bottom tab bar on mount (idle)', () => {
+    render(<CaptureClient userName="ada" />);
+    // empty-hero copy
+    expect(screen.getByText(/hold the button/i)).toBeTruthy();
+    // 4 nav tabs
+    const nav = screen.getByLabelText('primary');
+    expect(nav).toBeTruthy();
+    expect(nav.textContent).toContain('capture');
+    expect(nav.textContent).toContain('recall');
+    expect(nav.textContent).toContain('history');
+    expect(nav.textContent).toContain('settings');
+    // ambient privacy line
+    expect(screen.getByText(/audio → assemblyai/i)).toBeTruthy();
+    // hold-to-talk button
+    expect(screen.getByRole('button', { name: /hold to record/i })).toBeTruthy();
+  });
+
+  it('runs the full record → transcribe → commit cycle and renders a committed bubble + graph card', async () => {
+    const audioBlob = new Blob(['xxx'], { type: 'audio/webm' });
+    fakeRecorder.audioBlob = audioBlob;
+
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ transcript: 'met sarah at acme', durationMs: 1200 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    (globalThis as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch;
+
+    mutateAsyncMock.mockResolvedValue({
+      extracted: {
+        persons: [{ name: 'sarah', role: 'eng', companyHint: 'acme', topics: [] }],
+        companies: [{ name: 'acme' }],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      newEntities: 1,
+      matchedEntities: 0,
+      interactionId: 'int-1',
+    });
+
+    render(<CaptureClient userName="ada" />);
+    const btn = screen.getByRole('button', { name: /hold to record/i });
+
+    await act(async () => {
+      fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
+    });
+    // recorder transitions through ready, useEffect kicks off pipeline
+    await act(async () => {
+      setStatusHook?.('ready');
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    const call = fetchMock.mock.calls[0] as unknown as [unknown, RequestInit];
+    const init = call[1];
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeInstanceOf(FormData);
+    const fd = init.body as FormData;
+    expect(fd.get('audio')).toBeInstanceOf(Blob);
+
+    await waitFor(() => {
+      expect(mutateAsyncMock).toHaveBeenCalledWith({ transcript: 'met sarah at acme' });
+    });
+    await waitFor(() => {
+      expect(screen.getByText('met sarah at acme')).toBeTruthy();
+    });
+    // graph card: shows the person name
+    await waitFor(() => {
+      expect(screen.getByText('sarah')).toBeTruthy();
+    });
+  });
+
+  it('renders an empty graph card footer when extracted entities are all empty', async () => {
+    const audioBlob = new Blob(['x'], { type: 'audio/webm' });
+    fakeRecorder.audioBlob = audioBlob;
+    (globalThis as { fetch: typeof fetch }).fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ transcript: 'um nothing', durationMs: 800 }), {
+        status: 200,
+      }),
+    ) as unknown as typeof fetch;
+    mutateAsyncMock.mockResolvedValue({
+      extracted: {
+        persons: [],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      newEntities: 0,
+      matchedEntities: 0,
+      interactionId: 'int-empty',
+    });
+
+    render(<CaptureClient userName="ada" />);
+    const btn = screen.getByRole('button', { name: /hold to record/i });
+    await act(async () => {
+      fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
+    });
+    await act(async () => {
+      setStatusHook?.('ready');
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/no entities found/i)).toBeTruthy();
+    });
+  });
+
+  it('renders a failed bubble with retry/paste/discard actions on transcribe 502', async () => {
+    fakeRecorder.audioBlob = new Blob(['x'], { type: 'audio/webm' });
+    (globalThis as { fetch: typeof fetch }).fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          error: { code: 'provider_error', message: 'assemblyai didnt answer.' },
+        }),
+        { status: 502 },
+      ),
+    ) as unknown as typeof fetch;
+
+    render(<CaptureClient userName="ada" />);
+    const btn = screen.getByRole('button', { name: /hold to record/i });
+    await act(async () => {
+      fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
+    });
+    await act(async () => {
+      setStatusHook?.('ready');
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/assemblyai didnt answer/i)).toBeTruthy();
+    });
+    expect(screen.getByRole('button', { name: /↻ retry/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /paste instead/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /× discard/i })).toBeTruthy();
+  });
+
+  it('spacebar keydown starts recording (locked mode), keyup sends', async () => {
+    fakeRecorder.audioBlob = new Blob(['x'], { type: 'audio/webm' });
+    (globalThis as { fetch: typeof fetch }).fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ transcript: 'hello', durationMs: 500 }), { status: 200 }),
+    ) as unknown as typeof fetch;
+    mutateAsyncMock.mockResolvedValue({
+      extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+      newEntities: 0,
+      matchedEntities: 0,
+      interactionId: 'k',
+    });
+
+    render(<CaptureClient userName="ada" />);
+    await act(async () => {
+      fireEvent.keyDown(window, { code: 'Space' });
+      await Promise.resolve();
+    });
+    expect(fakeRecorder.start).toHaveBeenCalled();
+    // simulate recorder going to locked then user releases space → recorder.stop
+    fakeRecorder.status = 'recording';
+    await act(async () => {
+      fireEvent.keyUp(window, { code: 'Space' });
+    });
+    expect(fakeRecorder.stop).toHaveBeenCalled();
+  });
+
+  it('escape while recording discards', async () => {
+    render(<CaptureClient userName="ada" />);
+    // put recorder into recording first via space keydown
+    await act(async () => {
+      fireEvent.keyDown(window, { code: 'Space' });
+      await Promise.resolve();
+    });
+    fakeRecorder.status = 'recording';
+    await act(async () => {
+      fireEvent.keyDown(window, { code: 'Escape' });
+    });
+    expect(fakeRecorder.discard).toHaveBeenCalled();
+  });
+});
