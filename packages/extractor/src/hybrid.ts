@@ -26,6 +26,7 @@ import {
 } from './schema';
 import type { AssemblyAIEntity } from './types';
 import { linkerModel } from './models';
+import { STOPWORDS } from './stopwords';
 import { env } from '../../../apps/app/lib/config/env';
 
 export interface HybridInput {
@@ -38,15 +39,47 @@ export interface HybridInput {
 // ──────────────────────────────────────────────────────────────────────
 
 /**
- * Run the hybrid pipeline. Layer-1+2 are pure (deterministic); Layer-3
- * calls the LLM linker on every memo per locked decision #10.
+ * Run the hybrid extractor pipeline.
+ *
+ * Per locked decision #10, Layer-3 (Haiku via OpenRouter) is the DEFAULT
+ * relation extractor — it runs on every memo, not as a confidence gate. It
+ * fills relations Layer-1+2 cannot detect: per-person role, companyHint,
+ * action targets (which person an action refers to), and per-person notes.
+ *
+ * Pipeline:
+ *   Layer-1  mapProviderEntities  — span-level NER from AssemblyAI entities
+ *                                   (currently stubbed to empty per
+ *                                   `transcribe-entities.ts`; the AAI entity
+ *                                   detection toggle isn't wired yet).
+ *   Layer-2  applyHeuristics      — deterministic regex over the transcript:
+ *                                   action-verb phrases and top-3 frequent
+ *                                   non-stopword tokens for topics.
+ *   Layer-3  runLinkerLLM         — best-effort LLM call with an 8-second
+ *                                   timeout. On any failure (rate limit,
+ *                                   schema-validation, network 5xx, timeout)
+ *                                   it returns an empty result so mergeResults
+ *                                   becomes a no-op and the caller still gets
+ *                                   the Layer-1+2 result back.
+ *
+ * Contract: extractHybrid never throws on LLM failure — callers always get
+ * a valid ExtractionResult.
  */
 export async function extractHybrid({
   transcript,
   providerEntities,
 }: HybridInput): Promise<ExtractionResult> {
-  const skeleton = mapProviderEntities(providerEntities ?? []);
-  const filled = applyHeuristics(skeleton, transcript);
+  const entities = providerEntities ?? [];
+  const skeleton = mapProviderEntities(entities);
+  // Date spans are NOT synthesized into actions by Layer-1 (pure entity
+  // layer shouldn't invent actions). They are passed to Layer-2 so the
+  // heuristic verb-matcher can attach them as whenHint when a date string
+  // appears inside a verb's 80-char body window. The LLM also sees the
+  // raw transcript and handles whenHint extraction independently as a
+  // fallback when Layer-2 misses.
+  const dateSpans = entities
+    .filter((e) => e.entity_type.toLowerCase() === 'date')
+    .map((e) => e.text);
+  const filled = applyHeuristics(skeleton, transcript, dateSpans);
   const llm = await runLinkerLLM(transcript, filled);
   return mergeResults(filled, llm);
 }
@@ -141,31 +174,13 @@ export function mapProviderEntities(entities: AssemblyAIEntity[]): ExtractionRes
     }
   }
 
-  // Date adjacent to imperative verb (within 6 tokens) → action whenHint
-  // The whole entities array is iterated; we look at the raw transcript
-  // is not available here — but per spec we work off span text + position.
-  // The verb-adjacency check uses the spec rule, applied without the
-  // transcript by examining whether *another span* near the date matches
-  // an imperative verb. In practice we approximate by checking other
-  // entities — but the spec actually says "adjacent to an imperative verb
-  // in the transcript". Since this function is documented as pure over
-  // the entity array, we synthesize an action with the date as whenHint
-  // and the verb check happens in applyHeuristics on the transcript.
-  //
-  // For Layer-1, we conservatively synthesize an action with whenHint
-  // for any date span. Layer-2 then enriches with verb context.
-  for (const e of entities) {
-    if (e.entity_type.toLowerCase() === 'date') {
-      // skip if already represented
-      if (actions.some((a) => a.whenHint === e.text)) continue;
-      actions.push({
-        kind: 'reminder',
-        body: `(date noted) ${e.text}`,
-        whenHint: e.text,
-        targetPersonName: null,
-      });
-    }
-  }
+  // NOTE: date spans are intentionally NOT synthesized into actions here.
+  // Per the H4 code review, the pure entity layer must not invent actions.
+  // Date spans are extracted by `extractHybrid` and threaded to
+  // `applyHeuristics` so the heuristic verb-matcher can attach a whenHint
+  // only when a date appears inside the body of a real action verb. The
+  // LLM layer also receives the raw transcript and handles whenHint
+  // extraction as an independent fallback.
 
   return { persons, companies, events, topics: [], actions };
 }
@@ -196,62 +211,6 @@ function findNearestEventByWordDistance(
 // Layer 2 — regex / heuristic extraction
 // ──────────────────────────────────────────────────────────────────────
 
-const STOPWORDS = new Set([
-  'the',
-  'and',
-  'for',
-  'are',
-  'but',
-  'not',
-  'you',
-  'all',
-  'can',
-  'her',
-  'was',
-  'one',
-  'our',
-  'out',
-  'his',
-  'has',
-  'had',
-  'who',
-  'they',
-  'this',
-  'that',
-  'with',
-  'from',
-  'will',
-  'them',
-  'were',
-  'been',
-  'have',
-  'when',
-  'what',
-  'which',
-  'their',
-  'there',
-  'about',
-  'would',
-  'could',
-  'should',
-  'into',
-  'than',
-  'then',
-  'some',
-  'just',
-  'like',
-  'also',
-  'over',
-  'after',
-  'before',
-  'where',
-  'because',
-  'these',
-  'those',
-  'really',
-  'maybe',
-]);
-
 const ACTION_VERB_RE = /\b(send|email|remind|todo|intro|message|follow[- ]up|ping|check in|call|meet)\b/gi;
 
 function mapVerbToKind(verb: string): ActionCandidate['kind'] {
@@ -271,10 +230,17 @@ function mapVerbToKind(verb: string): ActionCandidate['kind'] {
  *
  * Does NOT touch relations (role, companyHint, person.topics). Those are
  * Layer-3's job per locked decision #10.
+ *
+ * `dateSpans` is the Layer-1 side output of AssemblyAI date entities. When
+ * a date span's text appears inside an action body, it is attached as
+ * `whenHint`. This replaces the Layer-1 "(date noted) X" synthesized
+ * action that the H4 code review flagged as inventing actions in the
+ * pure entity layer.
  */
 export function applyHeuristics(
   skeleton: ExtractionResult,
   transcript: string,
+  dateSpans: string[] = [],
 ): ExtractionResult {
   const actions = [...skeleton.actions];
   const existing = new Set(actions.map((a) => a.body.trim().toLowerCase()));
@@ -293,10 +259,13 @@ export function applyHeuristics(
     const key = body.toLowerCase();
     if (existing.has(key)) continue;
     existing.add(key);
+    // Attach whenHint if any date span's text appears in this body.
+    const bodyLower = body.toLowerCase();
+    const matchedDate = dateSpans.find((d) => bodyLower.includes(d.toLowerCase()));
     actions.push({
       kind: mapVerbToKind(verb),
       body,
-      whenHint: null,
+      whenHint: matchedDate ?? null,
       targetPersonName: null,
     });
   }
@@ -357,32 +326,50 @@ entities preserved and the relations filled in.`;
 
 /**
  * Call the linker LLM (Haiku via OpenRouter) with a scoped prompt.
- * Always called per locked decision #10 — not a gate.
+ * Always called per locked decision #10 — not a gate, best-effort.
  *
- * Returns an empty result if OPENROUTER_API_KEY is missing or the
- * transcript is blank, so tests + the no-key dev path don't blow up.
+ * Returns an empty result if OPENROUTER_API_KEY is missing, the
+ * transcript is blank, or the LLM call fails for any reason (rate
+ * limit, schema-validation, network 5xx, 8s timeout abort). Caller
+ * (`extractHybrid`) treats this as a no-op merge and returns the
+ * Layer-1+2 result alone.
+ *
+ * Logging note: `console.warn` is used here until `packages/logger`
+ * lands via issue #12 — at which point this should switch to the
+ * shared logger.
  */
 export async function runLinkerLLM(
   transcript: string,
   layer12Result: ExtractionResult,
 ): Promise<ExtractionResult> {
-  if (!env.OPENROUTER_API_KEY) {
-    return { persons: [], companies: [], events: [], topics: [], actions: [] };
-  }
-  if (!transcript.trim()) {
-    return { persons: [], companies: [], events: [], topics: [], actions: [] };
-  }
+  const empty: ExtractionResult = {
+    persons: [],
+    companies: [],
+    events: [],
+    topics: [],
+    actions: [],
+  };
+  if (!env.OPENROUTER_API_KEY) return empty;
+  if (!transcript.trim()) return empty;
 
   const userPrompt = `Pre-detected entities:\n${JSON.stringify(layer12Result, null, 2)}\n\nTranscript:\n"""\n${transcript}\n"""`;
 
-  const { object } = await generateObject({
-    model: linkerModel,
-    schema: ExtractionResult,
-    system: LINKER_SYSTEM,
-    prompt: userPrompt,
-    temperature: 0.1,
-  });
-  return object;
+  try {
+    const { object } = await generateObject({
+      model: linkerModel,
+      schema: ExtractionResult,
+      system: LINKER_SYSTEM,
+      prompt: userPrompt,
+      temperature: 0.1,
+      abortSignal: AbortSignal.timeout(8000),
+    });
+    return object;
+  } catch (err) {
+    // Best-effort: rate-limit, schema-validation, network 5xx, or the
+    // 8s timeout abort all land here. Fall back to Layer-1+2 alone.
+    console.warn('[extractor] runLinkerLLM failed, falling back to Layer-1+2:', err);
+    return empty;
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────
