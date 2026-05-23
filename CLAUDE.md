@@ -8,7 +8,7 @@ Homepage: <https://wingmic.xyz> · Repo: <https://github.com/Ayaan2907/wingmic>
 User speaks 10–30s into mic after meeting someone. LLM extracts persons,
 companies, events, topics, follow-up actions into a graph. NL recall:
 "who at acme works on rust?" returns matches in <500ms. Open source, MIT,
-deployed on Cloudflare Workers + libSQL/Turso.
+deployed on Cloudflare Pages (landing) + Railway (product app) + libSQL/Turso.
 
 ## stack (locked — do not change without /plan-eng-review)
 
@@ -22,14 +22,14 @@ deployed on Cloudflare Workers + libSQL/Turso.
 | Embeddings | OpenAI text-embedding-3-small (1536-d) |
 | Auth | BetterAuth + Resend magic link |
 | API | tRPC v11 + Server Actions hybrid |
-| Hosting | Cloudflare Pages (apps/web static) + Cloudflare Workers (apps/app dynamic via @opennextjs/cloudflare) |
+| Hosting | Cloudflare Pages (apps/web static) + Railway (apps/app dynamic, Node.js) |
 | Tests | Vitest unit + Playwright E2E |
 
 ## monorepo map
 
 ```
 apps/web              ← static landing → wingmic.xyz (Cloudflare Pages)
-apps/app              ← dynamic product → app.wingmic.xyz (Cloudflare Workers)
+apps/app              ← dynamic product → app.wingmic.xyz (Railway, Node.js)
 packages/brand        ← logos, favicons, OG, manifest
 packages/design-tokens
 packages/db           ← Drizzle schema + libSQL client + migrations
@@ -59,6 +59,20 @@ docs/                 ← architecture.md, deploy.md, superpowers/
    outside `packages/logger`. (Enforced once issue #12 lands.)
 8. **No new top-level packages without a roadmap entry.** Check README
    roadmap or v0.x epic issues before adding to `packages/`.
+
+## execution principles — apply to every task
+
+1. **Think before coding.** Avoid assumptions; ask clarifying questions
+   before jumping into execution. When intent is ambiguous, stop and ask.
+2. **Simplicity first.** Strive for the simplest possible solution. Avoid
+   over-engineering or writing excessive, unnecessary code. The smallest
+   change that solves the problem wins.
+3. **Surgical changes.** Focus exclusively on the specific instructions
+   provided. Do not touch unrelated code or introduce unintended side
+   effects. If you spot something worth fixing, flag it — don't fix it.
+4. **Goal-driven execution.** Define clear success criteria and the
+   desired end state before beginning any task. Result must align with
+   stated requirements, not your interpretation of them.
 
 ## skill routing (when working on this repo)
 
@@ -107,11 +121,18 @@ docs/                 ← architecture.md, deploy.md, superpowers/
 - Task 5: confidence-prompt UI for 0.5–0.85 (#3)
 - Task 6: iOS Safari SpeechRecognition chunking (#4)
 - Task 7: Sentry + PostHog (#9, p2)
-- Task 8: OpenNext + libSQL bundling (#7, **p1 blocker**)
+- ~~Task 8: OpenNext + libSQL bundling (#7)~~ — obsolete; pivoted to Railway (Node.js runtime, no edge-bundling problem)
 
 **Critical blockers:**
-- **#7** (OpenNext bundling) — `bun run cf:build` fails, blocks `apps/app` Workers deploy
+- None — landing live on Cloudflare Pages, apps/app deploys to Railway (no edge runtime constraints)
 - **#9** (Sentry/PostHog) — observability; p2, can slip to v0.1.2
+
+## deployment
+
+- **apps/web** → Cloudflare Pages (static export, no secrets)
+- **apps/app** → Railway (Node.js, full Next.js runtime, see `apps/app/railway.json`)
+- **Database** → libSQL/Turso (works identically across both targets)
+- Railway service root: `apps/app` (build + start scripts cd to monorepo root)
 
 **Next upstream:**
 - v0.2: contact imports (#10)

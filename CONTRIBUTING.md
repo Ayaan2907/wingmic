@@ -58,7 +58,7 @@ See [`docs/deploy.md`](docs/deploy.md) for how to acquire each API key.
               │  main  │  ← production. Branch-protected.
               └────────┘
                    │
-                   ▼  cf:deploy + wrangler pages deploy
+                   ▼  Cloudflare Pages (landing) + Railway (app) auto-deploy from main
               wingmic.xyz + app.wingmic.xyz
 ```
 
@@ -236,8 +236,8 @@ Maintainer-only. Driven by the staging → main flow.
 5. Merge release PR to `main` (squash merge for clean linear history; the release commit IS the release artifact).
 6. Tag: `git checkout main && git pull && git tag vX.Y.Z && git push --tags`.
 7. Cut GitHub Release: `gh release create vX.Y.Z --generate-notes`.
-8. Deploy landing: `bun --filter=@wingmic/web build && bunx wrangler pages deploy apps/web/out --project-name=wingmic-landing` (when wingmic.xyz comes online).
-9. Deploy product: `bun --filter=@wingmic/app cf:deploy` (when app.wingmic.xyz comes online; blocked on #7 + Task 8 of v0.1.1 plan).
+8. Deploy landing: auto-deploys on `main` push via Cloudflare Pages (build: `bun run --filter=@wingmic/web build`, output: `apps/web/out`).
+9. Deploy product: auto-deploys on `main` push via Railway (service root `apps/app`, config in `apps/app/railway.json`).
 10. Post launch update on the [project board](https://github.com/Ayaan2907/wingmic/projects).
 
 **Rollback:** if a release breaks production, the staging → main flow makes rollback a single command. `git checkout main && git revert <release-sha> && git push` reverses the release atomically. Direct hotfix path: branch `fix/<thing>` from `main`, PR to `staging`, fast-track to a patch release.

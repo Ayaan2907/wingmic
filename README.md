@@ -120,7 +120,7 @@ Roadmap and milestone progress live on the [project board](https://github.com/Ay
 | Auth | **BetterAuth** + Resend | OSS, self-hostable, magic-link only |
 | API | **tRPC v11** + Server Actions hybrid | Typed end-to-end, multi-client (RN / MCP later) |
 | State | **Zustand** for ephemeral UI; React Query for server | Minimal, no Redux |
-| Hosting | **Cloudflare Workers** via `@opennextjs/cloudflare` | Global edge, pairs with Turso replicas |
+| Hosting | **Cloudflare Pages** (landing) + **Railway** (product) | Static edge + Node.js runtime, Turso replicas for low-latency reads |
 | Tests | **Vitest** unit + **Playwright** E2E | Fastest TS testing, mobile + desktop projects |
 
 ---
@@ -129,7 +129,7 @@ Roadmap and milestone progress live on the [project board](https://github.com/Ay
 
 ```
 apps/web              ← static landing → wingmic.xyz (Cloudflare Pages)
-apps/app              ← dynamic product → app.wingmic.xyz (Cloudflare Workers)
+apps/app              ← dynamic product → app.wingmic.xyz (Railway, Node.js)
 packages/
   brand               ← logos, favicons, OG, manifest
   design-tokens       ← Tailwind preset + token TS exports
@@ -149,7 +149,7 @@ Built as a Turborepo monorepo. See [`docs/architecture.md`](docs/architecture.md
 | Surface | Source | Hosting | URL |
 |---|---|---|---|
 | **Landing** (static) | `apps/web` → `next export` | Cloudflare Pages | `wingmic.xyz` |
-| **Product** (dynamic) | `apps/app` → @opennextjs/cloudflare | Cloudflare Workers | `app.wingmic.xyz` |
+| **Product** (dynamic) | `apps/app` → `next start` | Railway (Node.js) | `app.wingmic.xyz` |
 
 Operator runbook: [`docs/deploy.md`](docs/deploy.md).
 
@@ -283,13 +283,15 @@ Status:
 From the workspace root:
 
 ```bash
-# Landing (static, no secrets)
-bun --filter=@wingmic/web build
-bunx wrangler pages deploy apps/web/out --project-name=wingmic-landing
+# Landing (static, no secrets) — Cloudflare Pages dashboard
+# Build command:  bun run --filter=@wingmic/web build
+# Output dir:     apps/web/out
 
-# Product (dynamic, 8 secrets)
-bun --filter=@wingmic/app cf:build
-bun --filter=@wingmic/app cf:deploy
+# Product (dynamic, 8 secrets) — Railway
+# Service root:   apps/app
+# Build:          bun install --frozen-lockfile && bun --filter @wingmic/app build
+# Start:          bun --filter @wingmic/app start
+# (defined in apps/app/railway.json)
 ```
 
 The hosted `wingmic.xyz` and the self-host code are **identical** — same repo, same migrations, same secrets. We don't keep a paid SaaS-only fork.

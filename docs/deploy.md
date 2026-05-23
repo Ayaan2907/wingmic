@@ -2,8 +2,8 @@
 
 Wingmic ships two surfaces:
 
-- **wingmic.xyz** — static landing built from `apps/web`, served by Cloudflare Pages. No secrets, no Worker.
-- **app.wingmic.xyz** — dynamic product built from `apps/app`, served by Cloudflare Workers via `@opennextjs/cloudflare`. Needs 8 secrets.
+- **wingmic.xyz** — static landing built from `apps/web`, served by Cloudflare Pages. No secrets, no runtime.
+- **app.wingmic.xyz** — dynamic product built from `apps/app`, served by Railway (Node.js, standard `next start`). Needs 8 secrets.
 
 This guide covers both. If you're just running locally for dev, jump to [§ Local development](#-local-development).
 
@@ -16,7 +16,7 @@ This guide covers both. If you're just running locally for dev, jump to [§ Loca
   - [The 8 secrets](#the-8-secrets)
   - [Acquire each secret](#acquire-each-secret)
   - [Set up the production database (Turso)](#set-up-the-production-database-turso)
-  - [Set secrets on Cloudflare](#set-secrets-on-cloudflare)
+  - [Set secrets on Railway](#set-secrets-on-railway)
   - [Build + deploy](#build--deploy)
 - [§ Custom domains](#-custom-domains)
 - [§ Local development](#-local-development)
@@ -27,23 +27,25 @@ This guide covers both. If you're just running locally for dev, jump to [§ Loca
 
 ## § Landing deploy (`wingmic.xyz`)
 
-Static export. No secrets. No Worker. Pure CDN.
+Static export. No secrets. No runtime. Pure CDN.
 
-### Build
+### Cloudflare Pages setup (dashboard, one-time)
+
+1. **dash.cloudflare.com** → Workers & Pages → **Create** → Pages → **Connect to Git** → select `Ayaan2907/wingmic`
+2. Production branch: `main`
+3. Build configuration:
+   - **Framework preset:** None
+   - **Build command:** `bun run --filter=@wingmic/web build`
+   - **Build output directory:** `apps/web/out`
+   - **Root directory:** *(leave blank — repo root)*
+4. Save & deploy. Subsequent pushes to `main` auto-deploy.
+
+### Build locally (sanity check)
 
 ```bash
-bun --filter=@wingmic/web build
+bun run --filter=@wingmic/web build
+# → produces apps/web/out/
 ```
-
-Produces `apps/web/out/` via `next build && next export`.
-
-### Deploy
-
-```bash
-bunx wrangler pages deploy apps/web/out --project-name=wingmic-landing
-```
-
-First deploy creates the Pages project. Subsequent deploys overwrite.
 
 ### DNS
 
@@ -57,7 +59,7 @@ Only `NEXT_PUBLIC_APP_URL=https://app.wingmic.xyz` (compile-time; set in `apps/w
 
 ## § Product deploy (`app.wingmic.xyz`)
 
-Dynamic Next.js app on Cloudflare Workers. Needs 8 secrets.
+Dynamic Next.js app on Railway (Node.js runtime, standard `next start`). Needs 8 secrets.
 
 ### the 8 secrets
 
@@ -109,7 +111,7 @@ turso db tokens create wingmic-prod --expiration none
 
 Save the URL as `TURSO_DB_URL` and the token as `TURSO_AUTH_TOKEN`.
 
-> **Token rotation:** if you suspect compromise, run `turso db tokens invalidate wingmic-prod` then create a new one and update Cloudflare secrets. Sessions persist across rotations because they're sealed with `BETTER_AUTH_SECRET`.
+> **Token rotation:** if you suspect compromise, run `turso db tokens invalidate wingmic-prod` then create a new one and update the Railway `TURSO_AUTH_TOKEN` variable. Sessions persist across rotations because they're sealed with `BETTER_AUTH_SECRET`.
 
 #### BetterAuth secret
 
@@ -189,59 +191,62 @@ turso db shell wingmic-prod
 
 If you see all 17 user tables + `__drizzle_migrations`, you're done.
 
-### set secrets on Cloudflare
+### set secrets on Railway
 
-You can use the dashboard or the CLI. CLI is faster.
+**Dashboard** — [railway.com](https://railway.com) → your project → `wingmic-app` service → **Variables** tab → **+ New Variable** (Railway encrypts at rest).
 
-**Option A: dashboard** — [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages → wingmic-app → Settings → Variables → Add variable** (encrypt = on).
+Add all 8:
 
-**Option B: CLI** — run from `apps/app/`:
-
-```bash
-cd apps/app
-
-bunx wrangler secret put TURSO_DB_URL
-bunx wrangler secret put TURSO_AUTH_TOKEN
-bunx wrangler secret put BETTER_AUTH_SECRET
-bunx wrangler secret put BETTER_AUTH_URL          # https://app.wingmic.xyz
-bunx wrangler secret put RESEND_API_KEY
-bunx wrangler secret put RESEND_FROM              # wingmic <auth@your-domain.com>
-bunx wrangler secret put ANTHROPIC_API_KEY
-bunx wrangler secret put OPENAI_API_KEY
+```
+TURSO_DB_URL=libsql://wingmic-prod-<your-org>.turso.io
+TURSO_AUTH_TOKEN=eyJhbGciOiJF...
+BETTER_AUTH_SECRET=<64-char random>
+BETTER_AUTH_URL=https://app.wingmic.xyz
+RESEND_API_KEY=re_...
+RESEND_FROM=wingmic <auth@your-domain.com>
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
 ```
 
-Wrangler will prompt for each value. Paste, hit enter. Done.
-
-Confirm with:
+**CLI alternative** (after `npm i -g @railway/cli && railway login && railway link`):
 
 ```bash
-bunx wrangler secret list
+railway variables --set TURSO_DB_URL=libsql://...
+railway variables --set TURSO_AUTH_TOKEN=...
+# etc.
 ```
 
-You should see all 8.
-
-> **Don't put secrets in `wrangler.jsonc`.** That file is committed to git. The `[vars]` block is for **public** values only (like `NEXT_PUBLIC_APP_URL`).
+Railway also auto-injects `PORT` — `next start -p ${PORT:-3211}` handles it (see `apps/app/package.json`).
 
 ### build + deploy
 
-From the workspace root:
+**One-time Railway setup:**
+
+1. [railway.com](https://railway.com) → **+ New Project** → **Deploy from GitHub repo** → select `Ayaan2907/wingmic`
+2. **Service settings:**
+   - **Root Directory:** `apps/app`
+   - **Builder:** Nixpacks (default; reads `apps/app/railway.json`)
+3. Set the 8 secrets above
+4. **Deploy** — Railway auto-deploys on every `main` push
+
+The `apps/app/railway.json` config:
+- **Build:** `cd ../.. && bun install --frozen-lockfile && bun --filter @wingmic/app build`
+- **Start:** `cd ../.. && bun --filter @wingmic/app start`
+- **Healthcheck:** `GET /api/auth/session` (30s timeout)
+
+First deploy emits a default URL like `https://wingmic-app-production.up.railway.app`. Verify it loads.
+
+**Iterate locally then push:**
 
 ```bash
-# 1. Build the worker bundle
-bun --filter=@wingmic/app cf:build
-# → produces apps/app/.open-next/
-
-# 2. Deploy
-bun --filter=@wingmic/app cf:deploy
-# → wrangler uploads to Cloudflare; first deploy creates the worker
+git push origin main
+# → Railway auto-builds and deploys
 ```
 
-First deploy emits a default URL like `https://wingmic-app.<your-subdomain>.workers.dev`. Verify it loads.
-
-Iterate:
+**Manual redeploy** (no code change):
 
 ```bash
-bun --filter=@wingmic/app cf:build && bun --filter=@wingmic/app cf:deploy
+railway redeploy --service wingmic-app
 ```
 
 ---
@@ -254,17 +259,24 @@ Cloudflare dashboard → Pages → `wingmic-landing` → Custom Domains → add 
 
 ### Product (`app.wingmic.xyz`)
 
-Cloudflare dashboard → your worker (`wingmic-app`) → **Settings → Triggers → Custom Domains → Add Custom Domain** → enter `app.wingmic.xyz`. Cloudflare auto-provisions the cert.
+Railway dashboard → `wingmic-app` service → **Settings → Networking → Custom Domain** → enter `app.wingmic.xyz`. Railway will give you a CNAME target (`xxxxx.up.railway.app`).
+
+Add a CNAME in your DNS provider:
+```
+app.wingmic.xyz  CNAME  xxxxx.up.railway.app
+```
+
+Railway provisions a Let's Encrypt cert automatically once DNS resolves.
 
 Then update `BETTER_AUTH_URL` to match exactly:
 
-```bash
-cd apps/app
-bunx wrangler secret put BETTER_AUTH_URL
-# → https://app.wingmic.xyz
+```
+BETTER_AUTH_URL=https://app.wingmic.xyz
 ```
 
-Re-deploy: `bun --filter=@wingmic/app cf:deploy`. Sessions are stateless once secrets are right; there's nothing else to migrate.
+(Variables tab in Railway, or `railway variables --set BETTER_AUTH_URL=...`.)
+
+Railway redeploys automatically on env-var change. Sessions are stateless once secrets are right; there's nothing else to migrate.
 
 ---
 
@@ -321,7 +333,7 @@ Recall:
 ### "module not found" after a dependency change
 
 ```bash
-rm -rf .next .open-next
+rm -rf .next
 bun install
 bun run build
 ```
@@ -329,7 +341,7 @@ bun run build
 ### stale Turborepo cache
 
 ```bash
-rm -rf .turbo apps/*/.next apps/*/.open-next
+rm -rf .turbo apps/*/.next
 bun install --force
 bun run build
 ```
@@ -340,7 +352,7 @@ bun run build
 Error: server returned UNAUTHORIZED
 ```
 
-→ `TURSO_AUTH_TOKEN` is missing, expired, or for the wrong DB. Regenerate via the Turso section above, push to Cloudflare via the secrets section.
+→ `TURSO_AUTH_TOKEN` is missing, expired, or for the wrong DB. Regenerate via the Turso section above, push to Railway via the Variables tab (or `railway variables --set`).
 
 ```
 Error: no such table: user
@@ -351,7 +363,7 @@ Error: no such table: user
 ### BetterAuth: "no session" right after sign-in
 
 - `BETTER_AUTH_URL` doesn't match the deployed origin exactly. Check trailing slash, http vs https.
-- `BETTER_AUTH_SECRET` is missing on the deployment. `bunx wrangler secret list` should show it.
+- `BETTER_AUTH_SECRET` is missing on the deployment. Check the Railway Variables tab (or `railway variables`).
 - Cookie domain mismatch (you're on `app.wingmic.xyz` but `BETTER_AUTH_URL` says `wingmic.xyz`). The auth cookie must be scoped to `app.wingmic.xyz`.
 
 ### Magic-link emails not arriving
@@ -374,23 +386,25 @@ Error: no such table: user
 - `OPENAI_API_KEY` missing → the embed call fails → no recall path.
 - Schema mismatch: if you migrated the DB and the embedding column dim changed, old rows become unscoreable. Re-capture to refresh.
 
-### Cold-start slow on Cloudflare
+### Slow first response after deploy on Railway
 
-Workers cold-start is normally ~100ms. If you're seeing 2-3s, the libSQL bundle is too big. Open an issue — this means the `useWorkerdCondition` ↔ libSQL/web alignment regressed.
+Railway containers go to sleep on the free/hobby tier. First request after idle takes 2-5s while the container wakes. Mitigations:
+- Upgrade to a paid plan (always-on)
+- Add an external uptime ping (e.g., UptimeRobot every 5min hitting `/api/auth/session`)
+- Move long-running work to Inngest (v0.2)
+
+### Railway build fails: "bun: command not found"
+
+Railway's Nixpacks usually detects Bun automatically. If it doesn't, set in the Railway service settings under **Build → Install Command:**
+```
+curl -fsSL https://bun.sh/install | bash && export PATH=$HOME/.bun/bin:$PATH && bun install --frozen-lockfile
+```
 
 ---
 
 ## § Known issues
 
-### `bun --filter=@wingmic/app cf:build` fails with "Could not resolve `@libsql/client`"
-
-OpenNext's esbuild step doesn't traverse Bun's symlink-hoisted node_modules from inside the deeply-nested `.open-next/server-functions/...` path. Three workaround paths:
-
-1. **Add `@libsql/client` to `dangerous.external` in `open-next.config.ts`** + add a separate esbuild pass that bundles libsql against the worker. Preserves bun-workspaces.
-2. **Move `apps/app` out of the workspace temporarily for deploy builds.** Fastest to ship; messes with the monorepo.
-3. **Wait for upstream fix.** Tracked at [opennextjs/opennextjs-cloudflare](https://github.com/opennextjs/opennextjs-cloudflare/issues) (search "monorepo libsql").
-
-Until resolved, `cf:deploy` for the product is **manual-only**. Landing deploy is **not** affected. Local dev (`bun run dev:app`) is unaffected, and a regular `next build` works.
+None currently blocking deploy. Previously: OpenNext + libSQL bundling for Cloudflare Workers (closed by Railway migration, see issue #7).
 
 ---
 
