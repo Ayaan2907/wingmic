@@ -76,7 +76,13 @@ docs/                 ← architecture.md, deploy.md, superpowers/
 
 ## skill routing (when working on this repo)
 
-- new feature idea → `/office-hours` first (saves to ~/.gstack/projects/wingmic/)
+**Planning → Execution flow:**
+1. new feature idea → `/office-hours` (design draft saved to `~/.gstack/projects/Ayaan2907-wingmic/`, personal lake)
+2. finalize spec → promote design doc to `docs/superpowers/specs/` (team-visible, committed)
+3. write execution plan → `/superpowers:writing-plans` (plan saved to `docs/superpowers/plans/`, repo-tracked)
+4. implement → follow plan, then `/review` pre-merge
+
+**Other routes:**
 - bug / "why broken" → `/investigate`
 - code review / pre-merge → `/review`
 - ship / deploy → `/ship` (then `/document-release`)
