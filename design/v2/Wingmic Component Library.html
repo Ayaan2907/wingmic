@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>wingmic — component library</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" href="library/assets/mark-tile.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --bg-page:      #0a0a0a;
+    --bg-card:      #08080d;
+    --bg-raised:    #0e0e12;
+    --ink:          #f4f1ea;
+    --ink-pure:     #ffffff;
+    --accent:       #FFC452;
+    --second:       #86efac;
+    --third:        #FF8FAB;
+    --alarm:        #FF6B6B;
+    --info-blue:    #7DD3FC;
+    --info-violet:  #A78BFA;
+
+    --surface-1:    rgba(255,255,255,0.025);
+    --surface-2:    rgba(255,255,255,0.04);
+    --surface-3:    rgba(255,255,255,0.06);
+    --border-soft:  rgba(255,255,255,0.06);
+    --border-mid:   rgba(255,255,255,0.10);
+    --border-hard:  rgba(255,255,255,0.15);
+
+    --text-100: #ffffff;
+    --text-85:  rgba(255,255,255,0.85);
+    --text-70:  rgba(255,255,255,0.70);
+    --text-55:  rgba(255,255,255,0.55);
+    --text-40:  rgba(255,255,255,0.40);
+    --text-30:  rgba(255,255,255,0.30);
+
+    --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-xl: 18px;
+
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    --font-serif:'Instrument Serif', Georgia, serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg-page);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(ellipse at 20% 0%,   rgba(255,196,82,0.04) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(255,107,107,0.03) 0%, transparent 50%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+  ::selection { background: #FFC452; color: #000; }
+
+  /* Shared animations */
+  @keyframes wm-blink   { 0%,50%{opacity:1} 51%,100%{opacity:0} }
+  @keyframes wm-pulse-d { 0%,100%{opacity:1} 50%{opacity:.4} }
+  @keyframes wm-pulse-s { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
+  @keyframes wm-drift   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+  @keyframes wm-ring    { 0%{transform:scale(0.85);opacity:.6} 100%{transform:scale(1.6);opacity:0} }
+  @keyframes wm-shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+  @keyframes wm-marquee { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+  @keyframes wm-bar     { 0%,100%{transform:scaleY(.25)} 50%{transform:scaleY(1)} }
+  @keyframes wm-spin    { to{transform:rotate(360deg)} }
+  @keyframes wm-rise    { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+  /* Page chrome */
+  .lib-shell { min-height: 100vh; display: flex; flex-direction: column; }
+
+  .lib-topbar {
+    position: sticky; top: 0; z-index: 200;
+    background: rgba(10,10,10,0.78);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .lib-topbar-inner {
+    display: flex; align-items: center; gap: 18px;
+    padding: 14px 28px;
+    max-width: 100%;
+  }
+  .lib-brand { display: flex; align-items: center; gap: 12px; }
+  .lib-brand-mark {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: #0a0a0a; border: 1px solid var(--border-mid);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .lib-brand-mark img { width: 18px; height: 18px; }
+  .lib-brand-name {
+    font: 800 16px/1 var(--font-sans);
+    letter-spacing: -0.02em;
+  }
+  .lib-brand-name .dot { color: var(--accent); }
+  .lib-version {
+    font: 600 10px/1 var(--font-mono);
+    color: #000; background: var(--accent);
+    padding: 4px 7px; border-radius: 4px;
+    letter-spacing: 1px;
+  }
+  .lib-eyebrow {
+    font: 500 11px/1 var(--font-mono);
+    color: var(--text-40);
+    letter-spacing: 2px; text-transform: uppercase;
+  }
+  .lib-meta {
+    margin-left: auto;
+    font: 500 11px/1 var(--font-mono);
+    color: var(--text-40);
+    letter-spacing: 1.5px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .lib-meta .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--second);
+    animation: wm-pulse-d 1.6s ease-in-out infinite;
+  }
+
+  /* Title block above canvas */
+  .lib-hero {
+    padding: 56px 32px 40px;
+    border-bottom: 1px solid var(--border-soft);
+    position: relative;
+  }
+  .lib-hero-inner { max-width: 1200px; margin: 0 auto; }
+  .lib-hero h1 {
+    margin: 14px 0 14px;
+    font: 900 clamp(40px, 5.5vw, 76px)/0.95 var(--font-sans);
+    letter-spacing: -0.035em;
+    color: var(--ink-pure);
+  }
+  .lib-hero h1 i {
+    font: 400 1em/1 var(--font-serif);
+    font-style: italic;
+    color: var(--accent);
+  }
+  .lib-hero p {
+    margin: 0;
+    max-width: 640px;
+    color: var(--text-55);
+    font-size: 17px;
+    line-height: 1.55;
+  }
+  .lib-hero .index {
+    margin-top: 36px;
+    display: flex; flex-wrap: wrap; gap: 6px 10px;
+    font: 500 11px/1 var(--font-mono);
+    color: var(--text-40);
+    letter-spacing: 1.5px; text-transform: uppercase;
+  }
+  .lib-hero .index a {
+    color: var(--text-70);
+    text-decoration: none;
+    padding: 6px 10px; border-radius: 999px;
+    border: 1px solid var(--border-soft);
+    background: var(--surface-1);
+    transition: 0.15s ease-out;
+  }
+  .lib-hero .index a:hover {
+    color: var(--accent);
+    border-color: rgba(255,196,82,0.3);
+    background: rgba(255,196,82,0.06);
+  }
+
+  /* Sticker decoration */
+  .lib-sticker {
+    position: absolute;
+    font: 700 11px/1 var(--font-mono);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 7px 11px;
+    border-radius: 999px;
+    color: #000;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.25);
+    white-space: nowrap;
+    z-index: 5;
+  }
+  .lib-sticker.s1 { top: 36px; right: 7%;  background: var(--accent); transform: rotate(-4deg); }
+  .lib-sticker.s2 { top: 110px; right: 18%; background: var(--third);  transform: rotate(3deg); }
+
+  /* Canvas wrapper — give the design_canvas component room */
+  .lib-canvas-wrap {
+    flex: 1; min-height: 0;
+    position: relative;
+  }
+  /* design-canvas component */
+  design-canvas { display: block; }
+
+  /* Tighten the design-canvas chrome to feel native */
+  /* (the starter handles its own visuals; we just sit beside it) */
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+</head>
+<body>
+  <div class="lib-shell">
+    <header class="lib-topbar">
+      <div class="lib-topbar-inner">
+        <div class="lib-brand">
+          <div class="lib-brand-mark"><img src="library/assets/mark.svg" alt="wingmic mark" /></div>
+          <div class="lib-brand-name">wingmic<span class="dot">.xyz</span></div>
+          <div class="lib-version">v0.1 / SYSTEM</div>
+        </div>
+        <div class="lib-eyebrow">component library // mobile-first</div>
+        <div class="lib-meta">
+          <span class="dot"></span>
+          <span>SYSTEM · LIVE</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="lib-hero">
+      <div class="lib-sticker s1">v0.1 atomic</div>
+      <div class="lib-sticker s2">mobile-first</div>
+      <div class="lib-hero-inner">
+        <div class="lib-eyebrow">◆ design system / atoms · molecules · screens</div>
+        <h1>Build wingmic from <i>parts.</i></h1>
+        <p>Every token, every primitive, every screen we ship — pinned to one canvas so engineering and design speak the same vocabulary. Pan, zoom, focus any artboard. Hand it to the build team.</p>
+        <nav class="index">
+          <a href="#sec-logic">00 · system logic</a>
+          <a href="#sec-tokens">01 · tokens</a>
+          <a href="#sec-atoms">02 · atoms</a>
+          <a href="#sec-voice">03 · voice + chat</a>
+          <a href="#sec-states">04 · states</a>
+          <a href="#sec-screens">05 · screens</a>
+          <a href="#sec-capture">06 · capture variants</a>
+          <a href="#sec-desktop">07 · desktop</a>
+        </nav>
+      </div>
+    </section>
+
+    <main class="lib-canvas-wrap">
+      <div id="canvas-root"></div>
+    </main>
+  </div>
+
+  <!-- Design canvas component (web component) -->
+  <script type="text/babel" src="library/design-canvas.jsx"></script>
+
+  <!-- Library modules -->
+  <script type="text/babel" src="library/lib-shared.jsx"></script>
+  <script type="text/babel" src="library/lib-logic.jsx"></script>
+  <script type="text/babel" src="library/lib-tokens.jsx"></script>
+  <script type="text/babel" src="library/lib-atoms.jsx"></script>
+  <script type="text/babel" src="library/lib-voice.jsx"></script>
+  <script type="text/babel" src="library/lib-states.jsx"></script>
+  <script type="text/babel" src="library/lib-screens.jsx"></script>
+  <script type="text/babel" src="library/lib-capture-variants.jsx"></script>
+  <script type="text/babel" src="library/lib-entities.jsx"></script>
+  <script type="text/babel" src="library/lib-desktop.jsx"></script>
+
+  <!-- Root render -->
+  <script type="text/babel" data-presets="react">
+    const {
+      // logic
+      LogicMicSurface, LogicNavMap, LogicFlowStoryboard,
+      // tokens
+      TokensColors, TokensType, TokensSpacing, TokensRadii, TokensShadows, TokensMotion, TokensIcons,
+      // atoms
+      AtomsButtons, AtomsInputs, AtomsPills, AtomsCards, AtomsAvatars, AtomsNav, AtomsStickers, AtomsStats, AtomsActivity,
+      // voice
+      VoiceMicStates, VoiceBarsCard, ChatThreadComponent, ChatComposerComponent,
+      // states
+      StatesLoading, StatesEmpty, StatesModal, StatesToast,
+      // screens (each is its own <DCArtboard>)
+      ScreenOnboarding, ScreenHome, ScreenChatResting, ScreenChatRecording, ScreenChatLocked, ScreenChatResponse,
+      ScreenGraph, ScreenPerson, ScreenCompany, ScreenEvent, ScreenActs, ScreenSearch, ScreenSettings,
+      // capture variants
+      CaptureVariantA, CaptureVariantB, CaptureVariantC,
+      // desktop
+      ScreenDesktopHome, ScreenDesktopChat, ScreenDesktopGraph, ScreenDesktopPerson,
+    } = window;
+
+    function Library() {
+      return (
+        <DesignCanvas initialZoom={0.55}>
+          {/* ───────── 00 SYSTEM LOGIC ───────── */}
+          <DCSection id="sec-logic" title="00 — system logic" subtitle="the contract. how the mic, the chat, and the nav add up to one mental model.">
+            <DCArtboard id="lo-mic"   label="one mic · one surface (answers Ayaan)" width={1280} height={760}><LogicMicSurface /></DCArtboard>
+            <DCArtboard id="lo-nav"   label="navigation map"                       width={1280} height={620}><LogicNavMap /></DCArtboard>
+            <DCArtboard id="lo-flow"  label="capture flow · storyboard"             width={1280} height={620}><LogicFlowStoryboard /></DCArtboard>
+          </DCSection>
+
+          {/* ───────── 01 TOKENS ───────── */}
+          <DCSection id="sec-tokens" title="01 — tokens" subtitle="the floor. colors, type, space, radii, shadow, motion.">
+            <DCArtboard id="t-colors"  label="color palette"  width={1280} height={760}><TokensColors /></DCArtboard>
+            <DCArtboard id="t-type"    label="type scale"     width={1080} height={1080}><TokensType /></DCArtboard>
+            <DCArtboard id="t-spacing" label="spacing"        width={760}  height={760}><TokensSpacing /></DCArtboard>
+            <DCArtboard id="t-radii"   label="radii"          width={760}  height={760}><TokensRadii /></DCArtboard>
+            <DCArtboard id="t-shadows" label="shadows"        width={1080} height={760}><TokensShadows /></DCArtboard>
+            <DCArtboard id="t-motion"  label="motion"         width={1080} height={760}><TokensMotion /></DCArtboard>
+            <DCArtboard id="t-icons"   label="iconography"    width={1080} height={760}><TokensIcons /></DCArtboard>
+          </DCSection>
+
+          {/* ───────── 02 ATOMS ───────── */}
+          <DCSection id="sec-atoms" title="02 — atoms" subtitle="primitives. one purpose. one prop surface.">
+            <DCArtboard id="a-buttons"   label="buttons"           width={1080} height={760}><AtomsButtons /></DCArtboard>
+            <DCArtboard id="a-inputs"    label="inputs"            width={760}  height={760}><AtomsInputs /></DCArtboard>
+            <DCArtboard id="a-pills"     label="pills + chips"     width={1080} height={620}><AtomsPills /></DCArtboard>
+            <DCArtboard id="a-cards"     label="cards"             width={1280} height={760}><AtomsCards /></DCArtboard>
+            <DCArtboard id="a-avatars"   label="avatars"           width={1080} height={620}><AtomsAvatars /></DCArtboard>
+            <DCArtboard id="a-stickers"  label="stickers + scribbles" width={1080} height={620}><AtomsStickers /></DCArtboard>
+            <DCArtboard id="a-stats"     label="stat block"        width={760}  height={620}><AtomsStats /></DCArtboard>
+            <DCArtboard id="a-activity"  label="activity row"      width={1080} height={520}><AtomsActivity /></DCArtboard>
+            <DCArtboard id="a-nav"       label="bottom nav (mobile)" width={1080} height={520}><AtomsNav /></DCArtboard>
+          </DCSection>
+
+          {/* ───────── 03 VOICE + CHAT ───────── */}
+          <DCSection id="sec-voice" title="03 — voice + chat" subtitle="the centerpiece. push to talk, slide to lock, swipe to discard.">
+            <DCArtboard id="v-mic"      label="mic button — every state" width={1280} height={620}><VoiceMicStates /></DCArtboard>
+            <DCArtboard id="v-bars"     label="voice-bar visualizer"     width={1080} height={520}><VoiceBarsCard /></DCArtboard>
+            <DCArtboard id="v-thread"   label="chat thread parts"        width={1080} height={760}><ChatThreadComponent /></DCArtboard>
+            <DCArtboard id="v-composer" label="chat composer (voice-first)" width={1080} height={620}><ChatComposerComponent /></DCArtboard>
+          </DCSection>
+
+          {/* ───────── 04 STATES ───────── */}
+          <DCSection id="sec-states" title="04 — states" subtitle="loading, empty, modal, toast. the moments around the work.">
+            <DCArtboard id="s-loading"  label="loading + skeleton" width={1080} height={620}><StatesLoading /></DCArtboard>
+            <DCArtboard id="s-empty"    label="empty states"       width={1080} height={620}><StatesEmpty /></DCArtboard>
+            <DCArtboard id="s-modal"    label="modal + sheet"      width={1080} height={760}><StatesModal /></DCArtboard>
+            <DCArtboard id="s-toast"    label="toast + commit"     width={1080} height={520}><StatesToast /></DCArtboard>
+          </DCSection>
+
+          {/* ───────── 05 SCREENS ───────── */}
+          <DCSection id="sec-screens" title="05 — screens" subtitle="mobile-first. 393 × 852. iPhone 15 Pro proportions.">
+            <DCArtboard id="scr-onboarding" label="onboarding"            width={460} height={920}><ScreenOnboarding /></DCArtboard>
+            <DCArtboard id="scr-home"       label="home / dashboard"      width={460} height={920}><ScreenHome /></DCArtboard>
+            <DCArtboard id="scr-chat-rest"  label="chat · resting"        width={460} height={920}><ScreenChatResting /></DCArtboard>
+            <DCArtboard id="scr-chat-rec"   label="chat · push to talk"   width={460} height={920}><ScreenChatRecording /></DCArtboard>
+            <DCArtboard id="scr-chat-lock"  label="chat · locked"         width={460} height={920}><ScreenChatLocked /></DCArtboard>
+            <DCArtboard id="scr-chat-resp"  label="chat · agent response" width={460} height={920}><ScreenChatResponse /></DCArtboard>
+            <DCArtboard id="scr-graph"      label="graph"                 width={460} height={920}><ScreenGraph /></DCArtboard>
+            <DCArtboard id="scr-person"     label="person detail"         width={460} height={920}><ScreenPerson /></DCArtboard>
+            <DCArtboard id="scr-company"    label="company detail"        width={460} height={920}><ScreenCompany /></DCArtboard>
+            <DCArtboard id="scr-event"      label="event detail"          width={460} height={920}><ScreenEvent /></DCArtboard>
+            <DCArtboard id="scr-acts"       label="acts inbox"            width={460} height={920}><ScreenActs /></DCArtboard>
+            <DCArtboard id="scr-search"     label="search results"        width={460} height={920}><ScreenSearch /></DCArtboard>
+            <DCArtboard id="scr-settings"   label="settings"              width={460} height={920}><ScreenSettings /></DCArtboard>
+          </DCSection>
+
+          {/* ───────── 06 CAPTURE VARIANTS ───────── */}
+          <DCSection id="sec-capture" title="06 — capture variants" subtitle="three readings of the voice-first capture moment.">
+            <DCArtboard id="cv-a" label="A · chat-anchored (canonical)" width={460} height={920}><CaptureVariantA /></DCArtboard>
+            <DCArtboard id="cv-b" label="B · centered orb"              width={460} height={920}><CaptureVariantB /></DCArtboard>
+            <DCArtboard id="cv-c" label="C · slide-up sheet"            width={460} height={920}><CaptureVariantC /></DCArtboard>
+          </DCSection>
+
+          {/* ───────── 07 DESKTOP ───────── */}
+          <DCSection id="sec-desktop" title="07 — desktop" subtitle="mobile-first scales up: persistent left rail · two-pane content · same atoms.">
+            <DCArtboard id="dt-home"   label="desktop · home"          width={1440} height={920}><ScreenDesktopHome /></DCArtboard>
+            <DCArtboard id="dt-chat"   label="desktop · chat + entity rail" width={1440} height={920}><ScreenDesktopChat /></DCArtboard>
+            <DCArtboard id="dt-graph"  label="desktop · graph + detail" width={1440} height={920}><ScreenDesktopGraph /></DCArtboard>
+            <DCArtboard id="dt-person" label="desktop · person (two-pane)" width={1440} height={920}><ScreenDesktopPerson /></DCArtboard>
+          </DCSection>
+        </DesignCanvas>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('canvas-root'));
+    root.render(<Library />);
+  </script>
+</body>
+</html>
