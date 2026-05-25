@@ -15,6 +15,13 @@
       "when": 1777857447851,
       "tag": "0001_gorgeous_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1779004800000,
+      "tag": "0002_vector_top_k_entity_embedding",
+      "breakpoints": true
     }
   ]
 }

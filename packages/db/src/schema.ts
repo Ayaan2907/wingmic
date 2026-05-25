@@ -14,12 +14,19 @@ const float32Blob = (size: number) =>
       const f32 = new Float32Array(value);
       return Buffer.from(f32.buffer, f32.byteOffset, f32.byteLength);
     },
-    fromDriver(value: Buffer | Uint8Array): number[] {
-      const buf =
-        value instanceof Buffer
+    fromDriver(value: Buffer | Uint8Array | ArrayBuffer | null | undefined): number[] {
+      // Nullable F32_BLOB columns round-trip as null/undefined — return empty
+      // array so downstream code can treat "no embedding" without throwing.
+      if (value == null) return [];
+      // libSQL native driver returns BLOBs as Buffer; the @libsql/client web/jsdom
+      // path may hand back an ArrayBuffer. Normalize both into a typed view.
+      const u8: Uint8Array =
+        value instanceof Uint8Array
           ? value
-          : Buffer.from(value.buffer, value.byteOffset, value.byteLength);
-      return Array.from(new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4));
+          : value instanceof ArrayBuffer
+            ? new Uint8Array(value)
+            : new Uint8Array((value as Buffer).buffer, (value as Buffer).byteOffset, (value as Buffer).byteLength);
+      return Array.from(new Float32Array(u8.buffer, u8.byteOffset, u8.byteLength / 4));
     },
   });
 
