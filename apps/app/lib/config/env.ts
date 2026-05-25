@@ -7,7 +7,7 @@
  *
  * Rules (enforced project-wide by CLAUDE.md + CONTRIBUTING.md once issue #12 lands):
  *   - Never read `process.env.X` directly outside this file.
- *   - New env vars require a Zod entry below + an entry in apps/web/.env.example.
+ *   - New env vars require a Zod entry below + an entry in apps/app/.env.example.
  *   - Required server vars throw at import time with a readable error.
  *   - Client-side bundle only sees NEXT_PUBLIC_* keys (Next.js inlines them at build).
  *
@@ -96,7 +96,7 @@ function loadEnv(): Env {
       throw new Error(
         `[env] invalid server environment variables:\n${formatIssues(
           result.error.issues,
-        )}\n\nFill apps/web/.env.local — see apps/web/.env.example.`,
+        )}\n\nFill apps/app/.env.local — see apps/app/.env.example.`,
       );
     }
     // Merge in client schema defaults so consumers can read either set
