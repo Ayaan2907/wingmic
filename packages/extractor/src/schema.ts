@@ -17,7 +17,7 @@ export const PersonCandidate = z.object({
     .array(z.string())
     .default([])
     .describe('topics or interests mentioned in connection with this person'),
-  email: z.string().email().nullable().describe('email if explicitly stated'),
+  email: z.string().nullable().describe('email if explicitly stated'),
   linkedin: z.string().nullable().describe('linkedin handle or URL if stated'),
   notes: z
     .string()

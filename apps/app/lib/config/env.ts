@@ -3,11 +3,11 @@
  *
  * Usage:
  *   import { env } from '@/lib/config/env';
- *   const key = env.ANTHROPIC_API_KEY;
+ *   const key = env.OPENROUTER_API_KEY;
  *
  * Rules (enforced project-wide by CLAUDE.md + CONTRIBUTING.md once issue #12 lands):
  *   - Never read `process.env.X` directly outside this file.
- *   - New env vars require a Zod entry below + an entry in apps/web/.env.example.
+ *   - New env vars require a Zod entry below + an entry in apps/app/.env.example.
  *   - Required server vars throw at import time with a readable error.
  *   - Client-side bundle only sees NEXT_PUBLIC_* keys (Next.js inlines them at build).
  *
@@ -37,12 +37,19 @@ const serverSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM: z.string().default('wingmic <auth@wingmic.xyz>'),
 
-  // ── LLM providers ─────────────────────────────────────────────────────
-  ANTHROPIC_API_KEY: z.string().min(1).optional(),
-  ANTHROPIC_EXTRACTION_MODEL: z.string().default('claude-sonnet-4-6'),
+  // ── Unified provider — OpenRouter (LLM + embeddings) ─────────────────
+  // v0.1.1 "Hosted Capture" locked decision #9: OpenRouter is mandatory.
+  // Direct ANTHROPIC_API_KEY / OPENAI_API_KEY have been removed.
+  OPENROUTER_API_KEY: z.string().min(1).optional(),
 
-  OPENAI_API_KEY: z.string().min(1).optional(),
-  OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
+  // ── ASR — AssemblyAI (direct, not via OpenRouter) ────────────────────
+  // v0.1.1 locked decision #1.
+  ASSEMBLYAI_API_KEY: z.string().min(1).optional(),
+
+  // ── Model selection (env-controlled; swap providers by changing string) ─
+  EXTRACTION_MODEL: z.string().default('anthropic/claude-haiku-4.5'),
+  LINKER_MODEL: z.string().default('anthropic/claude-haiku-4.5'),
+  EMBEDDING_MODEL: z.string().default('openai/text-embedding-3-small'),
 });
 
 // ── Client schema ───────────────────────────────────────────────────────
@@ -89,7 +96,7 @@ function loadEnv(): Env {
       throw new Error(
         `[env] invalid server environment variables:\n${formatIssues(
           result.error.issues,
-        )}\n\nFill apps/web/.env.local — see apps/web/.env.example.`,
+        )}\n\nFill apps/app/.env.local — see apps/app/.env.example.`,
       );
     }
     // Merge in client schema defaults so consumers can read either set

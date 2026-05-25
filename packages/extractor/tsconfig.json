@@ -6,5 +6,6 @@
     "incremental": false,
     "lib": ["ES2022", "DOM"]
   },
-  "include": ["src/**/*", "../../apps/app/lib/config/env.ts"]
+  "include": ["src/**/*", "../../apps/app/lib/config/env.ts"],
+  "exclude": ["src/**/*.smoke.ts"]
 }
