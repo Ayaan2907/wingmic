@@ -59,6 +59,23 @@ docs/                 ← architecture.md, deploy.md, superpowers/
    outside `packages/logger`. (Enforced once issue #12 lands.)
 8. **No new top-level packages without a roadmap entry.** Check README
    roadmap or v0.x epic issues before adding to `packages/`.
+9. **One mic, one surface.** Any mic affordance lands in chat with the
+   mic engaged — never build a separate capture screen. See
+   `design/design-system.md §12` for the full contract.
+
+## execution principles — apply to every task
+
+1. **Think before coding.** Avoid assumptions; ask clarifying questions
+   before jumping into execution. When intent is ambiguous, stop and ask.
+2. **Simplicity first.** Strive for the simplest possible solution. Avoid
+   over-engineering or writing excessive, unnecessary code. The smallest
+   change that solves the problem wins.
+3. **Surgical changes.** Focus exclusively on the specific instructions
+   provided. Do not touch unrelated code or introduce unintended side
+   effects. If you spot something worth fixing, flag it — don't fix it.
+4. **Goal-driven execution.** Define clear success criteria and the
+   desired end state before beginning any task. Result must align with
+   stated requirements, not your interpretation of them.
 
 ## execution principles — apply to every task
 
@@ -76,12 +93,24 @@ docs/                 ← architecture.md, deploy.md, superpowers/
 
 ## skill routing (when working on this repo)
 
-- new feature idea → `/office-hours` first (saves to ~/.gstack/projects/wingmic/)
+**Planning → Execution flow:**
+1. new feature idea → `/office-hours` (design draft saved to `~/.gstack/projects/Ayaan2907-wingmic/`, personal lake)
+2. finalize spec → promote design doc to `docs/superpowers/specs/` (team-visible, committed)
+3. write execution plan → `/superpowers:writing-plans` (plan saved to `docs/superpowers/plans/`, repo-tracked)
+4. implement → follow plan, then `/review` pre-merge
+
+**Other routes:**
 - bug / "why broken" → `/investigate`
 - code review / pre-merge → `/review`
 - ship / deploy → `/ship` (then `/document-release`)
 - design / brand questions → read `design/design-system.md` first
 - architecture changes → `/plan-eng-review` mandatory
+
+## design (canonical — do not deviate without /design-consultation)
+
+- `design/design-system.md` — design tokens, brand voice, component primitives. **v2 as of 2026-05-24** (Claude Design bundle).
+- `design/v2/screens.md` — reference doc for every screen, mapped to lib-* components.
+- `design/v2/screens.md` is the source of truth for the next-iteration UI direction. The chat-thread plan at `docs/superpowers/plans/2026-05-23-v0.1.1-hosted-capture.md` describes v0.1.1a/b implementation; design/v2/ describes the visual + interaction target.
 
 ## key files
 

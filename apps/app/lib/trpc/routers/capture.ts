@@ -1,13 +1,20 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc';
-import { extract, commit, ExtractionError, EmbeddingError } from '@wingmic/extractor';
+import { extractHybrid, commit, ExtractionError, EmbeddingError } from '@wingmic/extractor';
 import { TRPCError } from '@trpc/server';
+import { transcribeEntities } from '@/lib/capture/transcribe-entities';
 
 export const captureRouter = router({
   /**
-   * Run the extraction + resolution pipeline on a transcript.
-   * Returns the structured Claude output + the persisted graph result
-   * (interaction id, entity ids, new-vs-matched counts).
+   * Run the hybrid extraction + resolution pipeline on a transcript.
+   *
+   * v0.1.1 "Hosted Capture" (Task H4) — replaces the LLM-only `extract()`
+   * with `extractHybrid({ transcript, providerEntities })`:
+   *   1. transcribeEntities() re-runs AssemblyAI entity_detection on the
+   *      (possibly user-edited) transcript per locked decision #11.
+   *   2. extractHybrid() merges span-level entities + heuristics + Haiku
+   *      relation linker into the existing ExtractionResult shape.
+   *   3. commit() persists into the graph (resolution.ts unchanged).
    */
   commit: protectedProcedure
     .input(
@@ -21,7 +28,11 @@ export const captureRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        const extracted = await extract(input.transcript);
+        const providerEntities = await transcribeEntities(input.transcript);
+        const extracted = await extractHybrid({
+          transcript: input.transcript,
+          providerEntities,
+        });
         const result = await commit(extracted, {
           db: ctx.db,
           userId: ctx.user.id,

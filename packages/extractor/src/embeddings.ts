@@ -1,8 +1,6 @@
-import { openai } from '@ai-sdk/openai';
 import { embed, embedMany } from 'ai';
 import { env } from '../../../apps/app/lib/config/env';
-
-const MODEL = openai.textEmbeddingModel(env.OPENAI_EMBEDDING_MODEL);
+import { embeddingModel } from './models';
 
 export class EmbeddingError extends Error {
   constructor(message: string, public readonly cause?: unknown) {
@@ -13,14 +11,14 @@ export class EmbeddingError extends Error {
 
 /** Single-string embedding. Returns a number[] of length 1536. */
 export async function embedText(value: string): Promise<number[]> {
-  if (!env.OPENAI_API_KEY) {
-    throw new EmbeddingError('OPENAI_API_KEY is not set');
+  if (!env.OPENROUTER_API_KEY) {
+    throw new EmbeddingError('OPENROUTER_API_KEY is not set');
   }
   if (!value.trim()) {
     throw new EmbeddingError('cannot embed an empty string');
   }
   try {
-    const { embedding } = await embed({ model: MODEL, value });
+    const { embedding } = await embed({ model: embeddingModel, value });
     return embedding;
   } catch (err) {
     throw new EmbeddingError(
@@ -32,12 +30,12 @@ export async function embedText(value: string): Promise<number[]> {
 
 /** Batch embeddings for N strings. Returns array of length N. */
 export async function embedTexts(values: string[]): Promise<number[][]> {
-  if (!env.OPENAI_API_KEY) {
-    throw new EmbeddingError('OPENAI_API_KEY is not set');
+  if (!env.OPENROUTER_API_KEY) {
+    throw new EmbeddingError('OPENROUTER_API_KEY is not set');
   }
   if (values.length === 0) return [];
   try {
-    const { embeddings } = await embedMany({ model: MODEL, values });
+    const { embeddings } = await embedMany({ model: embeddingModel, values });
     return embeddings;
   } catch (err) {
     throw new EmbeddingError(
