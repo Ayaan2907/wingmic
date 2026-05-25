@@ -31,7 +31,8 @@ vi.mock('assemblyai', () => {
   return { AssemblyAI };
 });
 
-import { POST, __testing } from '../route';
+import { POST } from '../route';
+import { __testing, MAX_AUDIO_BYTES } from '../_internals';
 
 function authedSession(userId = 'user-1') {
   return { user: { id: userId } };
@@ -65,7 +66,7 @@ describe('POST /api/capture/transcribe', () => {
 
   it('returns 413 too_big when audio exceeds 3MB', async () => {
     getSessionMock.mockResolvedValueOnce(authedSession());
-    const oversized = new Blob([new Uint8Array(__testing.MAX_AUDIO_BYTES + 1)], {
+    const oversized = new Blob([new Uint8Array(MAX_AUDIO_BYTES + 1)], {
       type: 'audio/webm',
     });
     const req = buildRequest(oversized);

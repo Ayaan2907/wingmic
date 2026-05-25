@@ -10,74 +10,28 @@
  *   #1  AssemblyAI direct (not via OpenRouter).
  *   #11 entity_detection does NOT run here — moved to capture.commit
  *       so entities are derived from the (possibly user-edited) transcript.
- *   #13 Server-side guardrails:
+ *   #13 Server-side guardrails (constants in `_internals.ts`):
  *         - 3 MB byte cap on uploaded audio
  *         - 90 s duration cap (refuse to commit if AssemblyAI reports >90s)
  *         - 10 transcribes / minute per user (in-memory sliding window)
  *
+ * Module-scoped state (rate limiter, lazy AssemblyAI client) and helpers
+ * live in `./_internals.ts`. Next.js only allows specific exports from
+ * route handler files; custom exports break `next build`.
+ *
  * See: docs/superpowers/plans/2026-05-23-v0.1.1-hosted-capture.md §"Step 1"
  */
-import { AssemblyAI } from 'assemblyai';
 import { auth } from '@/lib/auth';
-import { env } from '@/lib/config/env';
+import {
+  MAX_AUDIO_BYTES,
+  MAX_DURATION_SECONDS,
+  rateLimit,
+  getClient,
+  errorBody,
+} from './_internals';
 
 export const runtime = 'nodejs';
 
-// ── Constants ──────────────────────────────────────────────────────────
-const MAX_AUDIO_BYTES = 3 * 1024 * 1024; // 3 MB (locked decision #13)
-const MAX_DURATION_SECONDS = 90; // locked decision #13
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 10; // locked decision #13
-
-// ── Rate limiter (in-memory, per-user sliding window) ──────────────────
-// Sufficient for v0.1.1 demo scale. libSQL-backed version slips to v0.1.1b.
-const rateLimitBuckets = new Map<string, number[]>();
-
-function rateLimit(userId: string): boolean {
-  const now = Date.now();
-  const cutoff = now - RATE_LIMIT_WINDOW_MS;
-  const stamps = (rateLimitBuckets.get(userId) ?? []).filter((t) => t > cutoff);
-  if (stamps.length >= RATE_LIMIT_MAX) {
-    rateLimitBuckets.set(userId, stamps);
-    return false;
-  }
-  stamps.push(now);
-  rateLimitBuckets.set(userId, stamps);
-  return true;
-}
-
-// ── Lazy AssemblyAI client ─────────────────────────────────────────────
-let _client: AssemblyAI | null = null;
-function getClient(): AssemblyAI {
-  if (!_client) {
-    if (!env.ASSEMBLYAI_API_KEY) {
-      throw new Error('ASSEMBLYAI_API_KEY missing');
-    }
-    _client = new AssemblyAI({ apiKey: env.ASSEMBLYAI_API_KEY });
-  }
-  return _client;
-}
-
-// ── Error envelope ─────────────────────────────────────────────────────
-type ErrorCode =
-  | 'unauthenticated'
-  | 'too_big'
-  | 'too_long'
-  | 'rate_limited'
-  | 'provider_error'
-  | 'transcript_empty'
-  | 'bad_request'
-  | 'unknown_error';
-
-function errorBody(
-  code: ErrorCode,
-  message: string,
-  cause?: { provider: 'assemblyai'; code: string },
-) {
-  return { error: cause ? { code, message, cause } : { code, message } };
-}
-
-// ── POST handler ───────────────────────────────────────────────────────
 export async function POST(req: Request): Promise<Response> {
   // 1. session
   let session: Awaited<ReturnType<typeof auth.api.getSession>>;
@@ -137,11 +91,13 @@ export async function POST(req: Request): Promise<Response> {
   try {
     transcript = await client.transcripts.transcribe({
       audio: buffer,
+      speech_models: ['universal-2'],
       format_text: true,
       punctuate: true,
     });
   } catch (err) {
     const code = err instanceof Error ? err.message : String(err);
+    console.error('[transcribe] AssemblyAI error:', err);
     return Response.json(
       errorBody(
         'provider_error',
@@ -180,17 +136,3 @@ export async function POST(req: Request): Promise<Response> {
   // 8. success
   return Response.json({ transcript: text, durationMs }, { status: 200 });
 }
-
-// Exported for tests. Not part of the route public API.
-export const __testing = {
-  reset() {
-    rateLimitBuckets.clear();
-    _client = null;
-  },
-  setClient(c: AssemblyAI | null) {
-    _client = c;
-  },
-  MAX_AUDIO_BYTES,
-  MAX_DURATION_SECONDS,
-  RATE_LIMIT_MAX,
-};
