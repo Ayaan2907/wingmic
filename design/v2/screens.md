@@ -1,9 +1,10 @@
 # Wingmic — v2 screens reference
 
 > Synthesized from Claude Design bundle 2026-05-24 (handle: `IeDyiNzPI2mu5WRJRWuuKQ`).
-> Each screen below maps to one or more components in the upstream `Wingmic Component Library.html` (`library/lib-*.jsx`).
+> Each screen below maps to one or more components in the runnable component library at [`design/v2/Wingmic Component Library.html`](./Wingmic%20Component%20Library.html), with source modules at [`design/v2/library/lib-*.jsx`](./library/).
 > Mobile is canonical (iPhone 15 Pro frame: **393 × 852**, 8px bezel, 126×36 dynamic island). Desktop variants where the bundle distinguishes are noted under each screen.
-> Token references throughout point back to `design/design-system.md` (v2).
+> Token references throughout point back to [`design/design-system.md`](../design-system.md) (v2).
+> To view the canvas locally: `cd design/v2 && python3 -m http.server 8000` then open `http://localhost:8000/Wingmic%20Component%20Library.html` (see [`design/v2/README.md`](./README.md)).
 
 ## Reading order
 

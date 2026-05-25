@@ -391,21 +391,26 @@ Loading: same silhouette, inline 14×14 spinner (`border: 2px solid rgba(0,0,0,0
 > Source: `lib-atoms.jsx` `FieldFrame`.
 
 ```css
-{
+.field-frame {
+  /* resting */
   padding: 12px 14px;
   border-radius: 10px;
   background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);   /* resting */
+  border: 1px solid rgba(255,255,255,0.08);
   font: 400 14.5px 'Inter';
   color: #f4f1ea;
 }
-/* focused */
-border: 1.5px solid #FFC452;
-box-shadow: 0 0 0 4px rgba(255,196,82,0.08);
 
-/* error */
-border: 1.5px solid rgba(255,107,107,0.6);
-box-shadow: 0 0 0 4px rgba(255,107,107,0.08);
+.field-frame[data-state="focused"],
+.field-frame:focus-within {
+  border: 1.5px solid #FFC452;
+  box-shadow: 0 0 0 4px rgba(255,196,82,0.08);
+}
+
+.field-frame[data-state="error"] {
+  border: 1.5px solid rgba(255,107,107,0.6);
+  box-shadow: 0 0 0 4px rgba(255,107,107,0.08);
+}
 ```
 
 States: `resting` · `filled` (check glyph trailing, second-color) · `focused` (amber ring + 4px halo + blink caret) · `error` (alarm ring + alarm halo, `↪ …` mono helper text in alarm color) · `search` (search icon leading + `⌘ K` trailing).
@@ -623,7 +628,7 @@ Frame: `bg rgba(255,255,255,0.02)`, `1.5px dashed rgba(255,255,255,0.12)`, `bord
 
 ## 7. Animation
 
-> Source: `lib-tokens.jsx` `TokensMotion`. Eight cues. If a behavior isn't here, ship the still — don't invent a new tween.
+> Source: `lib-tokens.jsx` `TokensMotion`. Nine cues. If a behavior isn't here, ship the still — don't invent a new tween.
 
 | Cue          | Duration            | Easing       | Use |
 |---|---|---|---|
@@ -736,7 +741,7 @@ Five nav slots. One verb each. Only `capture` mutates state on tap; everything e
 
 On desktop the bottom nav collapses into a **persistent left rail** with the same five slots plus a top-positioned `Hold to capture` brutalist CTA (`⌘ K` shortcut).
 
-### 12.3 Capture flow — four states
+### 12.3 Capture flow — five states
 
 | State | What's onscreen |
 |---|---|
