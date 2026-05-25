@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
-import { sql } from 'drizzle-orm';
 import * as schema from '@wingmic/db/schema';
 
 // Mock embedText so we don't hit OpenAI from tests.
@@ -32,10 +31,11 @@ function f32(arr: number[]): Buffer {
 
 describe('recall.query (libSQL vector_top_k)', () => {
   let db: ReturnType<typeof drizzle<typeof schema>>;
+  let client: ReturnType<typeof createClient>;
   const userId = 'user_test_1';
 
   beforeAll(async () => {
-    const client = createClient({ url: ':memory:' });
+    client = createClient({ url: ':memory:' });
     db = drizzle(client, { schema });
 
     // Minimal subset of schema needed for recall (we use the migration SQL shape).
@@ -106,7 +106,6 @@ describe('recall.query (libSQL vector_top_k)', () => {
     // match than any of user_test_1's. If the router leaked across users, the
     // top result would be one of these.
     const otherUserId = 'user_test_2';
-    const client = (db as unknown as { session: { client: ReturnType<typeof createClient> } }).session.client;
     const now = Date.now();
     const insert = async (id: string, name: string, vec: number[]) => {
       await client.execute({

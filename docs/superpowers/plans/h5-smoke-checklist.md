@@ -25,7 +25,7 @@ embeddings → recall) on a real 60s voice memo.
 ## acceptance — pipeline
 
 - [ ] **ASR**: transcribe endpoint returns within **10s** for 60s audio
-      (check network tab `/api/transcribe` timing)
+      (check network tab `/api/capture/transcribe` timing)
 - [ ] transcript is visible in the UI and roughly matches what you said
 - [ ] **hybrid extractor** returns within ~5s after ASR completes
 - [ ] extracted entities show **≥1 person** (priya or marcus)
@@ -38,8 +38,11 @@ embeddings → recall) on a real 60s voice memo.
 - [ ] navigate to recall
 - [ ] query: *"who works on edge sqlite at cloudflare?"*
 - [ ] **priya** is in the top 3 results
-- [ ] cosine score on the match is **> 0.6** (visible in result metadata
-      or via `bun run db:studio` on `embeddings` table)
+- [ ] cosine score on the match is **> 0.6** (visible in the result card
+      score field; or inspect `entity.embedding` directly via
+      `bun run db:studio` and compute cosine manually if needed — there's
+      no separate `embeddings` table, embeddings live on `entity.embedding`
+      and `interaction.embedding` columns)
 - [ ] click the match → person detail page renders with topics + actions
 
 ## if any check fails

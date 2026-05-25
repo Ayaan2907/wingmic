@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { eq, inArray, desc, sql } from 'drizzle-orm';
+import { inArray, desc, sql } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc';
 import { embedText, EmbeddingError } from '@wingmic/extractor/embeddings';
 import { TRPCError } from '@trpc/server';
