@@ -224,15 +224,17 @@ Railway also auto-injects `PORT` — `next start -p ${PORT:-3211}` handles it (s
 
 1. [railway.com](https://railway.com) → **+ New Project** → **Deploy from GitHub repo** → select `Ayaan2907/wingmic`
 2. **Service settings:**
-   - **Root Directory:** `apps/app`
-   - **Builder:** Nixpacks (default; reads `apps/app/railway.json`)
-3. Set the 8 secrets above
+   - **Root Directory:** `/` (repository root — **not** `apps/app`; subdir roots omit `packages/` and `bun.lock`)
+   - **Builder:** Railpack (reads root `railway.json`; `builder: RAILPACK`)
+3. Set the 8 secrets above (Doppler → Railway sync is fine)
 4. **Deploy** — Railway auto-deploys on every `main` push
 
-The `apps/app/railway.json` config:
-- **Build:** `cd ../.. && bun install --frozen-lockfile && bun --filter @wingmic/app build`
-- **Start:** `cd ../.. && bun --filter @wingmic/app start`
+Root `railway.json` config:
+- **Build:** `bun install --frozen-lockfile && bun run build:app` (Turbo builds `@wingmic/db`, `@wingmic/extractor`, then Next)
+- **Start:** `bun run start:app`
 - **Healthcheck:** `GET /api/auth/session` (30s timeout)
+
+If the dashboard still uses Nixpacks, root `nixpacks.toml` forces `bun install` instead of `npm i` (fixes `EUNSUPPORTEDPROTOCOL workspace:*`).
 
 First deploy emits a default URL like `https://wingmic-app-production.up.railway.app`. Verify it loads.
 
@@ -393,12 +395,17 @@ Railway containers go to sleep on the free/hobby tier. First request after idle 
 - Add an external uptime ping (e.g., UptimeRobot every 5min hitting `/api/auth/session`)
 - Move long-running work to Inngest (v0.2)
 
+### Railway build fails: `EUNSUPPORTEDPROTOCOL` / `workspace:*`
+
+Nixpacks ran `npm i` on a Bun workspace. Fix:
+
+1. **Root Directory** = repo root (`/`), not `apps/app`.
+2. **Builder** = Railpack (root `railway.json` sets `RAILPACK`).
+3. If still on Nixpacks, root `nixpacks.toml` forces `bun install`.
+
 ### Railway build fails: "bun: command not found"
 
-Railway's Nixpacks usually detects Bun automatically. If it doesn't, set in the Railway service settings under **Build → Install Command:**
-```
-curl -fsSL https://bun.sh/install | bash && export PATH=$HOME/.bun/bin:$PATH && bun install --frozen-lockfile
-```
+Use **Railpack** or root `nixpacks.toml` (installs `bun`). Root Directory must be repo root so `packageManager: bun@1.3.10` in root `package.json` is visible.
 
 ---
 

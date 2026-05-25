@@ -237,7 +237,7 @@ Maintainer-only. Driven by the staging → main flow.
 6. Tag: `git checkout main && git pull && git tag vX.Y.Z && git push --tags`.
 7. Cut GitHub Release: `gh release create vX.Y.Z --generate-notes`.
 8. Deploy landing: auto-deploys on `main` push via Cloudflare Pages (build: `bun run --filter=@wingmic/web build`, output: `apps/web/out`).
-9. Deploy product: auto-deploys on `main` push via Railway (service root `apps/app`, config in `apps/app/railway.json`).
+9. Deploy product: auto-deploys on `main` push via Railway (service root = repo root, config in `railway.json`).
 10. Post launch update on the [project board](https://github.com/Ayaan2907/wingmic/projects).
 
 **Rollback:** if a release breaks production, the staging → main flow makes rollback a single command. `git checkout main && git revert <release-sha> && git push` reverses the release atomically. Direct hotfix path: branch `fix/<thing>` from `main`, PR to `staging`, fast-track to a patch release.
