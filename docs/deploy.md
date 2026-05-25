@@ -223,18 +223,19 @@ Railway also auto-injects `PORT` — `next start -p ${PORT:-3211}` handles it (s
 **One-time Railway setup:**
 
 1. [railway.com](https://railway.com) → **+ New Project** → **Deploy from GitHub repo** → select `Ayaan2907/wingmic`
-2. **Service settings:**
-   - **Root Directory:** `/` (repository root — **not** `apps/app`; subdir roots omit `packages/` and `bun.lock`)
-   - **Builder:** Railpack (reads root `railway.json`; `builder: RAILPACK`)
+2. **Service settings** (all three matter):
+   - **Root Directory:** leave **empty** (repo root). Do **not** set `apps/app` — Railway only copies that folder, so `bun.lock`, `packages/*`, and root `package.json` workspaces are missing and Railpack falls back to `npm install` → `workspace:*` error.
+   - **Config file path:** `railway.json` (at repo root; does not follow Root Directory — if you must use a subdir root, set `/railway.json` explicitly in the UI).
+   - **Builder:** Railpack
 3. Set the 8 secrets above (Doppler → Railway sync is fine)
 4. **Deploy** — Railway auto-deploys on every `main` push
 
-Root `railway.json` config:
-- **Build:** `bun install --frozen-lockfile && bun run build:app` (Turbo builds `@wingmic/db`, `@wingmic/extractor`, then Next)
-- **Start:** `bun run start:app`
-- **Healthcheck:** `GET /api/auth/session` (30s timeout)
+Root config files:
+- **`railpack.json`** — install: `bun install --frozen-lockfile`; build: `bun run build:app`; start: `bun run start:app`
+- **`railway.json`** — `builder: RAILPACK`, healthcheck on `/api/auth/session`
+- **`nixpacks.toml`** — fallback only if the service is still on Nixpacks
 
-If the dashboard still uses Nixpacks, root `nixpacks.toml` forces `bun install` instead of `npm i` (fixes `EUNSUPPORTEDPROTOCOL workspace:*`).
+Successful Railpack logs show `bun install` in the **install** step, not `npm install`.
 
 First deploy emits a default URL like `https://wingmic-app-production.up.railway.app`. Verify it loads.
 
@@ -397,11 +398,12 @@ Railway containers go to sleep on the free/hobby tier. First request after idle 
 
 ### Railway build fails: `EUNSUPPORTEDPROTOCOL` / `workspace:*`
 
-Nixpacks ran `npm i` on a Bun workspace. Fix:
+Railpack/Nixpacks ran `npm install` on a Bun workspace. Common causes:
 
-1. **Root Directory** = repo root (`/`), not `apps/app`.
-2. **Builder** = Railpack (root `railway.json` sets `RAILPACK`).
-3. If still on Nixpacks, root `nixpacks.toml` forces `bun install`.
+1. **Root Directory** set to `apps/app` — only that `package.json` is visible; no `bun.lock` → “No package manager inferred, using npm default”.
+2. **Fix:** clear Root Directory (shared monorepo). Redeploy.
+3. Ensure root **`railpack.json`** exists (replaces the install step with `bun install`). The old `railpack.toml` `[nodejs] installCommand` format is **not** read by Railpack.
+4. If still on Nixpacks, root `nixpacks.toml` forces `bun install`.
 
 ### Railway build fails: "bun: command not found"
 
