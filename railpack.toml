@@ -1,0 +1,2 @@
+[nodejs]
+installCommand = "bun install --frozen-lockfile"
