@@ -59,6 +59,9 @@ docs/                 ← architecture.md, deploy.md, superpowers/
    outside `packages/logger`. (Enforced once issue #12 lands.)
 8. **No new top-level packages without a roadmap entry.** Check README
    roadmap or v0.x epic issues before adding to `packages/`.
+9. **One mic, one surface.** Any mic affordance lands in chat with the
+   mic engaged — never build a separate capture screen. See
+   `design/design-system.md §12` for the full contract.
 
 ## execution principles — apply to every task
 
@@ -88,6 +91,12 @@ docs/                 ← architecture.md, deploy.md, superpowers/
 - ship / deploy → `/ship` (then `/document-release`)
 - design / brand questions → read `design/design-system.md` first
 - architecture changes → `/plan-eng-review` mandatory
+
+## design (canonical — do not deviate without /design-consultation)
+
+- `design/design-system.md` — design tokens, brand voice, component primitives. **v2 as of 2026-05-24** (Claude Design bundle).
+- `design/v2/screens.md` — reference doc for every screen, mapped to lib-* components.
+- `design/v2/screens.md` is the source of truth for the next-iteration UI direction. The chat-thread plan at `docs/superpowers/plans/2026-05-23-v0.1.1-hosted-capture.md` describes v0.1.1a/b implementation; design/v2/ describes the visual + interaction target.
 
 ## key files
 
