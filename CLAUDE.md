@@ -145,9 +145,9 @@ docs/                 ← architecture.md, deploy.md, superpowers/
 ## deployment
 
 - **apps/web** → Cloudflare Pages (static export, no secrets)
-- **apps/app** → Railway (Node.js, full Next.js runtime, see `apps/app/railway.json`)
+- **apps/app** → Railway (Node.js, full Next.js runtime, see root `railway.json`)
 - **Database** → libSQL/Turso (works identically across both targets)
-- Railway service root: `apps/app` (build + start scripts cd to monorepo root)
+- Railway service root: **repo root** (`/`); config in `railway.json` (not `apps/app/`)
 
 **Next upstream:**
 - v0.2: contact imports (#10)

@@ -22,6 +22,8 @@
     "dev:web:doppler":    "doppler run -- bun run dev:web",
     "dev:app:doppler":    "doppler run -- bun run dev:app",
     "build":              "turbo build",
+    "build:app":          "turbo build --filter=@wingmic/app --env-mode=loose",
+    "start:app":          "bun --filter @wingmic/app start",
     "build:doppler":      "doppler run -- bun run build",
     "test":               "turbo test",
     "lint":               "turbo lint",

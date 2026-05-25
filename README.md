@@ -291,7 +291,7 @@ From the workspace root:
 # Service root:   apps/app
 # Build:          bun install --frozen-lockfile && bun --filter @wingmic/app build
 # Start:          bun --filter @wingmic/app start
-# (defined in apps/app/railway.json)
+# (defined in railway.json at repo root)
 ```
 
 The hosted `wingmic.xyz` and the self-host code are **identical** — same repo, same migrations, same secrets. We don't keep a paid SaaS-only fork.
