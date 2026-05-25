@@ -77,6 +77,20 @@ docs/                 ← architecture.md, deploy.md, superpowers/
    desired end state before beginning any task. Result must align with
    stated requirements, not your interpretation of them.
 
+## execution principles — apply to every task
+
+1. **Think before coding.** Avoid assumptions; ask clarifying questions
+   before jumping into execution. When intent is ambiguous, stop and ask.
+2. **Simplicity first.** Strive for the simplest possible solution. Avoid
+   over-engineering or writing excessive, unnecessary code. The smallest
+   change that solves the problem wins.
+3. **Surgical changes.** Focus exclusively on the specific instructions
+   provided. Do not touch unrelated code or introduce unintended side
+   effects. If you spot something worth fixing, flag it — don't fix it.
+4. **Goal-driven execution.** Define clear success criteria and the
+   desired end state before beginning any task. Result must align with
+   stated requirements, not your interpretation of them.
+
 ## skill routing (when working on this repo)
 
 **Planning → Execution flow:**
