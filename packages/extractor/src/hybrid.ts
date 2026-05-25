@@ -330,7 +330,7 @@ entities preserved and the relations filled in.`;
  *
  * Returns an empty result if OPENROUTER_API_KEY is missing, the
  * transcript is blank, or the LLM call fails for any reason (rate
- * limit, schema-validation, network 5xx, 8s timeout abort). Caller
+ * limit, schema-validation, network 5xx, 20s timeout abort). Caller
  * (`extractHybrid`) treats this as a no-op merge and returns the
  * Layer-1+2 result alone.
  *
@@ -361,7 +361,7 @@ export async function runLinkerLLM(
       system: LINKER_SYSTEM,
       prompt: userPrompt,
       temperature: 0.1,
-      abortSignal: AbortSignal.timeout(8000),
+      abortSignal: AbortSignal.timeout(20000),
     });
     return object;
   } catch (err) {
