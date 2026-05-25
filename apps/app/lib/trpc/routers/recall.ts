@@ -4,6 +4,7 @@ import { router, protectedProcedure } from '../trpc';
 import { embedText, EmbeddingError } from '@wingmic/extractor/embeddings';
 import { TRPCError } from '@trpc/server';
 import * as schema from '@wingmic/db/schema';
+import { ENTITY_EMBEDDING_INDEX } from '@wingmic/db/schema';
 
 export const recallRouter = router({
   /**
@@ -44,29 +45,36 @@ export const recallRouter = router({
       // column (the indexed table's rowid). We join back to entity to recover the
       // string PK + filter by owner. We over-fetch (limit * 4) so the per-user
       // filter has headroom before slicing.
-      // TODO(#12): replace with packages/logger once available.
-      console.time('recall');
+      // Latency is observable via the durationMs field in the response. When
+      // packages/logger lands (issue #12), add structured logging here.
       const vectorLiteral = `[${queryEmbedding.join(',')}]`;
       const k = input.limit * 4;
       const topRows = await ctx.db.all<{ id: string }>(sql`
         SELECT e.id as id
-        FROM vector_top_k('entity_embedding_vector_idx', vector32(${vectorLiteral}), ${k}) vt
+        FROM vector_top_k(${ENTITY_EMBEDDING_INDEX}, vector32(${vectorLiteral}), ${k}) vt
         JOIN entity e ON e.rowid = vt.id
         WHERE e.owner_user_id = ${ctx.user.id}
       `);
-      console.timeEnd('recall');
 
       const ranked = topRows.slice(0, input.limit);
       const ids = ranked.map((r) => r.id);
-      // vector_top_k orders by ascending distance; preserve that order as our score
-      // proxy (1.0 for best match, descending linearly). Real similarity scores
-      // require a second SELECT — deferred to v0.1.2 cluster browser work.
-      const scoreById = new Map(
-        ranked.map((r, i) => [r.id, ranked.length > 1 ? 1 - i / ranked.length : 1]),
-      );
       if (ids.length === 0) {
         return { entities: [], durationMs: Date.now() - t0 };
       }
+
+      // One extra SELECT to get real cosine similarity for the candidate IDs
+      // returned by vector_top_k (which only returns ids). Without this, score is
+      // rank-based and breaks the UI's > 0.7 / > 0.5 color thresholds.
+      const idPlaceholders = sql.join(
+        ids.map((id) => sql`${id}`),
+        sql`, `,
+      );
+      const distances = await ctx.db.all<{ id: string; sim: number }>(sql`
+        SELECT id, (1.0 - vector_distance_cos(embedding, vector32(${vectorLiteral}))) AS sim
+        FROM entity
+        WHERE id IN (${idPlaceholders})
+      `);
+      const scoreById = new Map(distances.map((d) => [d.id, d.sim]));
 
       const [entities, ec, ee, et, facts] = await Promise.all([
         ctx.db.query.entities.findMany({
@@ -114,7 +122,12 @@ export const recallRouter = router({
       const eventById = new Map(events.map((e) => [e.id, e]));
       const topicById = new Map(topics.map((t) => [t.id, t]));
 
-      const results = ids
+      // Sort by real cosine similarity DESC; vector_top_k order is an ANN
+      // approximation and the exact reorder is cheap once we have scoreById.
+      const orderedIds = [...ids].sort(
+        (a, b) => (scoreById.get(b) ?? 0) - (scoreById.get(a) ?? 0),
+      );
+      const results = orderedIds
         .map((id) => {
           const entity = entityById.get(id);
           if (!entity) return null;

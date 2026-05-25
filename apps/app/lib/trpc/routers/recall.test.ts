@@ -101,6 +101,38 @@ describe('recall.query (libSQL vector_top_k)', () => {
     expect(res.durationMs).toBeGreaterThanOrEqual(0);
   });
 
+  it('isolates results to the calling user (cross-user safety)', async () => {
+    // Seed a second user with entities whose embeddings are a STRONGER rust
+    // match than any of user_test_1's. If the router leaked across users, the
+    // top result would be one of these.
+    const otherUserId = 'user_test_2';
+    const client = (db as unknown as { session: { client: ReturnType<typeof createClient> } }).session.client;
+    const now = Date.now();
+    const insert = async (id: string, name: string, vec: number[]) => {
+      await client.execute({
+        sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, embedding, created_at, updated_at) VALUES (?, ?, 'person', ?, '[]', ?, ?, ?)`,
+        args: [id, otherUserId, name, f32(vec), now, now],
+      });
+    };
+    const strongRust = new Array(1536).fill(0);
+    strongRust[0] = 1; // identical-axis match — globally top-ranked
+    await insert('x1', 'Other Rustacean', strongRust);
+    await insert('x2', 'Other Rustacean Two', strongRust);
+
+    const ctx = {
+      db,
+      user: { id: userId },
+      session: { user: { id: userId } },
+    } as unknown as Parameters<typeof recallRouter.createCaller>[0];
+    const caller = recallRouter.createCaller(ctx);
+    const res = await caller.query({ q: 'who works on rust?', limit: 10 });
+
+    const ids = res.entities.map((e) => e.id);
+    expect(ids).not.toContain('x1');
+    expect(ids).not.toContain('x2');
+    expect(ids.every((id) => ['e1', 'e2', 'e3'].includes(id))).toBe(true);
+  });
+
   it('gracefully returns fewer rows when limit > index size', async () => {
     const ctx = {
       db,

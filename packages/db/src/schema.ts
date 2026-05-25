@@ -349,6 +349,12 @@ export const connectionRequests = sqliteTable('connection_request', {
   createdAt: ts('created_at'),
 });
 
+// ─── Index name constants ──────────────────────────────────────────────
+// Keep in sync with drizzle/0002_vector_top_k_entity_embedding.sql. Used by
+// recall router's raw `vector_top_k(...)` call — migration rename without
+// updating this constant breaks recall at runtime.
+export const ENTITY_EMBEDDING_INDEX = 'entity_embedding_vector_idx';
+
 // ─── Type exports ──────────────────────────────────────────────────────
 
 export type User = typeof users.$inferSelect;
