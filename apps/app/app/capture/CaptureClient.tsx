@@ -504,6 +504,10 @@ export default function CaptureClient({ userName }: { userName: string | null })
 function DesktopStyles() {
   // Per plan §17.3: on desktop ≥768px the tab bar moves to the top.
   // Inline media-query <style> avoids adding a CSS module just for this.
+  //
+  // Also declares the 9 named v2 motion cues from `design/design-system.md` §7
+  // (`TokensMotion`). Scoped here so capture surfaces use the named cues
+  // verbatim instead of the v1 globals.css aliases. Defined once.
   return (
     <style>{`
       @media (min-width: 768px) {
@@ -514,6 +518,43 @@ function DesktopStyles() {
           border-bottom: 1px solid var(--border-soft);
           height: 60px;
         }
+      }
+
+      @keyframes wm-blink {
+        0%, 50% { opacity: 1; }
+        51%, 100% { opacity: 0; }
+      }
+      @keyframes wm-pulse-d {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+      @keyframes wm-pulse-s {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+      }
+      @keyframes wm-drift {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-6px); }
+      }
+      @keyframes wm-ring {
+        0% { transform: scale(1); opacity: 0.55; }
+        100% { transform: scale(1.6); opacity: 0; }
+      }
+      @keyframes wm-shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+      @keyframes wm-rise {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes wm-marquee {
+        from { transform: translateX(0); }
+        to { transform: translateX(-50%); }
+      }
+      @keyframes wm-spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
       }
     `}</style>
   );
@@ -633,10 +674,11 @@ function EmptyHero() {
       </div>
       <h1
         style={{
-          fontSize: 30,
+          // v2 H3 = 28px Inter 800 / -0.02em / 1.15. Nearest-down from v1's 30.
+          fontSize: 28,
           fontWeight: 800,
-          letterSpacing: '-0.025em',
-          lineHeight: 1.1,
+          letterSpacing: '-0.02em',
+          lineHeight: 1.15,
         }}
       >
         hold the button.{' '}
@@ -644,10 +686,10 @@ function EmptyHero() {
           talk for thirty seconds about someone you just met.
         </span>
       </h1>
-      <p style={{ fontSize: 15.5, color: 'var(--text-70)', lineHeight: 1.55, maxWidth: 520 }}>
+      <p style={{ fontSize: 15, color: 'var(--text-70)', lineHeight: 1.55, maxWidth: 520 }}>
         i&apos;ll sort the names, companies, follow-ups. you&apos;ll see it land below.
       </p>
-      <p style={{ fontSize: 14, color: 'var(--text-40)', lineHeight: 1.55 }}>
+      <p style={{ fontSize: 14.5, color: 'var(--text-40)', lineHeight: 1.55 }}>
         short is fine. ten seconds counts.
       </p>
     </div>
@@ -670,6 +712,7 @@ function PhantomBubble({ recorder }: { recorder: ReturnType<typeof useAudioRecor
         display: 'flex',
         flexDirection: 'column',
         gap: 10,
+        animation: 'wm-rise 0.4s ease-out',
       }}
     >
       <div
@@ -691,7 +734,7 @@ function PhantomBubble({ recorder }: { recorder: ReturnType<typeof useAudioRecor
             height: 6,
             borderRadius: 999,
             background: coral,
-            animation: 'pulse-d 1.5s ease-in-out infinite',
+            animation: 'wm-pulse-d 1.5s ease-in-out infinite',
           }}
         />
         rec · {sec}s
@@ -801,8 +844,9 @@ function MessageBubble(props: MessageBubbleProps) {
             style={{
               height: 2,
               background: `linear-gradient(90deg, transparent, ${accent}, transparent)`,
+              backgroundSize: '200% 100%',
               borderRadius: 2,
-              animation: 'pulse-d 1.4s ease-in-out infinite',
+              animation: 'wm-shimmer 1.8s linear infinite',
             }}
           />
         )}
@@ -903,6 +947,8 @@ function BubbleFooter({ m }: { m: ThreadMessage }) {
 }
 
 function Skeleton() {
+  // v2 §6 "Loading / skeleton": skeletons match real shape, animated with
+  // `wm-shimmer 1.6s linear infinite` on a 3-stop linear gradient.
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {[0.85, 0.7, 0.55].map((w, i) => (
@@ -910,10 +956,12 @@ function Skeleton() {
           key={i}
           style={{
             width: `${w * 100}%`,
-            height: 12,
+            height: 10,
             borderRadius: 6,
-            background: 'rgba(255,255,255,0.06)',
-            animation: 'pulse-d 1.5s ease-in-out infinite',
+            background:
+              'linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 100%)',
+            backgroundSize: '200% 100%',
+            animation: 'wm-shimmer 1.6s linear infinite',
             animationDelay: `${i * 120}ms`,
           }}
         />
@@ -1115,12 +1163,12 @@ function PasteInline({
         rows={4}
         style={{
           width: '100%',
-          padding: 10,
+          padding: '12px 14px',
           background: 'rgba(0,0,0,0.3)',
           border: '1px solid var(--border-soft)',
-          borderRadius: 8,
+          borderRadius: 10,
           color: 'var(--ink)',
-          font: '14px Inter, system-ui, sans-serif',
+          font: '14.5px Inter, system-ui, sans-serif',
           resize: 'vertical',
           outline: 'none',
         }}
@@ -1131,8 +1179,10 @@ function PasteInline({
           onClick={onSubmit}
           disabled={!draft.trim()}
           style={{
+            // v2 sm button: 8/14 padding, 12.5px font. Sticker-shadow primary
+            // (3px 3px 0 #000) is correct here per design-system §6 Buttons.
             padding: '8px 14px',
-            borderRadius: 8,
+            borderRadius: 10,
             background: accent,
             color: '#000',
             fontWeight: 700,
@@ -1140,7 +1190,7 @@ function PasteInline({
             boxShadow: '3px 3px 0 #000',
             cursor: 'pointer',
             opacity: draft.trim() ? 1 : 0.5,
-            font: '700 13px Inter, system-ui, sans-serif',
+            font: '700 12.5px Inter, system-ui, sans-serif',
           }}
         >
           commit →
@@ -1150,12 +1200,12 @@ function PasteInline({
           onClick={onCancel}
           style={{
             padding: '8px 14px',
-            borderRadius: 8,
+            borderRadius: 10,
             background: 'transparent',
             color: 'var(--ink)',
             border: '1.5px solid var(--border-mid)',
             cursor: 'pointer',
-            font: '600 13px Inter, system-ui, sans-serif',
+            font: '600 12.5px Inter, system-ui, sans-serif',
           }}
         >
           cancel
@@ -1182,12 +1232,13 @@ function GraphCard({ message, result }: { message: ThreadMessage; result: GraphR
       style={{
         marginTop: 8,
         padding: 14,
-        borderRadius: 12,
+        borderRadius: 14,
         background: 'var(--surface-1)',
         border: '1px solid var(--border-soft)',
         display: 'flex',
         flexDirection: 'column',
         gap: 12,
+        animation: 'wm-rise 0.4s ease-out',
       }}
     >
       {extracted.persons.length > 0 && (
@@ -1303,6 +1354,7 @@ function PersonPill({
       }}
     >
       <span
+        // v2 §6 Avatars: initial in Inter 800 black, sized ~0.4 × size (28 → 11).
         style={{
           width: 28,
           height: 28,
@@ -1314,7 +1366,7 @@ function PersonPill({
           justifyContent: 'center',
           fontWeight: 800,
           fontSize: 11,
-          fontFamily: 'JetBrains Mono, monospace',
+          fontFamily: 'Inter, system-ui, sans-serif',
         }}
       >
         {monogram}
@@ -1334,17 +1386,21 @@ function PersonPill({
 }
 
 function TagPill({ color, children }: { color: string; children: React.ReactNode }) {
+  // v2 tag-pill recipe (design-system §2 "Tag-pill recipe"): ${color}1f fill
+  // + ${color}40 border + full-color text. Replaces v1's `${color}20`/`22`.
   return (
     <span
       className="mono"
       style={{
-        padding: '3px 10px',
+        padding: '3px 9px',
         borderRadius: 999,
-        background: `${color}22`,
+        background: `${color}1f`,
         color,
+        border: `1px solid ${color}40`,
         fontSize: 10.5,
         fontWeight: 600,
-        letterSpacing: 0.5,
+        letterSpacing: 1,
+        textTransform: 'uppercase',
       }}
     >
       {children}
@@ -1720,7 +1776,8 @@ function Dock({
               pointerEvents: 'auto',
               width: 88,
               height: 88,
-              borderRadius: 16,
+              // v2 radii ladder: 6/10/14/18/36/999. Nearest-down from 16 = 14.
+              borderRadius: 14,
               background: coral,
               color: '#000',
               fontSize: 22,
@@ -1811,9 +1868,13 @@ function PrivacyAmbientLine() {
 // ─── Bottom tab bar ──────────────────────────────────────────────────────
 
 function BottomTabBar({ active }: { active: 'capture' | 'recall' | 'history' | 'settings' }) {
+  // v2 nav-label rename (locked 2026-05-25, plan §Step 5):
+  //   recall → chat   (the surface stays /recall in v0.1.1; v2's "talk" verb
+  //                    lands as a label early so the 4-slot bar reads correctly
+  //                    against v2 tokens. v8 in v0.1.2 restructures to 5 slots.)
   const tabs: Array<{ key: typeof active; glyph: string; label: string; href: string }> = [
     { key: 'capture', glyph: '◉', label: 'capture', href: '/capture' },
-    { key: 'recall', glyph: '⌕', label: 'recall', href: '/recall' },
+    { key: 'recall', glyph: '⌕', label: 'chat', href: '/recall' },
     { key: 'history', glyph: '⏱', label: 'history', href: '/history' },
     { key: 'settings', glyph: '◊', label: 'settings', href: '/settings' },
   ];
@@ -1852,7 +1913,10 @@ function BottomTabBar({ active }: { active: 'capture' | 'recall' | 'history' | '
               color: isActive ? accent : 'var(--text-55)',
               position: 'relative',
               fontFamily: 'JetBrains Mono, monospace',
-              fontSize: 10.5,
+              // v2 §6 Bottom nav: mono 9px/1 uppercase tracked 0.5 for labels.
+              fontSize: 9,
+              letterSpacing: 0.5,
+              textTransform: 'uppercase',
             }}
           >
             {isActive && (
