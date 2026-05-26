@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>wingmic — launch ad · 30s</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
+  /* hide the Stage's playback chrome when clean mode requested (for frame export / recording) */
+  body.clean .wm-playback { display: none !important; }
+  body.clean .wm-stage-canvas { box-shadow: none !important; }
+
+  /* shared keyframes the scenes lean on */
+  @keyframes ad-blink   { 0%,50%{opacity:1} 51%,100%{opacity:0} }
+  @keyframes ad-pulse-d { 0%,100%{opacity:1} 50%{opacity:.35} }
+  @keyframes ad-pulse-s { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
+  @keyframes ad-spin    { to{transform:rotate(360deg)} }
+  @keyframes ad-bar     { 0%,100%{transform:scaleY(.25)} 50%{transform:scaleY(1)} }
+  @keyframes ad-drift   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+  @keyframes ad-ring    { 0%{transform:scale(0.85);opacity:.6} 100%{transform:scale(1.7);opacity:0} }
+
+  ::selection { background: #FFC452; color: #000; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+</head>
+<body data-screen-label="00 · loading">
+  <div id="root" style="position:absolute;inset:0"></div>
+
+  <script type="text/babel" src="ad/animations.jsx"></script>
+
+  <script type="text/babel" data-presets="react">
+    /* ────────────────────────────────────────────────────────────────────
+     * WINGMIC LAUNCH AD · 30s · 1080 × 1920
+     * Scenes (frames at 30fps):
+     *   00.0 – 03.5  TITLE   — wordmark + tagline + ambient graph
+     *   03.5 – 08.0  HUMAN   — founder photo · sticker · "you meet 12 people"
+     *   08.0 – 14.5  CAPTURE — phone + mic + transcript + voice bars
+     *   14.5 – 20.0  GRAPH   — entities + nodes wire up
+     *   20.0 – 25.0  ACT     — agent draft + send + commit toast
+     *   25.0 – 30.0  CLOSE   — wordmark + CTA + ship sticker
+     * ──────────────────────────────────────────────────────────────────── */
+
+    const C = {
+      bg:      '#0a0a0a',
+      bgCard:  '#08080d',
+      ink:     '#f4f1ea',
+      accent:  '#FFC452',
+      second:  '#86efac',
+      third:   '#FF8FAB',
+      alarm:   '#FF6B6B',
+      blue:    '#7DD3FC',
+      violet:  '#A78BFA',
+      t85:     'rgba(255,255,255,0.85)',
+      t70:     'rgba(255,255,255,0.70)',
+      t55:     'rgba(255,255,255,0.55)',
+      t40:     'rgba(255,255,255,0.40)',
+      t30:     'rgba(255,255,255,0.30)',
+    };
+    const F = {
+      sans:  "'Inter', system-ui, sans-serif",
+      mono:  "'JetBrains Mono', ui-monospace, monospace",
+      serif: "'Instrument Serif', Georgia, serif",
+    };
+
+    // Tag screen label with timestamp once per second so the comment system can pin moments
+    const W = 1080, H = 1920;
+
+    function ScreenLabel() {
+      const t = useTime();
+      const { setTime, setPlaying } = useTimeline();
+      // Expose Stage controls for programmatic frame export (used by save_screenshot)
+      React.useEffect(() => {
+        window.__stage = { setTime, setPlaying, time: t };
+      }, [setTime, setPlaying, t]);
+      React.useEffect(() => {
+        const s = Math.floor(t);
+        const wrapper = document.body;
+        wrapper.setAttribute('data-screen-label', `${String(s).padStart(2,'0')}s · ${
+          s < 3.5 ? 'title' :
+          s < 8   ? 'human' :
+          s < 14.5 ? 'capture' :
+          s < 20  ? 'graph' :
+          s < 25  ? 'act' : 'close'
+        }`);
+      }, [Math.floor(t)]);
+      return null;
+    }
+
+    // ── Background — warm radials always present ────────────────────────
+    function PageBG() {
+      return (
+        <div style={{
+          position: 'absolute', inset: 0, background: C.bg,
+          backgroundImage:
+            'radial-gradient(ellipse at 18% 0%, rgba(255,196,82,0.08) 0%, transparent 60%),' +
+            'radial-gradient(ellipse at 82% 100%, rgba(255,107,107,0.06) 0%, transparent 60%)',
+        }} />
+      );
+    }
+
+    // ── Drifting graph dots (subtle continuous motion) ─────────────────
+    function GraphField({ density = 1, opacity = 0.5 }) {
+      const t = useTime();
+      const nodes = React.useMemo(() => {
+        const out = [];
+        const N = Math.round(38 * density);
+        for (let i = 0; i < N; i++) {
+          out.push({
+            sx: Math.random() * W,
+            sy: Math.random() * H,
+            r:  1.5 + Math.random() * 2.5,
+            c:  [C.accent, C.second, C.third, C.t70][i % 4],
+            phx: Math.random() * Math.PI * 2,
+            phy: Math.random() * Math.PI * 2,
+            freq: 0.2 + Math.random() * 0.35,
+          });
+        }
+        return out;
+      }, [density]);
+
+      return (
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity }}>
+          {nodes.map((n, i) => {
+            const x = n.sx + Math.sin(t * n.freq + n.phx) * 22;
+            const y = n.sy + Math.cos(t * n.freq + n.phy) * 22;
+            return <circle key={i} cx={x} cy={y} r={n.r} fill={n.c} opacity="0.6" />;
+          })}
+          {nodes.map((n, i) => {
+            if (i % 3) return null;
+            const next = nodes[(i + 7) % nodes.length];
+            const x1 = n.sx + Math.sin(t * n.freq + n.phx) * 22;
+            const y1 = n.sy + Math.cos(t * n.freq + n.phy) * 22;
+            const x2 = next.sx + Math.sin(t * next.freq + next.phx) * 22;
+            const y2 = next.sy + Math.cos(t * next.freq + next.phy) * 22;
+            const d = Math.hypot(x1 - x2, y1 - y2);
+            if (d > 220) return null;
+            return <line key={'l'+i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,196,82,0.15)" strokeWidth="1" />;
+          })}
+        </svg>
+      );
+    }
+
+    // ── Sticker badge ───────────────────────────────────────────────────
+    function StickerBadge({ x, y, rotate = -3, color = C.accent, children, size = 'md', fadeIn = 0, fadeOut = Infinity }) {
+      const t = useTime();
+      const fadeInDur = 0.3, fadeOutDur = 0.3;
+      let opacity = 1;
+      if (t < fadeIn) opacity = 0;
+      else if (t < fadeIn + fadeInDur) opacity = (t - fadeIn) / fadeInDur;
+      if (t > fadeOut) opacity = 0;
+      else if (t > fadeOut - fadeOutDur) opacity = (fadeOut - t) / fadeOutDur;
+      const sizes = { sm: { p: '8px 14px', fs: 16 }, md: { p: '10px 18px', fs: 20 }, lg: { p: '14px 24px', fs: 26 } }[size];
+      return (
+        <div style={{
+          position: 'absolute', left: x, top: y, transform: `rotate(${rotate}deg)`,
+          opacity, transition: 'opacity 0.2s ease-out',
+        }}>
+          <span style={{
+            display: 'inline-block', padding: sizes.p, borderRadius: 999,
+            background: color, color: '#000',
+            font: `700 ${sizes.fs}px ${F.mono}`,
+            letterSpacing: 1.5, textTransform: 'uppercase',
+            boxShadow: '6px 6px 0 rgba(0,0,0,0.35)', whiteSpace: 'nowrap',
+          }}>{children}</span>
+        </div>
+      );
+    }
+
+    // ── Wingmic mark (SVG) ──────────────────────────────────────────────
+    function Mark({ size = 80, color = C.accent }) {
+      return (
+        <svg width={size} height={size} viewBox="0 0 64 64">
+          <path d="M 8 22 L 18 46 L 28 30 L 32 38 L 36 30 L 46 46 L 56 22" fill="none" stroke={color} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="8"  cy="22" r="3.5" fill={color} />
+          <circle cx="56" cy="22" r="3.5" fill={color} />
+          <circle cx="32" cy="38" r="3" fill={color} />
+          <line x1="6" y1="56" x2="58" y2="56" stroke={color} strokeWidth="1.5" opacity="0.25" />
+        </svg>
+      );
+    }
+
+    function Wordmark({ size = 36, accent = true }) {
+      return (
+        <span style={{
+          font: `800 ${size}px ${F.sans}`,
+          letterSpacing: '-0.025em', color: C.ink,
+        }}>
+          wingmic{accent && <span style={{ color: C.accent }}>.xyz</span>}
+        </span>
+      );
+    }
+
+    // ── Mic orb with rings ──────────────────────────────────────────────
+    function MicOrb({ size = 240, active = false, color = C.accent, x, y }) {
+      return (
+        <div style={{
+          position: 'absolute', left: x, top: y,
+          width: size, height: size,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {active && [0, 1, 2].map(i => (
+            <div key={i} style={{
+              position: 'absolute',
+              width: size + i * 50, height: size + i * 50,
+              borderRadius: '50%', border: `2px solid ${color}`,
+              opacity: Math.max(0, 0.5 - i * 0.16),
+              animation: `ad-pulse-s ${1.4 + i * 0.3}s ease-in-out infinite`,
+            }} />
+          ))}
+          <div style={{
+            position: 'absolute', inset: 0, borderRadius: '50%',
+            background: `radial-gradient(circle, ${color}22 0%, transparent 65%)`,
+          }} />
+          <div style={{
+            width: size, height: size, borderRadius: '50%',
+            background: active ? color : 'rgba(255,255,255,0.05)',
+            border: `3px solid ${active ? color : 'rgba(255,255,255,0.15)'}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: active ? `0 0 80px ${color}80` : 'none',
+            position: 'relative',
+          }}>
+            <svg width={size * 0.42} height={size * 0.42} viewBox="0 0 24 24" fill="none">
+              <rect x="9" y="2" width="6" height="13" rx="3" fill={active ? '#000' : 'rgba(255,255,255,0.6)'} />
+              <path d="M5 11a7 7 0 0014 0M12 18v3M9 21h6" stroke={active ? '#000' : 'rgba(255,255,255,0.6)'} strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Voice bars (phase-driven) ───────────────────────────────────────
+    function VoiceBars({ x, y, count = 22, height = 60, color = C.accent, active = true }) {
+      const t = useTime();
+      return (
+        <div style={{ position: 'absolute', left: x, top: y, display: 'flex', alignItems: 'center', gap: 5, height }}>
+          {Array.from({ length: count }, (_, i) => {
+            const seed = (Math.sin(t * 6 + i * 0.7) + Math.cos(t * 3 + i * 1.1)) * 0.5 + 0.5;
+            const h = active ? Math.max(8, 8 + seed * (height - 12)) : 6;
+            return (
+              <div key={i} style={{
+                width: 5, height: h, borderRadius: 3,
+                background: active ? color : 'rgba(255,255,255,0.25)',
+                transition: 'height 0.12s ease-out',
+              }} />
+            );
+          })}
+        </div>
+      );
+    }
+
+    // ── Phone frame ─────────────────────────────────────────────────────
+    function Phone({ x, y, width = 540, height = 1100, children, scale = 1 }) {
+      return (
+        <div style={{
+          position: 'absolute', left: x, top: y,
+          width: width + 24, height: height + 24,
+          borderRadius: 90, padding: 12,
+          background: '#1a1a20',
+          boxShadow: '0 60px 120px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.04), 0 0 100px rgba(255,196,82,0.05)',
+          transform: `scale(${scale})`, transformOrigin: 'top left',
+        }}>
+          <div style={{
+            width, height, borderRadius: 78, overflow: 'hidden', position: 'relative',
+            background: C.bg,
+            backgroundImage:
+              'radial-gradient(ellipse at 18% 0%, rgba(255,196,82,0.05) 0%, transparent 55%),' +
+              'radial-gradient(ellipse at 82% 100%, rgba(255,107,107,0.025) 0%, transparent 55%)',
+          }}>
+            {/* dynamic island */}
+            <div style={{
+              position: 'absolute', top: 22, left: '50%', transform: 'translateX(-50%)',
+              width: 180, height: 52, borderRadius: 999, background: '#000', zIndex: 50,
+            }} />
+            {children}
+          </div>
+        </div>
+      );
+    }
+
+    // ── Eyebrow label ───────────────────────────────────────────────────
+    function Eyebrow({ children, color = C.accent }) {
+      return (
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 12,
+          font: `500 22px ${F.mono}`, color, letterSpacing: 4, textTransform: 'uppercase',
+        }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: color }} />
+          <span>◆ {children}</span>
+        </div>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SCENE 1 — TITLE  (0–3.5s)
+    // ═══════════════════════════════════════════════════════════════════
+    function SceneTitle() {
+      return (
+        <Sprite start={0} end={3.6}>
+          {({ localTime, progress }) => {
+            const fade = Math.max(0, 1 - Math.max(0, localTime - 3.0) / 0.6);
+            const reveal = Math.min(1, localTime / 0.6);
+            const headlineY = (1 - Easing.easeOutCubic(Math.min(1, localTime / 0.7))) * 30;
+            const subY = (1 - Easing.easeOutCubic(Math.max(0, Math.min(1, (localTime - 0.5) / 0.7)))) * 30;
+            const subOpacity = Math.max(0, Math.min(1, (localTime - 0.5) / 0.7));
+            return (
+              <div style={{ position: 'absolute', inset: 0, opacity: fade }}>
+                <GraphField density={0.7} opacity={0.45} />
+
+                {/* Mark + Wordmark, top */}
+                <div style={{
+                  position: 'absolute', top: 200, left: '50%', transform: 'translateX(-50%)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24,
+                  opacity: reveal,
+                }}>
+                  <Mark size={120} color={C.accent} />
+                  <Wordmark size={48} />
+                </div>
+
+                {/* Headline */}
+                <div style={{
+                  position: 'absolute', top: 760, left: 0, right: 0, textAlign: 'center',
+                  transform: `translateY(${headlineY}px)`, opacity: reveal,
+                }}>
+                  <div style={{ font: `900 132px/0.95 ${F.sans}`, color: C.ink, letterSpacing: '-0.045em' }}>
+                    your social
+                  </div>
+                  <div style={{ font: `900 132px/0.95 ${F.sans}`, color: C.ink, letterSpacing: '-0.045em', marginTop: 6 }}>
+                    <i style={{ font: `400 1em/1 ${F.serif}`, fontStyle: 'italic', color: C.accent }}>RAM,</i> on disk.
+                  </div>
+                </div>
+
+                {/* Eyebrow above headline */}
+                <div style={{
+                  position: 'absolute', top: 680, left: 0, right: 0, textAlign: 'center',
+                  opacity: subOpacity, transform: `translateY(${subY}px)`,
+                }}>
+                  <Eyebrow>introducing wingmic</Eyebrow>
+                </div>
+
+                {/* Subtitle */}
+                <div style={{
+                  position: 'absolute', top: 1180, left: 0, right: 0, textAlign: 'center',
+                  opacity: subOpacity, transform: `translateY(${subY}px)`,
+                }}>
+                  <div style={{ font: `400 38px/1.4 ${F.sans}`, color: C.t55, padding: '0 80px' }}>
+                    Hold the mic. Talk like a human.<br />
+                    The graph builds itself.
+                  </div>
+                </div>
+
+                <StickerBadge x={130} y={1480} color={C.accent} rotate={-5} size="lg" fadeIn={1.2} fadeOut={3.5}>
+                  v0.1 · open beta
+                </StickerBadge>
+                <StickerBadge x={620} y={1560} color={C.third} rotate={4} size="md" fadeIn={1.6} fadeOut={3.5}>
+                  voice-first
+                </StickerBadge>
+              </div>
+            );
+          }}
+        </Sprite>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SCENE 2 — HUMAN  (3.5–8s)
+    // ═══════════════════════════════════════════════════════════════════
+    function SceneHuman() {
+      return (
+        <Sprite start={3.4} end={8.2}>
+          {({ localTime }) => {
+            const fadeIn = Math.min(1, localTime / 0.6);
+            const fadeOut = Math.max(0, 1 - Math.max(0, localTime - 4.0) / 0.5);
+            const op = Math.min(fadeIn, fadeOut);
+            // Ken Burns slow zoom + slight pan
+            const scale = 1.0 + (localTime / 4.6) * 0.12;
+            return (
+              <div style={{ position: 'absolute', inset: 0, opacity: op }}>
+                {/* Founder photo full-bleed */}
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  background: `url(ad/assets/founder.jpg) center/cover no-repeat`,
+                  transform: `scale(${scale}) translateY(${-(localTime / 4.6) * 24}px)`,
+                  transformOrigin: 'center 35%',
+                  filter: 'saturate(1.05)',
+                }} />
+                {/* Vignette + warm overlay */}
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  background:
+                    'linear-gradient(180deg, rgba(10,10,10,0.0) 30%, rgba(10,10,10,0.75) 80%, rgba(10,10,10,1) 100%),' +
+                    'radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(10,10,10,0.6) 100%)',
+                }} />
+                {/* Light film-grain feel via subtle gradient */}
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  background: 'radial-gradient(ellipse at 80% 10%, rgba(255,196,82,0.12) 0%, transparent 40%)',
+                  mixBlendMode: 'screen',
+                }} />
+
+                {/* Sticker overlay — DevConnect '26 */}
+                <StickerBadge x={120} y={220} color={C.accent} rotate={-6} size="lg" fadeIn={0.4} fadeOut={4.6}>
+                  DevConnect '26
+                </StickerBadge>
+                <StickerBadge x={720} y={340} color={C.second} rotate={5} size="md" fadeIn={0.8} fadeOut={4.6}>
+                  ◆ tue · 8:42 pm
+                </StickerBadge>
+
+                {/* Caption — typeset large */}
+                <div style={{
+                  position: 'absolute', left: 80, right: 80, bottom: 220, textAlign: 'left',
+                }}>
+                  <Eyebrow color={C.accent}>the moment</Eyebrow>
+                  <div style={{ font: `900 110px/0.95 ${F.sans}`, color: C.ink, letterSpacing: '-0.04em', marginTop: 28 }}>
+                    you meet <i style={{ font: `400 1em/1 ${F.serif}`, fontStyle: 'italic', color: C.accent }}>twelve</i>
+                  </div>
+                  <div style={{ font: `900 110px/0.95 ${F.sans}`, color: C.ink, letterSpacing: '-0.04em', marginTop: 6 }}>
+                    people in one
+                  </div>
+                  <div style={{ font: `900 110px/0.95 ${F.sans}`, color: C.ink, letterSpacing: '-0.04em', marginTop: 6 }}>
+                    <i style={{ font: `400 1em/1 ${F.serif}`, fontStyle: 'italic', color: C.accent }}>night.</i>
+                  </div>
+                </div>
+
+                {/* Mono caption — tomorrow */}
+                <div style={{
+                  position: 'absolute', left: 80, bottom: 130,
+                  font: `500 28px ${F.mono}`, color: C.t55, letterSpacing: 2, textTransform: 'uppercase',
+                  opacity: localTime > 2.4 ? Math.min(1, (localTime - 2.4) / 0.5) : 0,
+                }}>
+                  tomorrow · you'll remember <span style={{ color: C.alarm }}>three names</span>.
+                </div>
+              </div>
+            );
+          }}
+        </Sprite>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SCENE 3 — CAPTURE  (8–14.5s)
+    // ═══════════════════════════════════════════════════════════════════
+    function SceneCapture() {
+      const FAKE = "met sarah from acme, she's their rust lead. discussed edge config for hot reloading. need to send her my repo.";
+      return (
+        <Sprite start={7.8} end={14.7}>
+          {({ localTime }) => {
+            const fadeIn = Math.min(1, localTime / 0.5);
+            const fadeOut = Math.max(0, 1 - Math.max(0, localTime - 6.4) / 0.5);
+            const op = Math.min(fadeIn, fadeOut);
+
+            // Type the transcript progressively starting at 1.0s
+            const typeStart = 1.4;
+            const typeEnd = 5.4;
+            const typeT = Math.max(0, Math.min(1, (localTime - typeStart) / (typeEnd - typeStart)));
+            const charCount = Math.floor(typeT * FAKE.length);
+            const transcript = FAKE.slice(0, charCount);
+
+            // Phone slides up
+            const phoneY = 360 - Easing.easeOutCubic(Math.min(1, localTime / 0.8)) * 80;
+
+            return (
+              <div style={{ position: 'absolute', inset: 0, opacity: op }}>
+                <PageBG />
+                <GraphField density={0.5} opacity={0.25} />
+
+                <div style={{ position: 'absolute', top: 90, left: 80 }}>
+                  <Eyebrow>step 01 · the capture</Eyebrow>
+                </div>
+                <div style={{ position: 'absolute', top: 150, left: 80, right: 80 }}>
+                  <div style={{ font: `900 96px/0.95 ${F.sans}`, color: C.ink, letterSpacing: '-0.04em' }}>
+                    Hold. <i style={{ font: `400 1em/1 ${F.serif}`, fontStyle: 'italic', color: C.accent }}>Speak.</i>
+                  </div>
+                </div>
+
+                {/* Phone with chat composer recording state */}
+                <Phone x={210} y={phoneY} width={660} height={1280}>
+                  {/* status bar */}
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 90, paddingTop: 40, display: 'flex', justifyContent: 'space-between', padding: '40px 64px 0', font: `600 24px ${F.sans}`, color: '#fff', zIndex: 60 }}>
+                    <span>9:41</span>
+                    <span style={{ fontSize: 18, fontFamily: F.mono }}>5G ●●●●</span>
+                  </div>
+
+                  {/* chat header */}
+                  <div style={{ position: 'absolute', top: 110, left: 32, right: 32, display: 'flex', alignItems: 'center', gap: 16, paddingBottom: 18, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ width: 56, height: 56, borderRadius: 14, background: C.accent, color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', font: `900 24px ${F.sans}` }}>W</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ font: `800 26px ${F.sans}`, color: C.ink }}>wingmic</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: C.alarm, animation: 'ad-pulse-d 1s infinite' }} />
+                        <span style={{ font: `600 18px ${F.mono}`, color: C.alarm, letterSpacing: 1, textTransform: 'uppercase' }}>recording</span>
+                      </div>
+                    </div>
+                    <span style={{ font: `700 28px ${F.mono}`, color: C.accent }}>0:{String(Math.floor(localTime * 2.5)).padStart(2,'0')}</span>
+                  </div>
+
+                  {/* live transcript card */}
+                  <div style={{
+                    position: 'absolute', top: 280, left: 32, right: 32, padding: 28, borderRadius: 28,
+                    background: 'rgba(255,196,82,0.07)', border: `2px solid ${C.accent}80`,
+                    minHeight: 320,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                      <span style={{ font: `600 18px ${F.mono}`, color: C.accent, letterSpacing: 2, textTransform: 'uppercase' }}>◆ transcript · live</span>
+                    </div>
+                    <div style={{ font: `400 28px/1.45 ${F.sans}`, color: C.ink }}>
+                      {transcript}
+                      {charCount < FAKE.length && (
+                        <span style={{ display: 'inline-block', width: 4, height: 30, background: C.accent, marginLeft: 4, verticalAlign: 'text-bottom', animation: 'ad-blink 0.7s step-end infinite' }} />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Composer · holding */}
+                  <div style={{
+                    position: 'absolute', left: 32, right: 32, bottom: 70,
+                    display: 'flex', alignItems: 'center', gap: 18,
+                    padding: 18, borderRadius: 999,
+                    background: 'rgba(255,196,82,0.1)', border: `3px solid ${C.accent}`,
+                  }}>
+                    <span style={{ width: 14, height: 14, borderRadius: '50%', background: C.alarm, marginLeft: 12, animation: 'ad-pulse-d 1s infinite' }} />
+                    <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                      <VoiceBars x={0} y={-30} count={20} height={60} color={C.accent} />
+                    </div>
+                    {/* Mic button */}
+                    <div style={{
+                      width: 90, height: 90, borderRadius: '50%',
+                      background: C.accent, border: '3px solid #000', boxShadow: `0 0 60px ${C.accent}88, 6px 6px 0 #000`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      transform: 'scale(1.08)',
+                    }}>
+                      <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
+                        <rect x="9" y="2" width="6" height="13" rx="3" fill="#000" />
+                        <path d="M5 11a7 7 0 0014 0M12 18v3M9 21h6" stroke="#000" strokeWidth="2.5" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                  </div>
+                </Phone>
+
+                {/* Right side annotation stickers */}
+                <StickerBadge x={170} y={620} color={C.alarm} rotate={-7} size="md" fadeIn={0.6} fadeOut={6.4}>
+                  ● live
+                </StickerBadge>
+                <StickerBadge x={830} y={1100} color={C.accent} rotate={6} size="md" fadeIn={1.4} fadeOut={6.4}>
+                  on-device transcribe
+                </StickerBadge>
+              </div>
+            );
+          }}
+        </Sprite>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SCENE 4 — GRAPH FORMS  (14.5–20s)
+    // ═══════════════════════════════════════════════════════════════════
+    function SceneGraph() {
+      // Node positions around a center
+      const cx = 540, cy = 1080;
+      const nodes = [
+        { id: 'you',  x: cx,        y: cy,        r: 36, color: C.accent, label: 'You', self: true, start: 0 },
+        { id: 'sara', x: cx - 280,  y: cy - 280,  r: 26, color: C.accent, label: 'Sarah Chen',     kind: 'person',  start: 0.4 },
+        { id: 'acme', x: cx - 380,  y: cy + 30,   r: 22, color: C.blue,   label: 'Acme Corp',      kind: 'company', start: 0.9 },
+        { id: 'edge', x: cx + 320,  y: cy - 200,  r: 20, color: C.violet, label: 'edge config',    kind: 'concept', start: 1.4 },
+        { id: 'dev',  x: cx - 100,  y: cy - 420,  r: 18, color: C.t55,    label: 'DevConnect',     kind: 'event',   start: 1.9 },
+        { id: 'rust', x: cx + 250,  y: cy + 200,  r: 20, color: C.violet, label: 'rust',           kind: 'concept', start: 2.4 },
+        { id: 'hot',  x: cx + 380,  y: cy + 40,   r: 18, color: C.violet, label: 'hot reloading',  kind: 'concept', start: 2.6 },
+        { id: 'rep',  x: cx - 220,  y: cy + 320,  r: 18, color: C.second, label: 'repo · github',  kind: 'place',   start: 3.0 },
+      ];
+      const edges = [
+        ['you','sara', 0.6], ['sara','acme', 1.1], ['sara','dev', 2.1],
+        ['sara','edge', 1.6], ['sara','rust', 2.6], ['edge','hot', 2.8],
+        ['you','rep', 3.2], ['sara','rep', 3.4],
+      ];
+
+      return (
+        <Sprite start={14.3} end={20.1}>
+          {({ localTime }) => {
+            const fadeIn = Math.min(1, localTime / 0.45);
+            const fadeOut = Math.max(0, 1 - Math.max(0, localTime - 5.3) / 0.5);
+            const op = Math.min(fadeIn, fadeOut);
+
+            return (
+              <div style={{ position: 'absolute', inset: 0, opacity: op }}>
+                <PageBG />
+
+                <div style={{ position: 'absolute', top: 90, left: 80 }}>
+                  <Eyebrow color={C.violet}>step 02 · the extraction</Eyebrow>
+                </div>
+                <div style={{ position: 'absolute', top: 150, left: 80, right: 80 }}>
+                  <div style={{ font: `900 96px/0.95 ${F.sans}`, color: C.ink, letterSpacing: '-0.04em' }}>
+                    The graph <i style={{ font: `400 1em/1 ${F.serif}`, fontStyle: 'italic', color: C.violet }}>builds</i>
+                  </div>
+                  <div style={{ font: `900 96px/0.95 ${F.sans}`, color: C.ink, letterSpacing: '-0.04em', marginTop: 6 }}>
+                    itself.
+                  </div>
+                </div>
+
+                {/* SVG graph that builds */}
+                <svg viewBox={`0 0 ${W} ${H}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+                  {/* edges */}
+                  {edges.map(([a, b, s], i) => {
+                    const A = nodes.find(n => n.id === a);
+                    const B = nodes.find(n => n.id === b);
+                    const grow = Math.max(0, Math.min(1, (localTime - s) / 0.4));
+                    const ex = A.x + (B.x - A.x) * grow;
+                    const ey = A.y + (B.y - A.y) * grow;
+                    const c = A.id === 'you' || B.id === 'you' ? `${C.accent}80` : 'rgba(255,255,255,0.15)';
+                    return <line key={i} x1={A.x} y1={A.y} x2={ex} y2={ey} stroke={c} strokeWidth={A.id === 'you' || B.id === 'you' ? 2 : 1.5} />;
+                  })}
+                  {/* nodes */}
+                  {nodes.map(n => {
+                    if (localTime < n.start) return null;
+                    const pulse = Math.min(1, (localTime - n.start) / 0.4);
+                    const r = n.r * pulse;
+                    const isSquare = n.kind === 'company';
+                    const isDiamond = n.kind === 'event';
+                    const labelOp = Math.max(0, Math.min(1, (localTime - n.start - 0.2) / 0.3));
+                    return (
+                      <g key={n.id}>
+                        {n.self && (
+                          <circle cx={n.x} cy={n.y} r={r + 20} fill="none" stroke={n.color} strokeWidth="2" opacity="0.3">
+                            <animate attributeName="r" values={`${r+20};${r+30};${r+20}`} dur="2s" repeatCount="indefinite" />
+                          </circle>
+                        )}
+                        {isSquare ? (
+                          <rect x={n.x - r} y={n.y - r} width={r * 2} height={r * 2} fill={n.color} opacity="0.9" rx="4" />
+                        ) : isDiamond ? (
+                          <polygon points={`${n.x},${n.y-r} ${n.x+r},${n.y} ${n.x},${n.y+r} ${n.x-r},${n.y}`} fill="none" stroke={n.color} strokeWidth="3" />
+                        ) : (
+                          <circle cx={n.x} cy={n.y} r={r} fill={n.color} opacity={n.self ? 1 : 0.95} />
+                        )}
+                        {n.self && (
+                          <text x={n.x} y={n.y + 8} textAnchor="middle" fontFamily={F.sans} fontSize="22" fontWeight="900" fill="#000">You</text>
+                        )}
+                        {labelOp > 0 && !n.self && (
+                          <text x={n.x} y={n.y + n.r + 38} textAnchor="middle" fontFamily={F.mono} fontSize="22" fontWeight="600" fill={C.ink} opacity={labelOp} letterSpacing="0.4">{n.label}</text>
+                        )}
+                      </g>
+                    );
+                  })}
+                </svg>
+
+                {/* Floating entity chips appearing on right */}
+                <div style={{ position: 'absolute', right: 60, top: 1480, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'flex-end' }}>
+                  {[
+                    { l: '◉ Sarah Chen',    c: C.accent, s: 1.0 },
+                    { l: '▤ Acme Corp',     c: C.blue,   s: 1.5 },
+                    { l: '◆ DevConnect',    c: C.t55,    s: 2.5 },
+                    { l: '◇ edge config',   c: C.violet, s: 2.0 },
+                  ].map((chip, i) => {
+                    const ap = Math.max(0, Math.min(1, (localTime - chip.s) / 0.35));
+                    const sx = (1 - ap) * 60;
+                    return (
+                      <div key={i} style={{
+                        opacity: ap, transform: `translateX(${sx}px)`,
+                        padding: '14px 22px', borderRadius: 999,
+                        background: `${chip.c}26`, color: chip.c, border: `1.5px solid ${chip.c}66`,
+                        font: `700 28px ${F.mono}`, letterSpacing: 1.5, textTransform: 'uppercase',
+                      }}>{chip.l}</div>
+                    );
+                  })}
+                </div>
+
+                <StickerBadge x={80} y={1640} color={C.second} rotate={-4} size="md" fadeIn={3.2} fadeOut={5.3}>
+                  4 entities · 8 edges
+                </StickerBadge>
+              </div>
+            );
+          }}
+        </Sprite>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SCENE 5 — AGENT DRAFT  (20–25s)
+    // ═══════════════════════════════════════════════════════════════════
+    function SceneAct() {
+      const DRAFT = "Hey Sarah —\n\nGreat meeting you at DevConnect. As promised, here's the edge-reload repo: github.com/me/edge-reload.\n\nWould love your eyes when you can.\n\n— M";
+      return (
+        <Sprite start={19.8} end={25.2}>
+          {({ localTime }) => {
+            const fadeIn = Math.min(1, localTime / 0.45);
+            const fadeOut = Math.max(0, 1 - Math.max(0, localTime - 4.9) / 0.5);
+            const op = Math.min(fadeIn, fadeOut);
+
+            // Type the draft
+            const typeStart = 1.0, typeEnd = 3.5;
+            const typeT = Math.max(0, Math.min(1, (localTime - typeStart) / (typeEnd - typeStart)));
+            const chars = Math.floor(typeT * DRAFT.length);
+            const draftText = DRAFT.slice(0, chars);
+
+            // Confidence bar
+            const confT = Math.max(0, Math.min(1, (localTime - 0.6) / 1.2));
+            const confPct = Math.floor(confT * 92);
+
+            // Send tap moment
+            const sentAt = 4.0;
+            const sent = localTime > sentAt;
+            const sendPress = localTime > sentAt - 0.15 && localTime < sentAt + 0.15;
+
+            return (
+              <div style={{ position: 'absolute', inset: 0, opacity: op }}>
+                <PageBG />
+
+                <div style={{ position: 'absolute', top: 90, left: 80 }}>
+                  <Eyebrow color={C.second}>step 03 · the morning after</Eyebrow>
+                </div>
+                <div style={{ position: 'absolute', top: 150, left: 80, right: 80 }}>
+                  <div style={{ font: `900 96px/0.95 ${F.sans}`, color: C.ink, letterSpacing: '-0.04em' }}>
+                    The agent <i style={{ font: `400 1em/1 ${F.serif}`, fontStyle: 'italic', color: C.second }}>drafts.</i>
+                  </div>
+                  <div style={{ font: `900 96px/0.95 ${F.sans}`, color: C.ink, letterSpacing: '-0.04em', marginTop: 6 }}>
+                    You just send.
+                  </div>
+                </div>
+
+                {/* Big draft card */}
+                <div style={{
+                  position: 'absolute', top: 480, left: 80, right: 80,
+                  background: C.bgCard, border: `2px solid ${C.accent}40`, borderRadius: 32,
+                  padding: 44, boxShadow: '0 60px 120px rgba(0,0,0,0.6)',
+                }}>
+                  {/* header row */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 22 }}>
+                    <div style={{ width: 60, height: 60, borderRadius: 14, background: C.accent, color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', font: `900 26px ${F.sans}` }}>SC</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ padding: '4px 11px', borderRadius: 6, background: `${C.accent}22`, color: C.accent, font: `700 18px ${F.mono}`, letterSpacing: 1, textTransform: 'uppercase', border: `1px solid ${C.accent}40` }}>↗ check-in</span>
+                        <span style={{ padding: '4px 11px', borderRadius: 6, background: `${C.alarm}22`, color: C.alarm, font: `700 18px ${F.mono}`, letterSpacing: 1, textTransform: 'uppercase', border: `1px solid ${C.alarm}40` }}>● now</span>
+                      </div>
+                      <div style={{ font: `800 32px ${F.sans}`, color: C.ink, marginTop: 8 }}>Sarah Chen · Acme</div>
+                    </div>
+                  </div>
+
+                  {/* subject */}
+                  <div style={{ font: `500 22px ${F.mono}`, color: C.t70, padding: '14px 0', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    Subject: The edge-config repo I mentioned
+                  </div>
+
+                  {/* draft body */}
+                  <div style={{
+                    marginTop: 22, padding: 26, borderRadius: 18,
+                    background: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.06)',
+                    font: `400 24px/1.6 ${F.mono}`, color: C.t85, whiteSpace: 'pre-wrap', minHeight: 360,
+                  }}>{draftText}{chars < DRAFT.length && (
+                    <span style={{ display: 'inline-block', width: 3, height: 24, background: C.accent, marginLeft: 2, verticalAlign: 'text-bottom', animation: 'ad-blink 0.7s step-end infinite' }} />
+                  )}</div>
+
+                  {/* confidence + send button */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 28 }}>
+                    <span style={{ font: `600 22px ${F.mono}`, color: C.t70, letterSpacing: 1, textTransform: 'uppercase' }}>conf</span>
+                    <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                      <div style={{ width: `${confT * 92}%`, height: '100%', background: C.accent, borderRadius: 4, transition: 'width 0.1s' }} />
+                    </div>
+                    <span style={{ font: `700 28px ${F.mono}`, color: C.accent }}>{confPct}%</span>
+                  </div>
+
+                  {/* Send button */}
+                  <button style={{
+                    marginTop: 24, width: '100%', padding: '24px', borderRadius: 18,
+                    background: sent ? C.second : C.accent, color: '#000',
+                    border: '2.5px solid #000', boxShadow: sendPress ? '2px 2px 0 #000' : '6px 6px 0 #000',
+                    transform: sendPress ? 'translate(2px, 2px)' : 'translate(0, 0)',
+                    font: `800 32px ${F.sans}`,
+                    transition: 'all 0.15s ease-out',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14,
+                  }}>
+                    {sent ? '✓ sent · 0.4s ago' : 'Send now →'}
+                  </button>
+                </div>
+
+                {/* Pointer / tap visualization */}
+                {localTime > sentAt - 0.4 && localTime < sentAt + 0.3 && (
+                  <div style={{
+                    position: 'absolute', left: 540, top: 1500,
+                    width: 80, height: 80, borderRadius: '50%',
+                    background: 'rgba(255,255,255,0.25)', border: '3px solid rgba(255,255,255,0.6)',
+                    transform: `translate(-50%, -50%) scale(${1 + (localTime - (sentAt - 0.4)) * 1.5})`,
+                    opacity: Math.max(0, 1 - (localTime - (sentAt - 0.4)) * 2),
+                  }} />
+                )}
+
+                {/* Commit toast — slides in after send */}
+                {sent && (
+                  <div style={{
+                    position: 'absolute', left: '50%', bottom: 110,
+                    transform: `translate(-50%, ${Math.max(0, 1 - (localTime - sentAt) / 0.4) * 40}px)`,
+                    opacity: Math.min(1, (localTime - sentAt) / 0.3),
+                    display: 'inline-flex', alignItems: 'center', gap: 18,
+                    padding: '22px 32px', borderRadius: 999,
+                    background: C.bg, border: `2px solid ${C.second}`, boxShadow: `0 20px 60px rgba(0,0,0,0.5), 0 0 60px ${C.second}30`,
+                  }}>
+                    <span style={{ width: 14, height: 14, borderRadius: '50%', background: C.second, animation: 'ad-pulse-d 1.5s infinite' }} />
+                    <span style={{ font: `700 24px ${F.mono}`, color: C.second, letterSpacing: 1, textTransform: 'uppercase' }}>→ commit</span>
+                    <span style={{ font: `500 26px ${F.sans}`, color: C.ink }}>sarah · 92% · sent</span>
+                  </div>
+                )}
+
+                <StickerBadge x={130} y={420} color={C.second} rotate={-4} size="md" fadeIn={0.5} fadeOut={4.9}>
+                  ◷ 06:12 am · agent swept
+                </StickerBadge>
+              </div>
+            );
+          }}
+        </Sprite>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SCENE 6 — CLOSE  (25–30s)
+    // ═══════════════════════════════════════════════════════════════════
+    function SceneClose() {
+      return (
+        <Sprite start={24.8} end={30.1}>
+          {({ localTime }) => {
+            const fadeIn = Math.min(1, localTime / 0.5);
+            const op = fadeIn;
+            const markScale = Easing.easeOutBack(Math.min(1, localTime / 0.7));
+            const headOp = Math.max(0, Math.min(1, (localTime - 0.5) / 0.6));
+            const headY = (1 - Easing.easeOutCubic(Math.max(0, Math.min(1, (localTime - 0.5) / 0.6)))) * 30;
+            const subOp = Math.max(0, Math.min(1, (localTime - 1.2) / 0.6));
+            const ctaOp = Math.max(0, Math.min(1, (localTime - 2.0) / 0.6));
+
+            // Final stat trio drifts
+            const statsOp = Math.max(0, Math.min(1, (localTime - 2.6) / 0.6));
+
+            return (
+              <div style={{ position: 'absolute', inset: 0, opacity: op }}>
+                <PageBG />
+                <GraphField density={0.9} opacity={0.5} />
+
+                {/* Mark + wordmark big */}
+                <div style={{
+                  position: 'absolute', top: 280, left: '50%', transform: `translateX(-50%) scale(${markScale})`,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 28,
+                }}>
+                  <Mark size={150} color={C.accent} />
+                  <Wordmark size={56} />
+                </div>
+
+                {/* Big headline */}
+                <div style={{
+                  position: 'absolute', top: 850, left: 0, right: 0, textAlign: 'center',
+                  opacity: headOp, transform: `translateY(${headY}px)`,
+                }}>
+                  <div style={{ font: `900 130px/0.95 ${F.sans}`, color: C.ink, letterSpacing: '-0.045em' }}>
+                    Stop forgetting.
+                  </div>
+                  <div style={{ font: `900 130px/0.95 ${F.sans}`, color: C.ink, letterSpacing: '-0.045em', marginTop: 12 }}>
+                    Start <i style={{ font: `400 1em/1 ${F.serif}`, fontStyle: 'italic', color: C.accent }}>building.</i>
+                  </div>
+                </div>
+
+                {/* Stat trio */}
+                <div style={{
+                  position: 'absolute', top: 1280, left: 0, right: 0,
+                  display: 'flex', justifyContent: 'center', gap: 100,
+                  opacity: statsOp,
+                }}>
+                  {[
+                    { v: '12', l: 'people met',      c: C.accent, r: -3 },
+                    { v: '3',  l: 'acts auto-drafted', c: C.second, r: 2 },
+                    { v: '0',  l: 'forgotten',        c: C.third,  r: -1.5 },
+                  ].map((s, i) => (
+                    <div key={i} style={{ transform: `rotate(${s.r}deg)`, textAlign: 'center', animation: `ad-drift ${5 + i * 0.6}s ease-in-out infinite` }}>
+                      <div style={{ font: `400 130px/0.85 ${F.serif}`, fontStyle: 'italic', color: s.c, letterSpacing: '-0.04em' }}>{s.v}</div>
+                      <div style={{ font: `600 22px ${F.mono}`, color: C.t40, letterSpacing: 2, textTransform: 'uppercase', marginTop: 12 }}>{s.l}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* CTA */}
+                <div style={{
+                  position: 'absolute', bottom: 280, left: 0, right: 0, textAlign: 'center',
+                  opacity: ctaOp,
+                }}>
+                  <div style={{ font: `500 28px ${F.mono}`, color: C.accent, letterSpacing: 4, textTransform: 'uppercase', marginBottom: 26 }}>
+                    ◆ open beta · now shipping
+                  </div>
+                  <button style={{
+                    padding: '32px 62px', borderRadius: 22,
+                    background: C.accent, color: '#000',
+                    border: '3px solid #000', boxShadow: '8px 8px 0 #000',
+                    font: `800 38px ${F.sans}`,
+                  }}>wingmic.xyz · get the beta</button>
+                </div>
+
+                <StickerBadge x={80} y={1620} color={C.third} rotate={-5} size="md" fadeIn={2.4}>
+                  voice-first
+                </StickerBadge>
+                <StickerBadge x={760} y={1700} color={C.accent} rotate={4} size="md" fadeIn={2.6}>
+                  on-device · private
+                </StickerBadge>
+              </div>
+            );
+          }}
+        </Sprite>
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ROOT
+    // ═══════════════════════════════════════════════════════════════════
+    function App() {
+      return (
+        <Stage width={W} height={H} duration={30.5} background="#0a0a0a" autoplay={true} persistKey="wingmic-ad">
+          <ScreenLabel />
+          <SceneTitle />
+          <SceneHuman />
+          <SceneCapture />
+          <SceneGraph />
+          <SceneAct />
+          <SceneClose />
+        </Stage>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
