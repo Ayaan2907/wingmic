@@ -22,6 +22,13 @@
       "when": 1779004800000,
       "tag": "0002_vector_top_k_entity_embedding",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1779775875857,
+      "tag": "0003_v012_coordinated_schema",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { customType, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { customType, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { createId } from '@paralleldrive/cuid2';
 
 /**
@@ -50,6 +50,12 @@ export const users = sqliteTable('user', {
   image: text('image'),
   createdAt: ts('created_at'),
   updatedAt: ts('updated_at'),
+  // v0.1.2 additions (PR α α-0)
+  audioRetentionMode: text('audio_retention_mode', { enum: ['24h', '7d', 'forever', 'never'] }).notNull().default('24h'),
+  linkerModelOverride: text('linker_model_override'),
+  preferredMicDeviceId: text('preferred_mic_device_id'),
+  asrLanguage: text('asr_language').notNull().default('en-US'),
+  acknowledgedPrivacy: integer('acknowledged_privacy', { mode: 'boolean' }).notNull().default(false),
 });
 
 // BetterAuth core tables — kept in sync with @better-auth/cli expectations.
@@ -191,6 +197,7 @@ export const entities = sqliteTable(
     embedding: float32Blob(1536)('embedding'),
     createdAt: ts('created_at'),
     updatedAt: ts('updated_at'),
+    deletedAt: integer('deleted_at', { mode: 'timestamp' }),
   },
   (t) => [
     index('entity_owner_idx').on(t.ownerUserId),
@@ -230,10 +237,22 @@ export const interactions = sqliteTable(
     capturedAt: integer('captured_at', { mode: 'timestamp' }).notNull(),
     embedding: float32Blob(1536)('embedding'),
     createdAt: ts('created_at'),
+    // v0.1.2 additions (PR α α-0)
+    parentInteractionId: text('parent_interaction_id').references((): any => interactions.id, { onDelete: 'set null' }),
+    threadRootId: text('thread_root_id').references((): any => interactions.id, { onDelete: 'set null' }),
+    audioStorageKey: text('audio_storage_key'),
+    audioRetentionExpiry: integer('audio_retention_expiry', { mode: 'timestamp' }),
+    // NOTE: plan §18 specifies NOT NULL + unique with userId, but we make this nullable so
+    // existing rows survive the migration without a default value. Uniqueness is enforced
+    // via composite unique index below (SQLite unique indexes allow multiple NULLs).
+    clientCaptureId: text('client_capture_id'),
+    status: text('status', { enum: ['draft', 'committed', 'failed'] }).notNull().default('committed'),
+    deletedAt: integer('deleted_at', { mode: 'timestamp' }),
   },
   (t) => [
     index('interaction_user_idx').on(t.userId),
     index('interaction_captured_at_idx').on(t.capturedAt),
+    uniqueIndex('interaction_user_client_capture_idx').on(t.userId, t.clientCaptureId),
   ],
 );
 
@@ -288,6 +307,7 @@ export const entityCompanies = sqliteTable(
     since: integer('since', { mode: 'timestamp' }),
     until: integer('until', { mode: 'timestamp' }),
     createdAt: ts('created_at'),
+    sourceDeleted: integer('source_deleted', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [
     index('entity_company_entity_idx').on(t.entityId),
@@ -307,6 +327,7 @@ export const entityEvents = sqliteTable(
       .references(() => events.id, { onDelete: 'cascade' }),
     role: text('role'),
     createdAt: ts('created_at'),
+    sourceDeleted: integer('source_deleted', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [index('entity_event_entity_idx').on(t.entityId)],
 );
@@ -326,8 +347,30 @@ export const entityTopics = sqliteTable(
       onDelete: 'set null',
     }),
     createdAt: ts('created_at'),
+    sourceDeleted: integer('source_deleted', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [index('entity_topic_entity_idx').on(t.entityId)],
+);
+
+// ─── Entity merge log (v0.1.2) ────────────────────────────────────────
+
+export const entityMerges = sqliteTable(
+  'entity_merge',
+  {
+    id: id(),
+    sourceEntityId: text('source_entity_id').notNull(), // the merged-FROM entity (may be deleted by now)
+    targetEntityId: text('target_entity_id')
+      .notNull()
+      .references(() => entities.id, { onDelete: 'cascade' }),
+    mergedByUserId: text('merged_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    mergedAt: ts('merged_at'),
+  },
+  (t) => [
+    index('entity_merge_target_idx').on(t.targetEntityId),
+    index('entity_merge_source_idx').on(t.sourceEntityId),
+  ],
 );
 
 // ─── Connection requests (opt-in linking, exposed in v0.2+) ────────────
@@ -368,3 +411,4 @@ export type Interaction = typeof interactions.$inferSelect;
 export type NewInteraction = typeof interactions.$inferInsert;
 export type EntityFact = typeof entityFacts.$inferSelect;
 export type EntityNote = typeof entityNotes.$inferSelect;
+export type EntityMerge = typeof entityMerges.$inferSelect;
