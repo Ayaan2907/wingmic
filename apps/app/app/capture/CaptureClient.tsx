@@ -1912,10 +1912,9 @@ function BottomTabBar({ active }: { active: 'capture' | 'recall' | 'history' | '
               justifyContent: 'center',
               gap: 2,
               textDecoration: 'none',
-              color: isActive ? accent : 'var(--text-55)',
               position: 'relative',
               fontFamily: 'JetBrains Mono, monospace',
-              // v2 §6 Bottom nav: mono 9px/1 uppercase tracked 0.5 for labels.
+              // v2 Bottom nav (design-system.md L509): mono 9px/1 uppercase tracked 0.5 for labels.
               fontSize: 9,
               letterSpacing: 0.5,
               textTransform: 'uppercase',
@@ -1936,8 +1935,12 @@ function BottomTabBar({ active }: { active: 'capture' | 'recall' | 'history' | '
                 }}
               />
             )}
-            <span style={{ fontSize: 16 }}>{t.glyph}</span>
-            <span>{t.label}</span>
+            {/* v2 Bottom nav: icon 20 + active=accent / inactive=text-55. */}
+            <span style={{ fontSize: 20, color: isActive ? accent : 'var(--text-55)' }}>
+              {t.glyph}
+            </span>
+            {/* v2 Bottom nav: label active=accent / inactive=text-40 (one notch quieter than icon). */}
+            <span style={{ color: isActive ? accent : 'var(--text-40)' }}>{t.label}</span>
           </a>
         );
       })}
