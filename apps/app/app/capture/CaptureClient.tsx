@@ -1,5 +1,7 @@
 'use client';
 
+// Canonical capture variant: A (chat-anchored). v17 lock 2026-05-26. See design/v2/library/lib-capture-variants.jsx CaptureVariantA for the reference layout. Variants B (centered orb) and C (slide-up sheet) are archived as visual reference only — see design/v2/library/lib-capture-variants.jsx.
+
 /**
  * CaptureClient — chat-thread + push-to-talk capture UI.
  *
