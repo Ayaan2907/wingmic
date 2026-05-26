@@ -9,7 +9,7 @@
  *
  * Replaces the old tap-to-record screen with:
  *   - chat-thread of memo bubbles (status morphs in place)
- *   - hold-to-talk button floating above a 4-tab bottom nav
+ *   - hold-to-talk button floating above a 5-tab bottom nav (v8: home/chat/capture/graph/acts)
  *   - progressive bubble states: sending → transcribing → linking → done
  *   - inline failed-bubble recovery (no modals)
  *   - long-press menu (copy, delete with 30s undo)
@@ -2196,18 +2196,19 @@ function PrivacyAmbientLine() {
 
 // ─── Bottom tab bar ──────────────────────────────────────────────────────
 
-function BottomTabBar({ active }: { active: 'capture' | 'recall' | 'history' | 'settings' }) {
-  // v2 nav-label rename (locked 2026-05-25, plan §Step 5):
-  //   recall → chat   (the surface stays /recall in v0.1.1; v2's "talk" verb
-  //                    lands as a label early so the 4-slot bar reads correctly
-  //                    against v2 tokens. v8 in v0.1.2 restructures to 5 slots.)
-  const tabs: Array<{ key: typeof active; glyph: string; label: string; href: string }> = [
-    { key: 'capture', glyph: '◉', label: 'capture', href: '/capture' },
-    // TODO(v8): key still says 'recall' (route hasn't moved); v0.1.2 §18 PR α
-    // restructures to the 5-slot bar — at that point key + label align.
-    { key: 'recall', glyph: '⌕', label: 'chat', href: '/recall' },
-    { key: 'history', glyph: '⏱', label: 'history', href: '/history' },
-    { key: 'settings', glyph: '◊', label: 'settings', href: '/settings' },
+function BottomTabBar({ active }: { active: 'home' | 'chat' | 'capture' | 'graph' | 'acts' }) {
+  // v8 5-slot bottom nav (plan §18, design/v2/library/lib-screens.jsx MobileNav):
+  //   home / chat / capture / graph / acts. The center capture slot breaks the
+  //   bar plane — larger disc, accent fill, brutal shadow, lifts above the bar
+  //   baseline. graph + acts routes ship empty in v11/v12; hrefs 404 until then.
+  const tabs: Array<{ key: typeof active; glyph: string; label: string; href: string; big?: boolean }> = [
+    { key: 'home', glyph: '⌂', label: 'home', href: '/' },
+    // TODO(v13): rename route from /recall to /chat once v13 lands. Label is
+    // already 'chat' (locked v2 token re-skin, 2026-05-25).
+    { key: 'chat', glyph: '⌕', label: 'chat', href: '/recall' },
+    { key: 'capture', glyph: '◉', label: 'capture', href: '/capture', big: true },
+    { key: 'graph', glyph: '◈', label: 'graph', href: '/graph' },
+    { key: 'acts', glyph: '◬', label: 'acts', href: '/acts' },
   ];
   return (
     <nav
@@ -2218,16 +2219,77 @@ function BottomTabBar({ active }: { active: 'capture' | 'recall' | 'history' | '
         right: 0,
         bottom: 0,
         height: TAB_BAR_HEIGHT_PX,
+        // Padding-top lets the breakout capture button extend above the bar.
+        paddingTop: 16,
         paddingBottom: 'env(safe-area-inset-bottom)',
         background: 'rgba(10,10,10,0.92)',
         backdropFilter: 'blur(20px)',
         borderTop: '1px solid var(--border-soft)',
         display: 'flex',
+        alignItems: 'flex-start',
         zIndex: 50,
       }}
     >
       {tabs.map((t) => {
         const isActive = t.key === active;
+        if (t.big) {
+          // Center breakout slot — lifts above the bar plane (lib-screens.jsx
+          // MobileNav `big: true`). 52px disc, accent fill, brutal shadow.
+          return (
+            <a
+              key={t.key}
+              href={t.href}
+              aria-current={isActive ? 'page' : undefined}
+              aria-label={t.label}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'center',
+                textDecoration: 'none',
+                fontFamily: 'JetBrains Mono, monospace',
+              }}
+            >
+              <span
+                style={{
+                  position: 'relative',
+                  top: -28,
+                  width: 52,
+                  height: 52,
+                  borderRadius: '50%',
+                  background: accent,
+                  border: '1.5px solid #000',
+                  boxShadow: '3px 3px 0 #000',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#000',
+                  fontSize: 22,
+                  // Pulse the breakout when already on /capture (uses approved
+                  // wm-pulse-s keyframe).
+                  animation: isActive ? 'wm-pulse-s 1.4s ease-in-out infinite' : undefined,
+                }}
+              >
+                {t.glyph}
+                <span
+                  // hidden text label for the breakout — keeps test parity
+                  // (nav.textContent includes "capture") without visually
+                  // duplicating the glyph.
+                  style={{
+                    position: 'absolute',
+                    width: 1,
+                    height: 1,
+                    overflow: 'hidden',
+                    clip: 'rect(0 0 0 0)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {t.label}
+                </span>
+              </span>
+            </a>
+          );
+        }
         return (
           <a
             key={t.key}
