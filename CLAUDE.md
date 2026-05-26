@@ -3,6 +3,12 @@
 You are working on **wingmic**, a voice-first networking memory app.
 Homepage: <https://wingmic.xyz> · Repo: <https://github.com/Ayaan2907/wingmic>
 
+## gstack
+
+Web browsing: use `/browse` skill from gstack, never use `mcp__claude-in-chrome__*` tools.
+
+**Available skills:** `/office-hours`, `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/design-consultation`, `/design-shotgun`, `/design-html`, `/review`, `/ship`, `/land-and-deploy`, `/canary`, `/benchmark`, `/browse`, `/connect-chrome`, `/qa`, `/qa-only`, `/design-review`, `/setup-browser-cookies`, `/setup-deploy`, `/setup-gbrain`, `/retro`, `/investigate`, `/document-release`, `/document-generate`, `/codex`, `/cso`, `/autoplan`, `/plan-devex-review`, `/devex-review`, `/careful`, `/freeze`, `/guard`, `/unfreeze`, `/gstack-upgrade`, `/learn`
+
 ## one-paragraph product
 
 User speaks 10–30s into mic after meeting someone. LLM extracts persons,
