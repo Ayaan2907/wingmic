@@ -112,7 +112,12 @@ describe('CaptureClient', () => {
     const nav = screen.getByLabelText('primary');
     expect(nav).toBeTruthy();
     expect(nav.textContent).toContain('capture');
-    expect(nav.textContent).toContain('recall');
+    // H6: v2 nav-label rename — the `recall` slot now reads "chat"
+    // (locked 2026-05-25). The href stays /recall in v0.1.1; v8 in v0.1.2
+    // restructures to the 5-slot home/chat/capture/graph/acts bar.
+    expect(nav.textContent).toContain('chat');
+    // Regression guard: the old v1 label must not coexist with the new v2 label
+    expect(nav.textContent).not.toContain('recall');
     expect(nav.textContent).toContain('history');
     expect(nav.textContent).toContain('settings');
     // ambient privacy line
