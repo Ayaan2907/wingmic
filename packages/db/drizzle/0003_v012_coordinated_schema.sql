@@ -2,10 +2,10 @@ CREATE TABLE `entity_merge` (
 	`id` text PRIMARY KEY NOT NULL,
 	`source_entity_id` text NOT NULL,
 	`target_entity_id` text NOT NULL,
-	`merged_by_user_id` text NOT NULL,
+	`merged_by_user_id` text,
 	`merged_at` integer NOT NULL,
 	FOREIGN KEY (`target_entity_id`) REFERENCES `entity`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`merged_by_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`merged_by_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE INDEX `entity_merge_target_idx` ON `entity_merge` (`target_entity_id`);--> statement-breakpoint

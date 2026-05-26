@@ -362,9 +362,8 @@ export const entityMerges = sqliteTable(
     targetEntityId: text('target_entity_id')
       .notNull()
       .references(() => entities.id, { onDelete: 'cascade' }),
-    mergedByUserId: text('merged_by_user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    // Audit table: SET NULL preserves merge history if the acting user is later deleted.
+    mergedByUserId: text('merged_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     mergedAt: ts('merged_at'),
   },
   (t) => [
