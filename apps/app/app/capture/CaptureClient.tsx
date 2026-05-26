@@ -472,7 +472,7 @@ export default function CaptureClient({ userName }: { userName: string | null })
       }}
     >
       <DesktopStyles />
-      <Header userName={userName} />
+      <Header userName={userName} recorder={recorder} />
 
       <ThreadView
         messages={messages.filter((m) => m.status !== 'deleted')}
@@ -564,22 +564,103 @@ function DesktopStyles() {
 
 // ─── Header ──────────────────────────────────────────────────────────────
 
-function Header({ userName }: { userName: string | null }) {
+function Header({
+  userName,
+  recorder,
+}: {
+  userName: string | null;
+  recorder: ReturnType<typeof useAudioRecorder>;
+}) {
+  // v17 item 4: header morphs while recording — brand avatar + "wingmic" word,
+  // a pulsing "recording" indicator, and a live m:ss duration counter.
+  const recording =
+    recorder.status === 'recording' ||
+    recorder.status === 'lock_armed' ||
+    recorder.status === 'cancel_armed' ||
+    recorder.status === 'locked';
+
+  const shell: React.CSSProperties = {
+    padding: '14px 20px',
+    borderBottom: '1px solid var(--border-soft)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    position: 'sticky',
+    top: 0,
+    background: 'rgba(10,10,10,0.85)',
+    backdropFilter: 'blur(20px)',
+    zIndex: 30,
+    gap: 12,
+  };
+
+  if (recording) {
+    const totalSec = Math.floor(recorder.duration / 1000);
+    const mm = Math.floor(totalSec / 60);
+    const ss = (totalSec % 60).toString().padStart(2, '0');
+    return (
+      <header style={shell} data-recording="true">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span
+            aria-hidden="true"
+            style={{
+              width: 24,
+              height: 24,
+              background: accent,
+              border: '1.5px solid #000',
+              boxShadow: '2px 2px 0 #000',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontFamily: 'Newsreader, Georgia, serif',
+              fontStyle: 'italic',
+              fontSize: 12,
+              fontWeight: 600,
+              lineHeight: 1,
+            }}
+          >
+            W
+          </span>
+          <span style={{ fontSize: 14, fontWeight: 400, color: 'var(--text-100, var(--ink))' }}>
+            wingmic
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span
+            aria-hidden="true"
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: 999,
+              background: accent,
+              display: 'inline-block',
+              animation: 'wm-pulse-s 1s ease-in-out infinite',
+            }}
+          />
+          <span
+            className="mono"
+            style={{
+              fontSize: 11,
+              letterSpacing: 0.5,
+              color: 'var(--text-55)',
+              textTransform: 'uppercase',
+            }}
+          >
+            recording
+          </span>
+        </div>
+        <span
+          className="mono"
+          style={{ fontSize: 12, color: accent, fontVariantNumeric: 'tabular-nums' }}
+        >
+          {mm}:{ss}
+        </span>
+      </header>
+    );
+  }
+
   return (
-    <header
-      style={{
-        padding: '14px 20px',
-        borderBottom: '1px solid var(--border-soft)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        position: 'sticky',
-        top: 0,
-        background: 'rgba(10,10,10,0.85)',
-        backdropFilter: 'blur(20px)',
-        zIndex: 30,
-      }}
-    >
+    <header style={shell}>
       <a
         href="/"
         className="mono"
@@ -742,15 +823,9 @@ function PhantomBubble({ recorder }: { recorder: ReturnType<typeof useAudioRecor
         rec · {sec}s
       </div>
       <LevelMeter level={recorder.level} />
-      <div className="mono" style={{ fontSize: 10, color: 'var(--text-40)' }}>
-        {recorder.status === 'lock_armed'
-          ? '↑ release to lock'
-          : recorder.status === 'cancel_armed'
-            ? '← release to discard'
-            : recorder.status === 'locked'
-              ? '◇ locked · tap stop'
-              : 'release to send · ← discard · ↑ lock'}
-      </div>
+      {/* v17 item 3: the slide-up-to-lock floating circle (rendered by Dock)
+          replaces the old text-hint that lived here. Phantom bubble is now
+          the live transcription surface only. */}
     </div>
   );
 }
@@ -811,13 +886,17 @@ function MessageBubble(props: MessageBubbleProps) {
 
   return (
     <div style={{ alignSelf: 'flex-end', maxWidth: '92%', width: '100%' }}>
+      {/* v17 item 1: user-authored bubble chrome — accent fill, brutal shadow,
+          asymmetric radii (sharp bottom-right corner). Matches CaptureVariantA. */}
       <div
         style={{
           alignSelf: 'flex-end',
           padding: '14px 16px',
-          borderRadius: 14,
-          background: 'var(--surface-2)',
-          border: '1px solid var(--border-soft)',
+          borderRadius: '18px 18px 4px 18px',
+          background: accent,
+          color: '#fff',
+          border: '1.5px solid #000',
+          boxShadow: '3px 3px 0 #000',
           display: 'flex',
           flexDirection: 'column',
           gap: 10,
@@ -832,7 +911,7 @@ function MessageBubble(props: MessageBubbleProps) {
             style={{
               fontSize: 15.5,
               lineHeight: 1.55,
-              color: 'var(--text-85)',
+              color: '#fff',
               whiteSpace: 'pre-wrap',
               margin: 0,
             }}
@@ -841,11 +920,13 @@ function MessageBubble(props: MessageBubbleProps) {
           </p>
         ) : null}
         {showLinkSweep && (
+          // v17 item 1: bubble is now accent — sweep must contrast (white).
           <div
             aria-hidden="true"
             style={{
               height: 2,
-              background: `linear-gradient(90deg, transparent, ${accent}, transparent)`,
+              background:
+                'linear-gradient(90deg, transparent, rgba(255,255,255,0.8), transparent)',
               backgroundSize: '200% 100%',
               borderRadius: 2,
               animation: 'wm-shimmer 1.8s linear infinite',
@@ -871,6 +952,7 @@ function BubbleHeader({ m, onDelete }: { m: ThreadMessage; onDelete: () => void 
   } else if (m.status === 'linking') meta = '· linking entities';
   else if (m.status === 'committed') meta = `· ${time}`;
 
+  // v17 item 1: meta on the accent bubble — white-translucent for legibility.
   return (
     <div
       className="mono"
@@ -878,7 +960,7 @@ function BubbleHeader({ m, onDelete }: { m: ThreadMessage; onDelete: () => void 
         display: 'flex',
         justifyContent: 'space-between',
         fontSize: 10,
-        color: 'var(--text-40)',
+        color: 'rgba(255,255,255,0.75)',
         letterSpacing: 1,
         textTransform: 'uppercase',
       }}
@@ -891,7 +973,7 @@ function BubbleHeader({ m, onDelete }: { m: ThreadMessage; onDelete: () => void 
           aria-label="delete memo"
           style={{
             background: 'transparent',
-            color: 'var(--text-40)',
+            color: 'rgba(255,255,255,0.75)',
             border: 'none',
             cursor: 'pointer',
             font: 'inherit',
@@ -905,18 +987,20 @@ function BubbleHeader({ m, onDelete }: { m: ThreadMessage; onDelete: () => void 
 }
 
 function BubbleFooter({ m }: { m: ThreadMessage }) {
+  // v17 item 1: footer meta lives on the accent bubble — white-translucent.
+  const meta = 'rgba(255,255,255,0.65)';
   if (m.status === 'uploading' || m.status === 'transcribing') {
     const kb = m.audioBlob ? Math.round(m.audioBlob.size / 1024) : 0;
     const dur = (m.duration / 1000).toFixed(1);
     return (
-      <div className="mono" style={{ fontSize: 10, color: 'var(--text-30)' }}>
+      <div className="mono" style={{ fontSize: 10, color: meta }}>
         {kb}kb · {dur}s
       </div>
     );
   }
   if (m.status === 'linking') {
     return (
-      <div className="mono" style={{ fontSize: 10, color: 'var(--text-30)' }}>
+      <div className="mono" style={{ fontSize: 10, color: meta }}>
         transcribed in {fmtMs(m.transcribeMs)} · committing...
       </div>
     );
@@ -933,13 +1017,13 @@ function BubbleFooter({ m }: { m: ThreadMessage }) {
       g.extracted.actions.length === 0;
     if (isEmpty) {
       return (
-        <div className="mono" style={{ fontSize: 10, color: 'var(--text-40)' }}>
+        <div className="mono" style={{ fontSize: 10, color: meta }}>
           no entities found · {fmtMs(m.transcribeMs)} transcribe · {fmtMs(m.commitMs)} commit
         </div>
       );
     }
     return (
-      <div className="mono" style={{ fontSize: 10, color: 'var(--text-30)' }}>
+      <div className="mono" style={{ fontSize: 10, color: meta }}>
         {fmtMs(m.transcribeMs)} transcribe · {fmtMs(m.commitMs)} commit · {newN} new ·{' '}
         {linkN} linked
       </div>
@@ -1793,40 +1877,200 @@ function Dock({
             ■
           </button>
         ) : (
-          <button
-            ref={buttonRef}
-            type="button"
-            aria-label="Hold to record voice memo. Tap to use lock mode."
-            aria-keyshortcuts="Space"
-            aria-pressed={isActive}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerCancel}
+          // v17 items 2 + 3: when recording, the dock morphs into a horizontal
+          // pill (composer chrome) with the SAME <button> shrunk to 46px and
+          // moved to the right edge. We keep the original button element across
+          // idle↔active so pointer capture, listeners, and gesture state stay
+          // attached — only the surrounding chrome + styles swap.
+          <div
             style={{
+              position: 'relative',
               pointerEvents: 'auto',
-              width: isActive ? 112 : 88,
-              height: isActive ? 112 : 88,
-              borderRadius: 999,
-              background: accent,
-              color: '#000',
-              fontWeight: 800,
-              border: '1.5px solid #000',
-              boxShadow: isActive
-                ? `4px 4px 0 #000, 0 0 32px ${accent}80`
-                : '4px 4px 0 #000',
-              cursor: 'pointer',
-              fontSize: 11,
-              letterSpacing: 1,
-              fontFamily: 'JetBrains Mono, monospace',
-              textTransform: 'uppercase',
-              transition: 'width 0.18s ease-out, height 0.18s ease-out, box-shadow 0.18s ease-out',
-              touchAction: 'none',
+              display: 'flex',
+              alignItems: 'center',
               transform: `translateY(-${BUTTON_FLOAT_ABOVE_PX}px)`,
+              ...(isActive
+                ? {
+                    width: 'min(560px, calc(100% - 32px))',
+                    background: 'var(--surface-1)',
+                    border: '1.5px solid #000',
+                    borderRadius: 999,
+                    padding: '8px 16px',
+                    boxShadow: '3px 3px 0 #000',
+                    gap: 12,
+                  }
+                : {}),
             }}
           >
-            {isActive ? 'release' : 'hold'}
-          </button>
+            {isActive && (
+              <>
+                {/* pulsing alarm dot */}
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 999,
+                    background: accent,
+                    animation: 'wm-pulse-s 1s ease-in-out infinite',
+                    flexShrink: 0,
+                  }}
+                />
+                {/* 5-bar voice meter, accent, staggered */}
+                <div
+                  aria-hidden="true"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2,
+                    height: 18,
+                    flexShrink: 0,
+                  }}
+                >
+                  {[0, 80, 160, 240, 320].map((d, i) => (
+                    <span
+                      key={i}
+                      style={{
+                        width: 3,
+                        height: i % 2 === 0 ? 14 : 10,
+                        background: accent,
+                        borderRadius: 1,
+                        animation: 'wm-pulse-s 0.9s ease-in-out infinite',
+                        animationDelay: `${d}ms`,
+                      }}
+                    />
+                  ))}
+                </div>
+                {/* slide-to-cancel hint */}
+                <span
+                  className="mono"
+                  style={{
+                    flex: 1,
+                    fontSize: 11,
+                    letterSpacing: 0.5,
+                    color: 'var(--text-55)',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  ← slide to cancel
+                </span>
+                {/* v17 item 3: slide-up-to-lock floating circle, above the mic. */}
+                <div
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    bottom: 'calc(100% + 8px)',
+                    right: 15,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 4,
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 999,
+                      background: 'var(--surface-1)',
+                      border: `1.5px solid ${accent}`,
+                      boxShadow: '2px 2px 0 #000',
+                      color: accent,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      animation: 'wm-pulse-s 1.4s ease-in-out infinite',
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <rect
+                        x="5"
+                        y="11"
+                        width="14"
+                        height="9"
+                        rx="2"
+                        stroke={accent}
+                        strokeWidth="1.8"
+                      />
+                      <path d="M8 11V8a4 4 0 0 1 8 0v3" stroke={accent} strokeWidth="1.8" />
+                    </svg>
+                  </span>
+                  <span
+                    className="mono"
+                    style={{
+                      fontSize: 9,
+                      letterSpacing: 0.5,
+                      color: 'var(--text-55)',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    ↑ lock
+                  </span>
+                </div>
+              </>
+            )}
+            <button
+              ref={buttonRef}
+              type="button"
+              aria-label="Hold to record voice memo. Tap to use lock mode."
+              aria-keyshortcuts="Space"
+              aria-pressed={isActive}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerCancel}
+              style={{
+                pointerEvents: 'auto',
+                width: isActive ? 46 : 88,
+                height: isActive ? 46 : 88,
+                borderRadius: 999,
+                background: accent,
+                color: isActive ? '#fff' : '#000',
+                fontWeight: 800,
+                border: '1.5px solid #000',
+                boxShadow: isActive
+                  ? '0 0 30px rgba(255,69,0,0.5), 3px 3px 0 #000'
+                  : '4px 4px 0 #000',
+                cursor: 'pointer',
+                fontSize: isActive ? 0 : 11,
+                letterSpacing: 1,
+                fontFamily: 'JetBrains Mono, monospace',
+                textTransform: 'uppercase',
+                transition:
+                  'width 0.18s ease-out, height 0.18s ease-out, box-shadow 0.18s ease-out',
+                touchAction: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              {isActive ? (
+                // white mic glyph (CaptureVariantA uses Icon name="mic")
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"
+                    stroke="#fff"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill="#fff"
+                  />
+                  <path
+                    d="M5 11a7 7 0 0 0 14 0M12 18v3"
+                    stroke="#fff"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              ) : (
+                'hold'
+              )}
+            </button>
+          </div>
         )}
       </div>
     </>
