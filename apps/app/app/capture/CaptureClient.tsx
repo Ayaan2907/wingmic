@@ -1874,6 +1874,8 @@ function BottomTabBar({ active }: { active: 'capture' | 'recall' | 'history' | '
   //                    against v2 tokens. v8 in v0.1.2 restructures to 5 slots.)
   const tabs: Array<{ key: typeof active; glyph: string; label: string; href: string }> = [
     { key: 'capture', glyph: '◉', label: 'capture', href: '/capture' },
+    // TODO(v8): key still says 'recall' (route hasn't moved); v0.1.2 §18 PR α
+    // restructures to the 5-slot bar — at that point key + label align.
     { key: 'recall', glyph: '⌕', label: 'chat', href: '/recall' },
     { key: 'history', glyph: '⏱', label: 'history', href: '/history' },
     { key: 'settings', glyph: '◊', label: 'settings', href: '/settings' },
