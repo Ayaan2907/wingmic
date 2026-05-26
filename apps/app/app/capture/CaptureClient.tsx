@@ -26,7 +26,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
-import { useAudioRecorder, type RecorderStatus } from './_components/useAudioRecorder';
+import { useAudioRecorder } from './_components/useAudioRecorder';
 import { micOrbStateFor, type MicOrbState } from './micOrbState';
 
 // ── Constants ───────────────────────────────────────────────────────────
@@ -2040,7 +2040,7 @@ function Dock({
                 · hover     → 88px, lifted (-1px) w/ 5px shadow & subtle tint
                 · recording → 46px, accent fill, 30px accent glow, mic glyph
                 · sending   → 46px, muted (rgba 0.06) fill, t70 mic glyph,
-                              wm-marquee sweep ring around the orb
+                              wm-spin sweep ring around the orb
                 · locked    → handled by the outer coral stop button branch
                 · thinking  → reserved (see micOrbState.ts) — not currently
                               produced because the recorder hook completes at
@@ -2098,7 +2098,7 @@ function Dock({
                 flexShrink: 0,
               }}
             >
-              {/* sending: thin sweep ring around the orb (wm-marquee). */}
+              {/* sending: thin sweep ring around the orb (wm-spin). */}
               {isSending && (
                 <span
                   aria-hidden="true"

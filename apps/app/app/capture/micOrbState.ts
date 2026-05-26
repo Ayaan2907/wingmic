@@ -72,7 +72,10 @@ export function micOrbStateFor(
     case 'ready':
     case 'idle':
     case 'error':
-    default:
       return isHovered ? 'hover' : 'idle';
+    default: {
+      const _exhaustive: never = recorderStatus;
+      return isHovered ? 'hover' : 'idle';
+    }
   }
 }
