@@ -50,12 +50,6 @@ export interface HomeClientProps {
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
-function previewOf(transcript: string): string {
-  const trimmed = transcript.trim();
-  if (trimmed.length <= 60) return trimmed;
-  return trimmed.slice(0, 57) + '…';
-}
-
 function timeOf(iso: string): string {
   try {
     return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

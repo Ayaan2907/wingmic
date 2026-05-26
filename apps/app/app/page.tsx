@@ -83,6 +83,7 @@ async function loadHomeData(userId: string): Promise<HomeInitialData> {
 
   const recent: HomeRecentItem[] = recentRows.map((r) => ({
     id: r.id,
+    // libSQL HTTP driver path may return integer instead of Date; defensive cast.
     capturedAt: (r.capturedAt instanceof Date ? r.capturedAt : new Date(r.capturedAt as unknown as number)).toISOString(),
     transcriptPreview: previewOf(r.transcript ?? ''),
     entityCount: entityCounts.get(r.id) ?? 0,
@@ -106,23 +107,25 @@ async function loadHomeData(userId: string): Promise<HomeInitialData> {
 async function loadEntityCounts(interactionIds: string[]): Promise<Map<string, number>> {
   if (interactionIds.length === 0) return new Map();
   const out = new Map<string, number>();
-  const factRows = await db
-    .select({
-      id: schema.entityFacts.sourceInteractionId,
-      n: count(),
-    })
-    .from(schema.entityFacts)
-    .where(inArray(schema.entityFacts.sourceInteractionId, interactionIds))
-    .groupBy(schema.entityFacts.sourceInteractionId);
+  const [factRows, topicRows] = await Promise.all([
+    db
+      .select({
+        id: schema.entityFacts.sourceInteractionId,
+        n: count(),
+      })
+      .from(schema.entityFacts)
+      .where(inArray(schema.entityFacts.sourceInteractionId, interactionIds))
+      .groupBy(schema.entityFacts.sourceInteractionId),
+    db
+      .select({
+        id: schema.entityTopics.sourceInteractionId,
+        n: count(),
+      })
+      .from(schema.entityTopics)
+      .where(inArray(schema.entityTopics.sourceInteractionId, interactionIds))
+      .groupBy(schema.entityTopics.sourceInteractionId),
+  ]);
   for (const r of factRows) if (r.id) out.set(r.id, (out.get(r.id) ?? 0) + Number(r.n));
-  const topicRows = await db
-    .select({
-      id: schema.entityTopics.sourceInteractionId,
-      n: count(),
-    })
-    .from(schema.entityTopics)
-    .where(inArray(schema.entityTopics.sourceInteractionId, interactionIds))
-    .groupBy(schema.entityTopics.sourceInteractionId);
   for (const r of topicRows) if (r.id) out.set(r.id, (out.get(r.id) ?? 0) + Number(r.n));
   return out;
 }
