@@ -148,8 +148,12 @@ export function BottomTabBar({ active }: { active: BottomTabKey }) {
                 }}
               />
             )}
-            {/* v2 Bottom nav: icon 20 + active=accent / inactive=text-55. */}
-            <span style={{ fontSize: 20, color: isActive ? accent : 'var(--text-55)' }}>
+            {/* v2 Bottom nav: icon 20 + active=accent / inactive=text-55. Decorative glyph,
+                aria-hidden so SR only announces the visible label below (and the aria-current). */}
+            <span
+              aria-hidden="true"
+              style={{ fontSize: 20, color: isActive ? accent : 'var(--text-55)' }}
+            >
               {t.glyph}
             </span>
             {/* v2 Bottom nav: label active=accent / inactive=text-40 (one notch quieter than icon). */}

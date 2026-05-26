@@ -14,8 +14,8 @@ ALTER TABLE `entity` ADD `deleted_at` integer;--> statement-breakpoint
 ALTER TABLE `entity_company` ADD `source_deleted` integer DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE `entity_event` ADD `source_deleted` integer DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE `entity_topic` ADD `source_deleted` integer DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE `interaction` ADD `parent_interaction_id` text REFERENCES interaction(id);--> statement-breakpoint
-ALTER TABLE `interaction` ADD `thread_root_id` text REFERENCES interaction(id);--> statement-breakpoint
+ALTER TABLE `interaction` ADD `parent_interaction_id` text REFERENCES interaction(id) ON DELETE SET NULL;--> statement-breakpoint
+ALTER TABLE `interaction` ADD `thread_root_id` text REFERENCES interaction(id) ON DELETE SET NULL;--> statement-breakpoint
 ALTER TABLE `interaction` ADD `audio_storage_key` text;--> statement-breakpoint
 ALTER TABLE `interaction` ADD `audio_retention_expiry` integer;--> statement-breakpoint
 ALTER TABLE `interaction` ADD `client_capture_id` text;--> statement-breakpoint

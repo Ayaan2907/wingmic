@@ -255,7 +255,11 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
                   i < items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
               }}
             >
-              <PersonAvatar name={item.transcriptPreview || 'memo'} seed={item.id} size={32} />
+              {/* Decorative: seeded from interaction id, not a real person — hide from SR
+                  so the transcript preview is announced cleanly. */}
+              <span aria-hidden="true" style={{ display: 'inline-flex' }}>
+                <PersonAvatar name={item.transcriptPreview || 'memo'} seed={item.id} size={32} />
+              </span>
               <span
                 style={{
                   flex: 1,
