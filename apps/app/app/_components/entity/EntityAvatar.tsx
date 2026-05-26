@@ -95,11 +95,12 @@ export function PersonAvatar({
 export interface CompanyTileProps {
   name: string;
   size?: number;
+  accent?: Accent;
   domain?: string;
   style?: React.CSSProperties;
 }
 
-export function CompanyTile({ name, size = 64, domain, style }: CompanyTileProps) {
+export function CompanyTile({ name, size = 64, accent = 'blue', domain, style }: CompanyTileProps) {
   const initial = firstLetter(name).toUpperCase();
   return (
     <div
@@ -110,8 +111,8 @@ export function CompanyTile({ name, size = 64, domain, style }: CompanyTileProps
         width: size,
         height: size,
         borderRadius: 4,
-        background: 'var(--surface-1, rgba(255,255,255,0.025))',
-        color: '#fff',
+        background: ACCENT_HEX[accent],
+        color: '#000',
         border: '1.5px solid #000',
         boxShadow: '3px 3px 0 #000',
         display: 'inline-flex',
@@ -142,7 +143,7 @@ export interface EventDiamondProps {
 
 export function EventDiamond({
   name,
-  size = 48,
+  size = 64,
   accent = 'amber',
   style,
 }: EventDiamondProps) {
@@ -258,7 +259,7 @@ export function PinTile({ size = 32, style }: PinTileProps) {
       }}
       aria-label="pinned"
     >
-      {'⚓'}
+      {'📌'}
     </span>
   );
 }
@@ -296,6 +297,10 @@ export function EntityAvatar(props: EntityAvatarProps) {
     case 'pin': {
       const { kind: _k, ...rest } = props;
       return <PinTile {...rest} />;
+    }
+    default: {
+      const _exhaustive: never = props;
+      return null;
     }
   }
 }
