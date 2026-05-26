@@ -18,6 +18,7 @@ This guide covers both. If you're just running locally for dev, jump to [§ Loca
   - [Set up the production database (Turso)](#set-up-the-production-database-turso)
   - [Set secrets on Railway](#set-secrets-on-railway)
   - [Build + deploy](#build--deploy)
+  - [Railway dashboard checklist (evidence-based)](#railway-dashboard-checklist-evidence-based)
 - [§ Custom domains](#-custom-domains)
 - [§ Local development](#-local-development)
 - [§ Troubleshooting](#-troubleshooting)
@@ -220,38 +221,43 @@ Railway also auto-injects `PORT` — `next start -p ${PORT:-3211}` handles it (s
 
 ### build + deploy
 
-**One-time Railway setup:**
+**Canonical runbook (with official doc links, log signatures, failure modes):** [railway-deploy-runbook.md](./railway-deploy-runbook.md)
 
-1. [railway.com](https://railway.com) → **+ New Project** → **Deploy from GitHub repo** → select `Ayaan2907/wingmic`
-2. **Service settings** (all three matter):
-   - **Root Directory:** leave **empty** (repo root). Do **not** set `apps/app` — Railway only copies that folder, so `bun.lock`, `packages/*`, and root `package.json` workspaces are missing and Railpack falls back to `npm install` → `workspace:*` error.
-   - **Config file path:** `railway.json` (at repo root; does not follow Root Directory — if you must use a subdir root, set `/railway.json` explicitly in the UI).
-   - **Builder:** Railpack
-3. Set the 8 secrets above (Doppler → Railway sync is fine)
-4. **Deploy** — Railway auto-deploys on every `main` push
+**Stack:** Railway runs [**Railpack**](https://docs.railway.com/builds/build-configuration#railpack) (not Nixpacks). Railpack runs `bun run build:app` → [**Turborepo**](https://turbo.build/repo/docs/crafting-your-repository/constructing-ci) `turbo build --filter=@wingmic/app`. Config: root `railway.json` + `railpack.json`.
 
-Root config files:
-- **`railpack.json`** — overrides build (`bun run build:app`) and start only; install is auto-detected (Bun + `bun.lock`). Do **not** set `install.inputs` to `"."` — Railpack rejects it (`install inputs must be an image or step input`).
-- **`railway.json`** — `builder: RAILPACK`, healthcheck on `/api/auth/session`
-- **`turbo.json`** — `build:app` runs `turbo build --filter=@wingmic/app` (builds `packages/*` then `apps/app`)
-- **`nixpacks.toml`** — fallback only if the service is still on Nixpacks
+**One-time setup:**
 
-Successful Railpack logs: `Using bun package manager`, `Found workspace with 9 packages`, install step runs `bun install` (not `npm install`).
+1. [railway.com](https://railway.com) → deploy from GitHub → `Ayaan2907/wingmic`
+2. Complete the [dashboard checklist](#railway-dashboard-checklist-evidence-based) below
+3. Set runtime variables (Doppler → Railway sync or manual) — see [env.ts](../apps/app/lib/config/env.ts) for current names (`OPENROUTER_API_KEY`, `ASSEMBLYAI_API_KEY`, etc.)
+4. Push to your deploy branch (`staging` / `main`) or **Redeploy**
 
-First deploy emits a default URL like `https://wingmic-app-production.up.railway.app`. Verify it loads.
-
-**Iterate locally then push:**
+**Local parity** (repo root):
 
 ```bash
-git push origin main
-# → Railway auto-builds and deploys
+bun install --frozen-lockfile
+bun run build:app
+bun run start:app
 ```
 
-**Manual redeploy** (no code change):
+**Manual redeploy:** `railway redeploy --service wingmic-app`
 
-```bash
-railway redeploy --service wingmic-app
-```
+### Railway dashboard checklist (evidence-based)
+
+Do this in **Railway → `wingmic-app` → Settings**. Full rationale: [railway-deploy-runbook.md §4](./railway-deploy-runbook.md#4-railway-dashboard--exact-settings).
+
+| Field | Set to |
+|---|---|
+| **Root Directory** | **Empty** (not `apps/app`) — [Railway shared monorepo](https://docs.railway.com/deployments/monorepo) |
+| **Builder** | **Railpack** — [Railway build config](https://docs.railway.com/builds/build-configuration#railpack) |
+| **Config file path** | `railway.json` (repo root) |
+| **Custom build command** | **Empty** (use `railpack.json`) |
+| **Custom start command** | **Empty** (use `railpack.json`) |
+| **Branch** | `staging` or `main` per environment |
+
+**GitHub:** no repo setting changes required beyond Railway app access to the repo.
+
+**Success logs must include:** `railpack-v0.23.x`, `Using config file railpack.json`, `Using bun package manager`, `Found workspace with 9 packages`, install = `bun install` (never `npm install`). See [runbook §6](./railway-deploy-runbook.md#6-verify-a-successful-build-log-checklist).
 
 ---
 
@@ -397,18 +403,13 @@ Railway containers go to sleep on the free/hobby tier. First request after idle 
 - Add an external uptime ping (e.g., UptimeRobot every 5min hitting `/api/auth/session`)
 - Move long-running work to Inngest (v0.2)
 
-### Railway build fails: `EUNSUPPORTEDPROTOCOL` / `workspace:*`
+### Railway build fails
 
-Railpack/Nixpacks ran `npm install` on a Bun workspace. Common causes:
+See [railway-deploy-runbook.md §7](./railway-deploy-runbook.md#7-failure-modes-symptom--cause--fix) (symptom → cause → fix with doc links). Common cases:
 
-1. **Root Directory** set to `apps/app` — only that `package.json` is visible; no `bun.lock` → “No package manager inferred, using npm default”.
-2. **Fix:** clear Root Directory (shared monorepo). Redeploy.
-3. Ensure root **`railpack.json`** exists (replaces the install step with `bun install`). The old `railpack.toml` `[nodejs] installCommand` format is **not** read by Railpack.
-4. If still on Nixpacks, root `nixpacks.toml` forces `bun install`.
-
-### Railway build fails: "bun: command not found"
-
-Use **Railpack** or root `nixpacks.toml` (installs `bun`). Root Directory must be repo root so `packageManager: bun@1.3.10` in root `package.json` is visible.
+- `workspace:*` / `npm install` → Root Directory still `apps/app`
+- `install inputs must be an image or step input` → invalid `railpack.json` install block (fixed on `staging`)
+- `No package manager inferred` → partial repo in build context; clear Root Directory
 
 ---
 

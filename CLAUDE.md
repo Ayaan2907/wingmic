@@ -101,7 +101,8 @@ docs/                 ← architecture.md, deploy.md, superpowers/
 ## key files
 
 - `docs/architecture.md` — Framing-D identity model, capture + recall pipelines, schema map
-- `docs/deploy.md` — operator runbook, 8-secret table, troubleshooting
+- `docs/deploy.md` — operator runbook, secrets, troubleshooting
+- `docs/railway-deploy-runbook.md` — Railway + Railpack + Turbo dashboard checklist (doc-backed)
 - `docs/packages.md` — how to add or modify a package in the monorepo
 - `CONTRIBUTING.md` — branch + commit conventions, PR checklist
 - `design/design-system.md` — brand voice + tokens (canonical handoff)
