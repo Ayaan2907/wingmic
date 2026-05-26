@@ -400,7 +400,7 @@ Error: no such table: user
 
 Railway containers go to sleep on the free/hobby tier. First request after idle takes 2-5s while the container wakes. Mitigations:
 - Upgrade to a paid plan (always-on)
-- Add an external uptime ping (e.g., UptimeRobot every 5min hitting `/api/auth/session`)
+- Add an external uptime ping (e.g., UptimeRobot every 5min hitting `/api/health`)
 - Move long-running work to Inngest (v0.2)
 
 ### Railway build fails

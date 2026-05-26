@@ -6,6 +6,6 @@
     }
   },
   "deploy": {
-    "startCommand": "bun run start:app"
+    "startCommand": "cd apps/app && bun run start"
   }
 }

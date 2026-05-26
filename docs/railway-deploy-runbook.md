@@ -60,7 +60,7 @@ These files live at the **repository root**. Railway’s config file path does *
 {
   "build": { "builder": "RAILPACK" },
   "deploy": {
-    "healthcheckPath": "/api/auth/session",
+    "healthcheckPath": "/api/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
@@ -146,7 +146,7 @@ Open: **Project → `wingmic-app` service → Settings** (and **Variables** for 
 | Field | Value |
 |---|---|
 | **Watch paths** | `apps/app/**`, `packages/**`, `bun.lock`, `package.json`, `railpack.json`, `railway.json`, `turbo.json` |
-| **Health check** | Path `/api/auth/session` (also in `railway.json`) |
+| **Health check** | Path `/api/health` (also in `railway.json`) — not an auth route; `/api/auth/get-session` needs DB and may 404 if misnamed |
 
 ### 4.3 Do not set (common mistakes)
 
