@@ -231,11 +231,12 @@ Railway also auto-injects `PORT` — `next start -p ${PORT:-3211}` handles it (s
 4. **Deploy** — Railway auto-deploys on every `main` push
 
 Root config files:
-- **`railpack.json`** — install: `bun install --frozen-lockfile`; build: `bun run build:app`; start: `bun run start:app`
+- **`railpack.json`** — overrides build (`bun run build:app`) and start only; install is auto-detected (Bun + `bun.lock`). Do **not** set `install.inputs` to `"."` — Railpack rejects it (`install inputs must be an image or step input`).
 - **`railway.json`** — `builder: RAILPACK`, healthcheck on `/api/auth/session`
+- **`turbo.json`** — `build:app` runs `turbo build --filter=@wingmic/app` (builds `packages/*` then `apps/app`)
 - **`nixpacks.toml`** — fallback only if the service is still on Nixpacks
 
-Successful Railpack logs show `bun install` in the **install** step, not `npm install`.
+Successful Railpack logs: `Using bun package manager`, `Found workspace with 9 packages`, install step runs `bun install` (not `npm install`).
 
 First deploy emits a default URL like `https://wingmic-app-production.up.railway.app`. Verify it loads.
 
