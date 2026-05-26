@@ -27,6 +27,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { useAudioRecorder, type RecorderStatus } from './_components/useAudioRecorder';
+import { micOrbStateFor, type MicOrbState } from './micOrbState';
 
 // ── Constants ───────────────────────────────────────────────────────────
 const HOLD_THRESHOLDS = {
@@ -1846,11 +1847,17 @@ function Dock({
     };
   }, [recorder, beginHold]);
 
-  const isLocked = recorder.status === 'locked';
-  const isActive =
-    recorder.status === 'recording' ||
-    recorder.status === 'lock_armed' ||
-    recorder.status === 'cancel_armed';
+  // v0.1.2 PR α v15 — drive dock visuals from the 7-state MicOrb mapping.
+  // `isHovered` is :hover/:focus-visible bookkeeping on the orb button itself.
+  // `orbState` is the single source of truth for which visual recipe runs
+  // (see lib-voice.jsx `VoiceMicStates`). The old `isLocked` / `isActive`
+  // booleans are derived from `orbState` so the surrounding chrome (pill,
+  // coral stop) still gates correctly without re-walking RecorderStatus.
+  const [isHovered, setIsHovered] = useState(false);
+  const orbState: MicOrbState = micOrbStateFor(recorder.status, isHovered);
+  const isLocked = orbState === 'locked';
+  const isActive = orbState === 'recording';
+  const isSending = orbState === 'sending';
 
   return (
     <>
@@ -2027,35 +2034,63 @@ function Dock({
                 </div>
               </>
             )}
+            {/*
+              v0.1.2 PR α v15 — visual variants per `orbState` (lib-voice.jsx).
+                · idle      → 88px, surface-1, t70 'hold' label, 4px brutal shadow
+                · hover     → 88px, lifted (-1px) w/ 5px shadow & subtle tint
+                · recording → 46px, accent fill, 30px accent glow, mic glyph
+                · sending   → 46px, muted (rgba 0.06) fill, t70 mic glyph,
+                              wm-marquee sweep ring around the orb
+                · locked    → handled by the outer coral stop button branch
+                · thinking  → reserved (see micOrbState.ts) — not currently
+                              produced because the recorder hook completes at
+                              'ready' before the LLM-extraction phase begins
+                · done      → reserved (see micOrbState.ts) — commit success
+                              currently surfaces via the GraphCard, not the orb
+              Only the 9 named keyframes from DesktopStyles are used.
+            */}
             <button
               ref={buttonRef}
               type="button"
-              aria-label={isActive ? 'recording — release to send, swipe up to lock, swipe left to cancel' : 'hold to record voice memo, tap to use lock mode'}
+              aria-label={isActive ? 'recording — release to send, swipe up to lock, swipe left to cancel' : isSending ? 'sending recording' : 'hold to record voice memo, tap to use lock mode'}
               aria-keyshortcuts="Space"
               aria-pressed={isActive}
+              data-orb-state={orbState}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerCancel}
+              onPointerEnter={() => setIsHovered(true)}
+              onPointerLeave={() => setIsHovered(false)}
+              onFocus={() => setIsHovered(true)}
+              onBlur={() => setIsHovered(false)}
               style={{
                 pointerEvents: 'auto',
-                width: isActive ? 46 : 88,
-                height: isActive ? 46 : 88,
+                position: 'relative',
+                width: isActive || isSending ? 46 : 88,
+                height: isActive || isSending ? 46 : 88,
                 borderRadius: 999,
-                background: accent,
+                background: isSending
+                  ? 'rgba(255,255,255,0.06)'
+                  : accent,
                 color: isActive ? '#fff' : '#000',
                 fontWeight: 800,
                 border: '1.5px solid #000',
                 boxShadow: isActive
                   ? '0 0 30px rgba(255,69,0,0.5), 3px 3px 0 #000'
-                  : '4px 4px 0 #000',
+                  : isSending
+                    ? '3px 3px 0 #000'
+                    : orbState === 'hover'
+                      ? '5px 5px 0 #000'
+                      : '4px 4px 0 #000',
+                transform: orbState === 'hover' ? 'translateY(-1px)' : undefined,
                 cursor: 'pointer',
                 fontSize: 11,
                 letterSpacing: 1,
                 fontFamily: 'JetBrains Mono, monospace',
                 textTransform: 'uppercase',
                 transition:
-                  'width 0.18s ease-out, height 0.18s ease-out, box-shadow 0.18s ease-out',
+                  'width 0.18s ease-out, height 0.18s ease-out, box-shadow 0.12s ease-out, transform 0.12s ease-out, background 0.18s ease-out',
                 touchAction: 'none',
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -2063,6 +2098,22 @@ function Dock({
                 flexShrink: 0,
               }}
             >
+              {/* sending: thin sweep ring around the orb (wm-marquee). */}
+              {isSending && (
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    inset: -3,
+                    borderRadius: 999,
+                    border: `1.5px solid ${accent}80`,
+                    borderTopColor: 'transparent',
+                    borderLeftColor: 'transparent',
+                    animation: 'wm-spin 1.1s linear infinite',
+                    pointerEvents: 'none',
+                  }}
+                />
+              )}
               {isActive ? (
                 // white mic glyph (CaptureVariantA uses Icon name="mic")
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -2077,6 +2128,23 @@ function Dock({
                   <path
                     d="M5 11a7 7 0 0 0 14 0M12 18v3"
                     stroke="#fff"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              ) : isSending ? (
+                // muted mic glyph (text-70) — uploading the blob.
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"
+                    stroke="var(--text-70)"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M5 11a7 7 0 0 0 14 0M12 18v3"
+                    stroke="var(--text-70)"
                     strokeWidth="1.8"
                     strokeLinecap="round"
                   />
