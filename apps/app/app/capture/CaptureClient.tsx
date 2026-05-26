@@ -573,6 +573,11 @@ function Header({
 }) {
   // v17 item 4: header morphs while recording — brand avatar + "wingmic" word,
   // a pulsing "recording" indicator, and a live m:ss duration counter.
+  //
+  // Header recording-indicator stays on through `locked` state — the dock
+  // chrome swaps to a stop button (see Dock.isLocked branch) but the header
+  // keeps the pulse + counter so the user knows recording is still in flight.
+  // This is the v2 variant-A locked-state layout.
   const recording =
     recorder.status === 'recording' ||
     recorder.status === 'lock_armed' ||
@@ -625,7 +630,15 @@ function Header({
             wingmic
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {/* Live region: SR announces state change on entry and counter ticks
+            via the consolidated aria-label. Inner visual children are
+            aria-hidden so SR reads the label only (no double-announce). */}
+        <span
+          role="status"
+          aria-live="polite"
+          aria-label={`recording, ${mm}:${ss}`}
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        >
           <span
             aria-hidden="true"
             style={{
@@ -638,6 +651,7 @@ function Header({
             }}
           />
           <span
+            aria-hidden="true"
             className="mono"
             style={{
               fontSize: 11,
@@ -648,8 +662,9 @@ function Header({
           >
             recording
           </span>
-        </div>
+        </span>
         <span
+          aria-hidden="true"
           className="mono"
           style={{ fontSize: 12, color: accent, fontVariantNumeric: 'tabular-nums' }}
         >
@@ -2015,7 +2030,7 @@ function Dock({
             <button
               ref={buttonRef}
               type="button"
-              aria-label="Hold to record voice memo. Tap to use lock mode."
+              aria-label={isActive ? 'recording — release to send, swipe up to lock, swipe left to cancel' : 'hold to record voice memo, tap to use lock mode'}
               aria-keyshortcuts="Space"
               aria-pressed={isActive}
               onPointerDown={onPointerDown}
@@ -2035,7 +2050,7 @@ function Dock({
                   ? '0 0 30px rgba(255,69,0,0.5), 3px 3px 0 #000'
                   : '4px 4px 0 #000',
                 cursor: 'pointer',
-                fontSize: isActive ? 0 : 11,
+                fontSize: 11,
                 letterSpacing: 1,
                 fontFamily: 'JetBrains Mono, monospace',
                 textTransform: 'uppercase',
