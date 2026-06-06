@@ -243,9 +243,11 @@ function ChromeBtn({
   children: React.ReactNode;
 }) {
   return (
-    <Link
-      // typedRoutes is enabled; the chrome nav still routes to literal paths.
-      href={href as unknown as never}
+    <a
+      // Plain <a> matches BottomTabBar + ChatThread chip convention. typedRoutes
+      // can't infer dynamic strings; native <a> dodges the cast without losing
+      // anything meaningful at this scale.
+      href={href}
       aria-label={label}
       style={{
         width: 32,
@@ -262,7 +264,7 @@ function ChromeBtn({
       }}
     >
       {children}
-    </Link>
+    </a>
   );
 }
 
@@ -562,9 +564,10 @@ function RelatedRow({ item, isLast }: { item: EntityRelated; isLast: boolean }) 
   const href = relatedHref(item);
   const avatar = relatedAvatar(item);
   return (
-    <Link
-      // Dynamic per-entity href; typedRoutes can't infer the runtime kind.
-      href={href as unknown as never}
+    <a
+      // Plain <a> for the dynamic /{kind}/{id} href — matches BottomTabBar +
+      // ChatThread chip convention; avoids the typedRoutes cast workaround.
+      href={href}
       data-testid="entity-related-row"
       data-related-href={href}
       style={{
@@ -603,7 +606,7 @@ function RelatedRow({ item, isLast }: { item: EntityRelated; isLast: boolean }) 
         )}
       </div>
       <span style={{ color: 'var(--text-40)', fontSize: 14 }}>→</span>
-    </Link>
+    </a>
   );
 }
 
