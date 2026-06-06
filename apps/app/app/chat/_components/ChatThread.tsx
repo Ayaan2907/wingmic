@@ -110,7 +110,7 @@ function ChatThreadInner(props: ThreadViewProps) {
 // we compare the fields ChatThread + PhantomBubble actually read:
 //   · status — drives dimming + phantom-bubble visibility
 //   · duration, level — PhantomBubble's live counter + level meter
-//   · audioBlob, error — reserved (not read here today, but cheap to track)
+//   · error — preserved so a fresh failure object forces a re-render
 // The recorder *methods* (start/stop/...) are useCallback-stable in the
 // hook, so we don't compare them.
 export const ChatThread = memo(ChatThreadInner, (prev, next) => {
@@ -129,7 +129,6 @@ export const ChatThread = memo(ChatThreadInner, (prev, next) => {
     prev.recorder.status === next.recorder.status &&
     prev.recorder.duration === next.recorder.duration &&
     prev.recorder.level === next.recorder.level &&
-    prev.recorder.audioBlob === next.recorder.audioBlob &&
     prev.recorder.error === next.recorder.error
   );
 });

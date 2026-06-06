@@ -65,6 +65,17 @@ function seedMessages(initialThread: ChatInitialItem[]): ThreadMessage[] {
 
 function ChatClientInner({ userName, initialThread = [] }: ChatClientProps) {
   const recorder = useAudioRecorder();
+  // useAudioRecorder returns a fresh object literal every render, so
+  // `recorder` has a new identity each pass. We pin the latest value in
+  // a ref so callbacks that need its methods/state can read them without
+  // listing `recorder` in their dep arrays — otherwise every useCallback
+  // that closes over it would be recreated each render, defeating the
+  // React.memo equality checks in ChatThread + CaptureDock (PR β₁-C, D5).
+  // Pattern: https://react.dev/learn/separating-events-from-effects
+  const recorderRef = useRef(recorder);
+  useEffect(() => {
+    recorderRef.current = recorder;
+  }, [recorder]);
   const [messages, setMessages] = useState<ThreadMessage[]>(() => seedMessages(initialThread));
   const [pasteOpenForId, setPasteOpenForId] = useState<string | null>(null);
   const [pasteDraft, setPasteDraft] = useState('');
@@ -127,8 +138,8 @@ function ChatClientInner({ userName, initialThread = [] }: ChatClientProps) {
         fromPaste: false,
       },
     ]);
-    await recorder.start();
-  }, [recorder]);
+    await recorderRef.current.start();
+  }, []);
 
   // armRecord=1 — set by the upcoming /capture → /chat redirect (β₁-B).
   // Mirror the keyboard-Space path so the queued bubble is created AND
@@ -327,7 +338,7 @@ function ChatClientInner({ userName, initialThread = [] }: ChatClientProps) {
     if (msg.error?.code === 'NotAllowedError') {
       activeIdRef.current = id;
       patch(id, { status: 'queued', error: null });
-      await recorder.start();
+      await recorderRef.current.start();
       return;
     }
     if (msg.audioBlob) {
@@ -354,7 +365,7 @@ function ChatClientInner({ userName, initialThread = [] }: ChatClientProps) {
         });
       }
     }
-  }, [messages, patch, recorder, commitMutation]);
+  }, [messages, patch, commitMutation]);
 
   const discardBubble = useCallback((id: string) => {
     const controller = pipelineControllersRef.current.get(id);
