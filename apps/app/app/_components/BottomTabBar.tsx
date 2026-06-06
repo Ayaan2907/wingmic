@@ -40,26 +40,6 @@ function vibrate(pattern: number | number[]) {
   }
 }
 
-export function BottomTabBar({ active }: { active: BottomTabKey }) {
-  const { recorder, beginCapture } = useCapture();
-  const status = recorder.status;
-
-  // Hide the regular bar content during `locked` — render the locked pill
-  // chrome in its place, in the same DOM nav element (keeps button identity
-  // stable for any post-locked pointer events).
-  if (status === 'locked') {
-    return <LockedBar onStop={() => recorder.stop()} onDiscard={() => recorder.discard()} duration={recorder.duration} />;
-  }
-
-  return <DefaultBar active={active} recorder={recorder} beginCapture={beginCapture} />;
-}
-
-interface DefaultBarProps {
-  active: BottomTabKey;
-  recorder: ReturnType<typeof useCapture>['recorder'];
-  beginCapture: ReturnType<typeof useCapture>['beginCapture'];
-}
-
 export const NAV_TABS: Array<{ key: BottomTabKey; glyph: string; label: string; href: string; big?: boolean }> = [
   { key: 'home', glyph: '⌂', label: 'home', href: '/' },
   { key: 'chat', glyph: '⌕', label: 'chat', href: '/chat' },
@@ -94,28 +74,6 @@ export function NavLink({ tab, active }: { tab: (typeof NAV_TABS)[number]; activ
       <span aria-hidden="true" style={{ fontSize: 20, color: active ? accent : 'var(--text-55)' }}>{tab.glyph}</span>
       <span style={{ color: active ? accent : 'var(--text-40)' }}>{tab.label}</span>
     </a>
-  );
-}
-
-function DefaultBar({ active, recorder, beginCapture }: DefaultBarProps) {
-  return (
-    <nav aria-label="primary" className="app-nav">
-      {NAV_TABS.map((t) => {
-        const isActive = t.key === active;
-        if (t.big) {
-          return (
-            <CaptureOrb
-              key={t.key}
-              isActive={isActive}
-              label={t.label}
-              recorder={recorder}
-              beginCapture={beginCapture}
-            />
-          );
-        }
-        return <NavLink key={t.key} tab={t} active={isActive} />;
-      })}
-    </nav>
   );
 }
 
@@ -489,5 +447,3 @@ export function LockedBar({ onStop, onDiscard, duration }: LockedBarProps) {
     </nav>
   );
 }
-
-export default BottomTabBar;
