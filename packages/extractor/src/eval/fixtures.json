@@ -57,5 +57,47 @@
       "persons": [{ "name": "s. chen", "aliases_include": ["chen"], "companyHint": "acme" }],
       "companies_include": ["acme", "vercel"]
     }
+  },
+  {
+    "id": "fixture_006_multi_person_dated_followup",
+    "transcript": "coffee chat with lena from notion and theo from linear, both shipping ai features, lena wants the writeup on our extraction pipeline, send it friday morning",
+    "expected": {
+      "persons": [
+        { "name": "lena", "companyHint": "notion" },
+        { "name": "theo", "companyHint": "linear" }
+      ],
+      "companies_include": ["notion", "linear"],
+      "topics_include": ["ai"],
+      "actions": [
+        { "kind": "email", "body_contains": "extraction", "whenHint_contains": "friday" }
+      ]
+    }
+  },
+  {
+    "id": "fixture_007_first_name_intro",
+    "transcript": "ran into raj at the bun meetup, staff eng at planetscale doing vitess internals, gotta intro him to my friend at turso next week",
+    "expected": {
+      "persons": [
+        { "name": "raj", "role_contains": "staff", "companyHint": "planetscale", "topics_include": ["vitess"] }
+      ],
+      "companies_include": ["planetscale", "turso"],
+      "events_include": ["bun meetup"],
+      "topics_include": ["vitess"],
+      "actions": [
+        { "kind": "intro", "whenHint_contains": "week" }
+      ]
+    }
+  },
+  {
+    "id": "fixture_008_event_multi_topic",
+    "transcript": "at the rust meetup last night, long chat with maya from fly.io about edge workers, wasm, and cold-start budgets, she's writing a blog post on it",
+    "expected": {
+      "persons": [
+        { "name": "maya", "companyHint": "fly", "topics_include": ["edge workers", "wasm"] }
+      ],
+      "companies_include": ["fly"],
+      "events_include": ["rust meetup"],
+      "topics_include": ["edge workers", "wasm", "cold-start"]
+    }
   }
 ]

@@ -18,6 +18,7 @@ This guide covers both. If you're just running locally for dev, jump to [§ Loca
   - [Set up the production database (Turso)](#set-up-the-production-database-turso)
   - [Set secrets on Railway](#set-secrets-on-railway)
   - [Build + deploy](#build--deploy)
+  - [Railway dashboard checklist (evidence-based)](#railway-dashboard-checklist-evidence-based)
 - [§ Custom domains](#-custom-domains)
 - [§ Local development](#-local-development)
 - [§ Troubleshooting](#-troubleshooting)
@@ -73,16 +74,16 @@ Wingmic v0.1.1 needs exactly 8 environment variables to run the product in produ
 | `BETTER_AUTH_URL` | The deployed origin (no trailing slash) | You set this | ✅ |
 | `RESEND_API_KEY` | Sends magic-link emails | [Resend dashboard](#resend) | ✅ |
 | `RESEND_FROM` | Sender display + address | After domain verified at Resend | ✅ |
-| `ANTHROPIC_API_KEY` | Claude extraction calls | [Anthropic console](#anthropic) | ✅ |
-| `OPENAI_API_KEY` | Embedding calls (text-embedding-3-small) | [OpenAI platform](#openai) | ✅ |
+| `OPENROUTER_API_KEY` | LLM extraction + embedding calls | [OpenRouter](https://openrouter.ai) | ✅ |
+| `ASSEMBLYAI_API_KEY` | Hosted audio transcription | [AssemblyAI](https://assemblyai.com) | ✅ |
 
 Optional:
 
 | Variable | Default | When to override |
 |---|---|---|
 | `NEXT_PUBLIC_APP_URL` | `https://app.wingmic.xyz` | If you self-host on your own domain |
-| `ANTHROPIC_EXTRACTION_MODEL` | `claude-sonnet-4-6` | Try a different Claude model |
-| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Try a different embedding model |
+| `EXTRACTION_MODEL` / `LINKER_MODEL` | OpenRouter model strings | Swap the LLM (e.g. `openai/gpt-4o-mini`) without code changes |
+| `EMBEDDING_MODEL` | `text-embedding-3-small` | Try a different embedding model |
 
 ### acquire each secret
 
@@ -220,34 +221,43 @@ Railway also auto-injects `PORT` — `next start -p ${PORT:-3211}` handles it (s
 
 ### build + deploy
 
-**One-time Railway setup:**
+**Canonical runbook (with official doc links, log signatures, failure modes):** [railway-deploy-runbook.md](./railway-deploy-runbook.md)
 
-1. [railway.com](https://railway.com) → **+ New Project** → **Deploy from GitHub repo** → select `Ayaan2907/wingmic`
-2. **Service settings:**
-   - **Root Directory:** `apps/app`
-   - **Builder:** Nixpacks (default; reads `apps/app/railway.json`)
-3. Set the 8 secrets above
-4. **Deploy** — Railway auto-deploys on every `main` push
+**Stack:** Railway runs [**Railpack**](https://docs.railway.com/builds/build-configuration#railpack) (not Nixpacks). Railpack runs `bun run build:app` → [**Turborepo**](https://turbo.build/repo/docs/crafting-your-repository/constructing-ci) `turbo build --filter=@wingmic/app`. Config: root `railway.json` + `railpack.json`.
 
-The `apps/app/railway.json` config:
-- **Build:** `cd ../.. && bun install --frozen-lockfile && bun --filter @wingmic/app build`
-- **Start:** `cd ../.. && bun --filter @wingmic/app start`
-- **Healthcheck:** `GET /api/auth/session` (30s timeout)
+**One-time setup:**
 
-First deploy emits a default URL like `https://wingmic-app-production.up.railway.app`. Verify it loads.
+1. [railway.com](https://railway.com) → deploy from GitHub → `Ayaan2907/wingmic`
+2. Complete the [dashboard checklist](#railway-dashboard-checklist-evidence-based) below
+3. Set runtime variables (Doppler → Railway sync or manual) — see [env.ts](../apps/app/lib/config/env.ts) for current names (`OPENROUTER_API_KEY`, `ASSEMBLYAI_API_KEY`, etc.)
+4. Push to your deploy branch (`staging` / `main`) or **Redeploy**
 
-**Iterate locally then push:**
+**Local parity** (repo root):
 
 ```bash
-git push origin main
-# → Railway auto-builds and deploys
+bun install --frozen-lockfile
+bun run build:app
+bun run start:app
 ```
 
-**Manual redeploy** (no code change):
+**Manual redeploy:** `railway redeploy --service wingmic-app`
 
-```bash
-railway redeploy --service wingmic-app
-```
+### Railway dashboard checklist (evidence-based)
+
+Do this in **Railway → `wingmic-app` → Settings**. Full rationale: [railway-deploy-runbook.md §4](./railway-deploy-runbook.md#4-railway-dashboard--exact-settings).
+
+| Field | Set to |
+|---|---|
+| **Root Directory** | **Empty** (not `apps/app`) — [Railway shared monorepo](https://docs.railway.com/deployments/monorepo) |
+| **Builder** | **Railpack** — [Railway build config](https://docs.railway.com/builds/build-configuration#railpack) |
+| **Config file path** | `railway.json` (repo root) |
+| **Custom build command** | **Empty** (use `railpack.json`) |
+| **Custom start command** | **Empty** (use `railpack.json`) |
+| **Branch** | `staging` or `main` per environment |
+
+**GitHub:** no repo setting changes required beyond Railway app access to the repo.
+
+**Success logs must include:** `railpack-v0.23.x`, `Using config file railpack.json`, `Using bun package manager`, `Found workspace with 9 packages`, install = `bun install` (never `npm install`). See [runbook §6](./railway-deploy-runbook.md#6-verify-a-successful-build-log-checklist).
 
 ---
 
@@ -390,15 +400,16 @@ Error: no such table: user
 
 Railway containers go to sleep on the free/hobby tier. First request after idle takes 2-5s while the container wakes. Mitigations:
 - Upgrade to a paid plan (always-on)
-- Add an external uptime ping (e.g., UptimeRobot every 5min hitting `/api/auth/session`)
+- Add an external uptime ping (e.g., UptimeRobot every 5min hitting `/api/health`)
 - Move long-running work to Inngest (v0.2)
 
-### Railway build fails: "bun: command not found"
+### Railway build fails
 
-Railway's Nixpacks usually detects Bun automatically. If it doesn't, set in the Railway service settings under **Build → Install Command:**
-```
-curl -fsSL https://bun.sh/install | bash && export PATH=$HOME/.bun/bin:$PATH && bun install --frozen-lockfile
-```
+See [railway-deploy-runbook.md §7](./railway-deploy-runbook.md#7-failure-modes-symptom--cause--fix) (symptom → cause → fix with doc links). Common cases:
+
+- `workspace:*` / `npm install` → Root Directory still `apps/app`
+- `install inputs must be an image or step input` → invalid `railpack.json` install block (fixed on `staging`)
+- `No package manager inferred` → partial repo in build context; clear Root Directory
 
 ---
 

@@ -1,0 +1,12 @@
+# Fallback when Railway uses Nixpacks instead of Railpack.
+# Root cause of npm failures: default `npm i` cannot resolve workspace:* (Bun monorepo).
+# Service Root Directory must be repo root (not apps/app).
+
+[phases.setup]
+nixPkgs = ["nodejs_22", "bun"]
+
+[phases.install]
+cmds = ["bun install --frozen-lockfile"]
+
+[phases.build]
+cmds = ["bun run build:app"]

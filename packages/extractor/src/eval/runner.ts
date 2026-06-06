@@ -3,14 +3,21 @@
  * and reports per-fixture pass/fail + overall accuracy.
  *
  * Usage:
- *   bun run apps/web/lib/extractor/eval/runner.ts
+ *   bun run packages/extractor/src/eval/runner.ts
  *   or via package.json:  bun run extract:eval
  *
  * Threshold: 85% pass rate or the run exits non-zero (CI gate).
+ *
+ * v0.1.1 H5: runner now exercises `extractHybrid` (Layer-1 AssemblyAI
+ * entities + Layer-2 regex + Layer-3 Haiku via OpenRouter) — the canonical
+ * post-H4 path. Layer-1 receives `providerEntities = undefined` here (no
+ * AssemblyAI call in offline eval), so hybrid degrades gracefully to
+ * Layer-2 + Layer-3 — same path the production transcribeEntities() stub
+ * currently produces.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { extract } from '../client';
+import { extractHybrid } from '../hybrid';
 import { slugify } from '../slug';
 
 interface FixtureExpect {
@@ -45,7 +52,7 @@ async function run() {
 
   for (const f of fixtures) {
     const t0 = Date.now();
-    const result = await extract(f.transcript);
+    const result = await extractHybrid({ transcript: f.transcript });
     const dt = Date.now() - t0;
     const issues = check(f, result);
     if (issues.length === 0) {
@@ -73,7 +80,7 @@ async function run() {
   }
 }
 
-function check(f: Fixture, got: Awaited<ReturnType<typeof extract>>): string[] {
+function check(f: Fixture, got: Awaited<ReturnType<typeof extractHybrid>>): string[] {
   const issues: string[] = [];
   const e = f.expected;
 

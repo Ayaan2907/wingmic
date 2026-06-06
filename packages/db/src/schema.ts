@@ -1,4 +1,5 @@
-import { customType, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { customType, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { createId } from '@paralleldrive/cuid2';
 
 /**
@@ -14,12 +15,19 @@ const float32Blob = (size: number) =>
       const f32 = new Float32Array(value);
       return Buffer.from(f32.buffer, f32.byteOffset, f32.byteLength);
     },
-    fromDriver(value: Buffer | Uint8Array): number[] {
-      const buf =
-        value instanceof Buffer
+    fromDriver(value: Buffer | Uint8Array | ArrayBuffer | null | undefined): number[] {
+      // Nullable F32_BLOB columns round-trip as null/undefined — return empty
+      // array so downstream code can treat "no embedding" without throwing.
+      if (value == null) return [];
+      // libSQL native driver returns BLOBs as Buffer; the @libsql/client web/jsdom
+      // path may hand back an ArrayBuffer. Normalize both into a typed view.
+      const u8: Uint8Array =
+        value instanceof Uint8Array
           ? value
-          : Buffer.from(value.buffer, value.byteOffset, value.byteLength);
-      return Array.from(new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4));
+          : value instanceof ArrayBuffer
+            ? new Uint8Array(value)
+            : new Uint8Array((value as Buffer).buffer, (value as Buffer).byteOffset, (value as Buffer).byteLength);
+      return Array.from(new Float32Array(u8.buffer, u8.byteOffset, u8.byteLength / 4));
     },
   });
 
@@ -43,6 +51,12 @@ export const users = sqliteTable('user', {
   image: text('image'),
   createdAt: ts('created_at'),
   updatedAt: ts('updated_at'),
+  // v0.1.2 additions
+  audioRetentionMode: text('audio_retention_mode', { enum: ['24h', '7d', 'forever', 'never'] }).notNull().default('24h'),
+  linkerModelOverride: text('linker_model_override'),
+  preferredMicDeviceId: text('preferred_mic_device_id'),
+  asrLanguage: text('asr_language').notNull().default('en-US'),
+  acknowledgedPrivacy: integer('acknowledged_privacy', { mode: 'boolean' }).notNull().default(false),
 });
 
 // BetterAuth core tables — kept in sync with @better-auth/cli expectations.
@@ -184,6 +198,7 @@ export const entities = sqliteTable(
     embedding: float32Blob(1536)('embedding'),
     createdAt: ts('created_at'),
     updatedAt: ts('updated_at'),
+    deletedAt: integer('deleted_at', { mode: 'timestamp' }),
   },
   (t) => [
     index('entity_owner_idx').on(t.ownerUserId),
@@ -223,10 +238,22 @@ export const interactions = sqliteTable(
     capturedAt: integer('captured_at', { mode: 'timestamp' }).notNull(),
     embedding: float32Blob(1536)('embedding'),
     createdAt: ts('created_at'),
+    // v0.1.2 additions
+    parentInteractionId: text('parent_interaction_id').references((): AnySQLiteColumn => interactions.id, { onDelete: 'set null' }),
+    threadRootId: text('thread_root_id').references((): AnySQLiteColumn => interactions.id, { onDelete: 'set null' }),
+    audioStorageKey: text('audio_storage_key'),
+    audioRetentionExpiry: integer('audio_retention_expiry', { mode: 'timestamp' }),
+    // NOTE: plan §18 specifies NOT NULL + unique with userId, but we make this nullable so
+    // existing rows survive the migration without a default value. Uniqueness is enforced
+    // via composite unique index below (SQLite unique indexes allow multiple NULLs).
+    clientCaptureId: text('client_capture_id'),
+    status: text('status', { enum: ['draft', 'committed', 'failed'] }).notNull().default('committed'),
+    deletedAt: integer('deleted_at', { mode: 'timestamp' }),
   },
   (t) => [
     index('interaction_user_idx').on(t.userId),
     index('interaction_captured_at_idx').on(t.capturedAt),
+    uniqueIndex('interaction_user_client_capture_idx').on(t.userId, t.clientCaptureId),
   ],
 );
 
@@ -281,6 +308,7 @@ export const entityCompanies = sqliteTable(
     since: integer('since', { mode: 'timestamp' }),
     until: integer('until', { mode: 'timestamp' }),
     createdAt: ts('created_at'),
+    sourceDeleted: integer('source_deleted', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [
     index('entity_company_entity_idx').on(t.entityId),
@@ -300,6 +328,7 @@ export const entityEvents = sqliteTable(
       .references(() => events.id, { onDelete: 'cascade' }),
     role: text('role'),
     createdAt: ts('created_at'),
+    sourceDeleted: integer('source_deleted', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [index('entity_event_entity_idx').on(t.entityId)],
 );
@@ -319,8 +348,29 @@ export const entityTopics = sqliteTable(
       onDelete: 'set null',
     }),
     createdAt: ts('created_at'),
+    sourceDeleted: integer('source_deleted', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [index('entity_topic_entity_idx').on(t.entityId)],
+);
+
+// ─── Entity merge log (v0.1.2) ────────────────────────────────────────
+
+export const entityMerges = sqliteTable(
+  'entity_merge',
+  {
+    id: id(),
+    sourceEntityId: text('source_entity_id').notNull(), // the merged-FROM entity (may be deleted by now)
+    targetEntityId: text('target_entity_id')
+      .notNull()
+      .references(() => entities.id, { onDelete: 'cascade' }),
+    // Audit table: SET NULL preserves merge history if the acting user is later deleted.
+    mergedByUserId: text('merged_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    mergedAt: ts('merged_at'),
+  },
+  (t) => [
+    index('entity_merge_target_idx').on(t.targetEntityId),
+    index('entity_merge_source_idx').on(t.sourceEntityId),
+  ],
 );
 
 // ─── Connection requests (opt-in linking, exposed in v0.2+) ────────────
@@ -342,6 +392,12 @@ export const connectionRequests = sqliteTable('connection_request', {
   createdAt: ts('created_at'),
 });
 
+// ─── Index name constants ──────────────────────────────────────────────
+// Keep in sync with drizzle/0002_vector_top_k_entity_embedding.sql. Used by
+// recall router's raw `vector_top_k(...)` call — migration rename without
+// updating this constant breaks recall at runtime.
+export const ENTITY_EMBEDDING_INDEX = 'entity_embedding_vector_idx';
+
 // ─── Type exports ──────────────────────────────────────────────────────
 
 export type User = typeof users.$inferSelect;
@@ -355,3 +411,4 @@ export type Interaction = typeof interactions.$inferSelect;
 export type NewInteraction = typeof interactions.$inferInsert;
 export type EntityFact = typeof entityFacts.$inferSelect;
 export type EntityNote = typeof entityNotes.$inferSelect;
+export type EntityMerge = typeof entityMerges.$inferSelect;
