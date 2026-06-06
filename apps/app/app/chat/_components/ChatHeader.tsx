@@ -8,16 +8,11 @@
 // stop button but the header keeps the pulse + counter so the user knows
 // recording is still in flight.
 
-import type { useAudioRecorder } from '@/app/capture/_components/useAudioRecorder';
+import { useCapture } from '@/app/_components/CaptureProvider';
 import { accent } from './tokens';
 
-export function ChatHeader({
-  userName,
-  recorder,
-}: {
-  userName: string | null;
-  recorder: ReturnType<typeof useAudioRecorder>;
-}) {
+export function ChatHeader({ userName }: { userName: string | null }) {
+  const { recorder } = useCapture();
   const recording =
     recorder.status === 'recording' ||
     recorder.status === 'lock_armed' ||

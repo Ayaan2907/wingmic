@@ -3,11 +3,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor, cleanup } from '@testing-library/react';
 
 // ── Mock next/navigation ────────────────────────────────────────────────
-// ChatClient reads useSearchParams() to handle the ?armRecord=1 deep link.
-// Jsdom has no Next router context, so we stub the hook to a noop query bag.
-// Individual tests below override this mock to drive armRecord scenarios.
+// PR β₁-D: CaptureProvider uses useRouter() + usePathname() to push to
+// /chat once the recorder transitions to `ready`. Jsdom has no Next router
+// context, so we stub all three hooks. pathname defaults to '/chat' so the
+// post-commit push is a no-op in these tests (the bubble lands on the
+// same page we're already on).
+const routerPushMock = vi.fn();
 vi.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: (_: string) => null }),
+  useRouter: () => ({ push: routerPushMock, replace: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => '/chat',
 }));
 
 // ── Mock tRPC client ────────────────────────────────────────────────────
@@ -81,6 +86,22 @@ vi.mock('@/app/capture/_components/useAudioRecorder', () => {
 });
 
 import ChatClient from '@/app/chat/ChatClient';
+import { CaptureProvider } from '@/app/_components/CaptureProvider';
+import { RecordingOverlay } from '@/app/_components/RecordingOverlay';
+import * as React from 'react';
+
+// Wrap renders in the provider — ChatClient now consumes useCapture() for
+// recorder + messages, and BottomTabBar's orb only works inside a provider.
+// RecordingOverlay is mounted so the live phantom-bubble + chrome render in
+// the test DOM as they would in production.
+function renderChat(props: { userName: string | null; initialThread?: Parameters<typeof ChatClient>[0]['initialThread'] }) {
+  return render(
+    <CaptureProvider>
+      <ChatClient {...props} />
+      <RecordingOverlay />
+    </CaptureProvider>,
+  );
+}
 
 function resetFakeRecorder() {
   fakeRecorder.status = 'idle';
@@ -113,7 +134,7 @@ describe('ChatClient', () => {
   });
 
   it('renders empty thread + bottom tab bar on mount (idle)', () => {
-    render(<ChatClient userName="ada" />);
+    renderChat({ userName: "ada" });
     // empty-hero copy
     expect(screen.getByText(/hold the button/i)).toBeTruthy();
     // v8: 5-slot bottom nav — home / chat / capture / graph / acts.
@@ -130,9 +151,7 @@ describe('ChatClient', () => {
     // Removed in v8 — these slots no longer exist in the 5-slot bar.
     expect(nav.textContent).not.toContain('history');
     expect(nav.textContent).not.toContain('settings');
-    // ambient privacy line
-    expect(screen.getByText(/audio → assemblyai/i)).toBeTruthy();
-    // hold-to-talk button
+    // hold-to-talk orb lives in the bottom nav (PR β₁-D — the orb IS the dock).
     expect(screen.getByRole('button', { name: /hold to record/i })).toBeTruthy();
   });
 
@@ -161,7 +180,7 @@ describe('ChatClient', () => {
       interactionId: 'int-1',
     });
 
-    render(<ChatClient userName="ada" />);
+    renderChat({ userName: "ada" });
     const btn = screen.getByRole('button', { name: /hold to record/i });
 
     await act(async () => {
@@ -218,7 +237,7 @@ describe('ChatClient', () => {
       interactionId: 'int-empty',
     });
 
-    render(<ChatClient userName="ada" />);
+    renderChat({ userName: "ada" });
     const btn = screen.getByRole('button', { name: /hold to record/i });
     await act(async () => {
       fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
@@ -244,7 +263,7 @@ describe('ChatClient', () => {
       ),
     ) as unknown as typeof fetch;
 
-    render(<ChatClient userName="ada" />);
+    renderChat({ userName: "ada" });
     const btn = screen.getByRole('button', { name: /hold to record/i });
     await act(async () => {
       fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
@@ -274,7 +293,7 @@ describe('ChatClient', () => {
       interactionId: 'k',
     });
 
-    render(<ChatClient userName="ada" />);
+    renderChat({ userName: "ada" });
     await act(async () => {
       fireEvent.keyDown(window, { code: 'Space' });
       await Promise.resolve();
@@ -317,7 +336,7 @@ describe('ChatClient', () => {
       throw new Error('commit should never be reached after discard');
     });
 
-    render(<ChatClient userName="ada" />);
+    renderChat({ userName: "ada" });
     const btn = screen.getByRole('button', { name: /hold to record/i });
     await act(async () => {
       fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
@@ -361,7 +380,7 @@ describe('ChatClient', () => {
       matchedEntities: 0,
       interactionId: 'k',
     });
-    const { unmount } = render(<ChatClient userName="ada" />);
+    const { unmount } = renderChat({ userName: "ada" });
     const btn = screen.getByRole('button', { name: /hold to record/i });
     await act(async () => {
       fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
@@ -390,7 +409,7 @@ describe('ChatClient', () => {
   });
 
   it('second-finger pointerdown does not start a second recording', async () => {
-    render(<ChatClient userName="ada" />);
+    renderChat({ userName: "ada" });
     const btn = screen.getByRole('button', { name: /hold to record/i });
     await act(async () => {
       fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
@@ -404,7 +423,7 @@ describe('ChatClient', () => {
   });
 
   it('escape while recording discards', async () => {
-    render(<ChatClient userName="ada" />);
+    renderChat({ userName: "ada" });
     // put recorder into recording first via space keydown
     await act(async () => {
       fireEvent.keyDown(window, { code: 'Space' });
@@ -423,7 +442,7 @@ describe('ChatClient', () => {
   // ChatClient must render the right chrome for every cold-mount path.
 
   it('resting state on cold mount with empty initialThread renders empty-hero + idle dock', () => {
-    render(<ChatClient userName="ada" initialThread={[]} />);
+    renderChat({ userName: "ada", initialThread: [] });
     // empty-hero copy is present
     expect(screen.getByText(/hold the button/i)).toBeTruthy();
     // dock is idle — orb state is `idle` (not recording/locked/sending)
@@ -454,7 +473,7 @@ describe('ChatClient', () => {
         capturedAt: '2026-06-03T09:15:00Z',
       },
     ];
-    render(<ChatClient userName="ada" initialThread={initialThread} />);
+    renderChat({ userName: 'ada', initialThread });
     const m1 = screen.getByText('met sarah at acme');
     const m2 = screen.getByText('priya knows compilers');
     const m3 = screen.getByText('marcus wants intro');
@@ -474,9 +493,12 @@ describe('ChatClient', () => {
   });
 
   it('thread dims (opacity 0.4, pointer-events none) when recorder transitions to recording', async () => {
-    render(<ChatClient userName="ada" initialThread={[
-      { id: 'p1', transcript: 'past memo one', capturedAt: '2026-06-01T14:00:00Z' },
-    ]} />);
+    renderChat({
+      userName: 'ada',
+      initialThread: [
+        { id: 'p1', transcript: 'past memo one', capturedAt: '2026-06-01T14:00:00Z' },
+      ],
+    });
     const pastBubble = screen.getByText('past memo one');
     // Walk up to the dim wrapper — it's the parent div with opacity:1 initially.
     const dimWrapper = pastBubble.closest('div[style*="opacity"]') as HTMLElement | null;
@@ -500,13 +522,9 @@ describe('ChatClient', () => {
     expect(dimWrapperAfter!.style.pointerEvents).toBe('none');
   });
 
-  // armRecord=1 deep-link path — exercised via the module-level mock of
-  // next/navigation, which makes per-test override awkward (vi.mock is
-  // hoisted to file scope). Recorded as a follow-up so the redirect entry
-  // path doesn't go untested forever.
-  it.todo(
-    'mounts in recording state when ?armRecord=1 is present (β₁-B deep-link) — needs per-test next/navigation override',
-  );
+  // PR β₁-D rolled back the armRecord URL-param approach: recording now
+  // begins via the orb in the bottom nav (live on every route), so there
+  // is no deep-link to test. Intentionally omitted.
 
   // Verifies the recorder hook is mounted by ChatClient exactly once, with
   // CaptureDock + ChatHeader + ChatThread receiving it as a prop. Today this

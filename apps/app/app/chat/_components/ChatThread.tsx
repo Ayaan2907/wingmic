@@ -1,20 +1,14 @@
 'use client';
 
-// ChatThread — chat-thread render surface, extracted from CaptureClient (PR β₁-A).
+// ChatThread — chat-thread render surface (PR β₁-D rewrite).
 //
-// Owns: ThreadView + all message-rendering sub-components (PhantomBubble,
-// MessageBubble, BubbleHeader, BubbleFooter, Skeleton, FailedBubble,
-// EmptyHero, InlineLink, PasteInline, GraphCard, PersonPill, TagPill,
-// ActionCard, UndoChip, failedKind, failedActions, LevelMeter).
-//
-// NEW for β₁: the message list is wrapped in a dimming layer — opacity 0.4 +
-// pointer-events: none when the recorder is hot. The phantom bubble (which
-// renders the live in-progress capture) sits OUTSIDE that wrapper, so it
-// stays at full opacity. design/v2/proto-screens-a.jsx §ScreenChatRecording
-// is the reference.
+// Consumes useCapture() for messages + recorder state. The thread dims
+// (opacity 0.4) while the mic is hot; the live phantom bubble is rendered
+// by the global RecordingOverlay (in layout.tsx), not in-thread, so the
+// dimming applies cleanly to the message list without needing an inner
+// "stays full opacity" carve-out.
 
-import { memo } from 'react';
-import { useAudioRecorder } from '@/app/capture/_components/useAudioRecorder';
+import { useCapture } from '@/app/_components/CaptureProvider';
 import type {
   ThreadMessage,
   GraphResult,
@@ -28,32 +22,29 @@ function fmtMs(ms: number | null): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-interface ThreadViewProps {
-  messages: ThreadMessage[];
-  onRetry: (id: string) => void;
-  onDiscard: (id: string) => void;
-  onPaste: (id: string) => void;
-  onDelete: (id: string) => void;
-  pasteOpenForId: string | null;
-  pasteDraft: string;
-  setPasteDraft: (v: string) => void;
-  onPasteSubmit: (id: string) => void;
-  onPasteCancel: () => void;
-  threadEndRef: React.RefObject<HTMLDivElement | null>;
-  recorder: ReturnType<typeof useAudioRecorder>;
-}
-
-function ChatThreadInner(props: ThreadViewProps) {
-  const { messages, recorder, threadEndRef } = props;
+export function ChatThread() {
+  const {
+    recorder,
+    visibleMessages,
+    pasteOpenForId,
+    pasteDraft,
+    setPasteDraft,
+    retryBubble,
+    discardBubble,
+    openPaste,
+    closePaste,
+    submitPaste,
+    softDelete,
+  } = useCapture();
   const recording =
     recorder.status === 'recording' ||
     recorder.status === 'lock_armed' ||
     recorder.status === 'cancel_armed' ||
     recorder.status === 'locked';
 
-  // β₁ thread-dimming: the message list dims while the mic is hot. Phantom
-  // bubble sits OUTSIDE the dimmed wrapper so live transcription stays at
-  // full opacity. Transition timed to ~motion-default-fast (180ms ease-out).
+  // β₁ thread-dimming: the message list dims while the mic is hot. The
+  // live phantom bubble lives in the global RecordingOverlay (above this
+  // surface in the layer stack), so the dim applies cleanly to the list.
   const dimStyle: React.CSSProperties = {
     opacity: recording ? 0.4 : 1,
     pointerEvents: recording ? 'none' : 'auto',
@@ -77,61 +68,27 @@ function ChatThreadInner(props: ThreadViewProps) {
       }}
     >
       <div style={dimStyle}>
-        {messages.length === 0 && !recording && <EmptyHero />}
+        {visibleMessages.length === 0 && !recording && <EmptyHero />}
 
-        {messages.map((m) => (
+        {visibleMessages.map((m) => (
           <MessageBubble
             key={m.id}
             message={m}
-            onRetry={() => props.onRetry(m.id)}
-            onDiscard={() => props.onDiscard(m.id)}
-            onPaste={() => props.onPaste(m.id)}
-            onDelete={() => props.onDelete(m.id)}
-            pasteOpen={props.pasteOpenForId === m.id}
-            pasteDraft={props.pasteDraft}
-            setPasteDraft={props.setPasteDraft}
-            onPasteSubmit={() => props.onPasteSubmit(m.id)}
-            onPasteCancel={props.onPasteCancel}
+            onRetry={() => retryBubble(m.id)}
+            onDiscard={() => discardBubble(m.id)}
+            onPaste={() => openPaste(m.id)}
+            onDelete={() => softDelete(m.id)}
+            pasteOpen={pasteOpenForId === m.id}
+            pasteDraft={pasteDraft}
+            setPasteDraft={setPasteDraft}
+            onPasteSubmit={() => submitPaste(m.id)}
+            onPasteCancel={closePaste}
           />
         ))}
       </div>
-
-      {recording && <PhantomBubble recorder={recorder} />}
-
-      <div ref={threadEndRef} />
     </div>
   );
 }
-
-// Locked decision D5 from /plan-eng-review on 2026-06-06 (PR β₁-C):
-// React.memo with prop-equality so ChatClient re-renders for unrelated state
-// (undoQueue, paste state on other bubbles, etc.) don't trip the full thread
-// re-render. recorder is a fresh object literal per useAudioRecorder call, so
-// we compare the fields ChatThread + PhantomBubble actually read:
-//   · status — drives dimming + phantom-bubble visibility
-//   · duration, level — PhantomBubble's live counter + level meter
-//   · error — preserved so a fresh failure object forces a re-render
-// The recorder *methods* (start/stop/...) are useCallback-stable in the
-// hook, so we don't compare them.
-export const ChatThread = memo(ChatThreadInner, (prev, next) => {
-  return (
-    prev.messages === next.messages &&
-    prev.pasteOpenForId === next.pasteOpenForId &&
-    prev.pasteDraft === next.pasteDraft &&
-    prev.onRetry === next.onRetry &&
-    prev.onDiscard === next.onDiscard &&
-    prev.onPaste === next.onPaste &&
-    prev.onDelete === next.onDelete &&
-    prev.setPasteDraft === next.setPasteDraft &&
-    prev.onPasteSubmit === next.onPasteSubmit &&
-    prev.onPasteCancel === next.onPasteCancel &&
-    prev.threadEndRef === next.threadEndRef &&
-    prev.recorder.status === next.recorder.status &&
-    prev.recorder.duration === next.recorder.duration &&
-    prev.recorder.level === next.recorder.level &&
-    prev.recorder.error === next.recorder.error
-  );
-});
 
 function EmptyHero() {
   return (
@@ -161,84 +118,6 @@ function EmptyHero() {
       <p style={{ fontSize: 14.5, color: 'var(--text-40)', lineHeight: 1.55 }}>
         short is fine. ten seconds counts.
       </p>
-    </div>
-  );
-}
-
-// ─── Phantom (recording-in-progress) bubble ─────────────────────────────
-
-function PhantomBubble({ recorder }: { recorder: ReturnType<typeof useAudioRecorder> }) {
-  const sec = (recorder.duration / 1000).toFixed(1);
-  return (
-    <div
-      style={{
-        alignSelf: 'flex-end',
-        maxWidth: '86%',
-        padding: '14px 16px',
-        borderRadius: 14,
-        background: 'var(--surface-2)',
-        border: `1.5px solid ${accent}50`,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-        animation: 'wm-rise 0.4s ease-out',
-      }}
-    >
-      <div
-        className="mono"
-        style={{
-          fontSize: 10,
-          color: accent,
-          letterSpacing: 2,
-          textTransform: 'uppercase',
-          display: 'flex',
-          gap: 6,
-          alignItems: 'center',
-        }}
-      >
-        <span
-          style={{
-            display: 'inline-block',
-            width: 6,
-            height: 6,
-            borderRadius: 999,
-            background: coral,
-            animation: 'wm-pulse-d 1.5s ease-in-out infinite',
-          }}
-        />
-        rec · {sec}s
-      </div>
-      <LevelMeter level={recorder.level} />
-    </div>
-  );
-}
-
-function LevelMeter({ level }: { level: number[] }) {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      aria-label="recording level"
-      style={{
-        display: 'flex',
-        gap: 3,
-        alignItems: 'center',
-        height: 40,
-      }}
-    >
-      {level.map((v, i) => (
-        <div
-          key={i}
-          aria-hidden="true"
-          style={{
-            width: 3,
-            height: Math.max(4, Math.round(4 + v * 34)),
-            background: accent,
-            borderRadius: 2,
-            transition: 'height 0.12s ease-out',
-          }}
-        />
-      ))}
     </div>
   );
 }
@@ -910,14 +789,9 @@ function ActionCard({
 
 // ─── Undo chip ──────────────────────────────────────────────────────────
 
-export function UndoChip({
-  queue,
-  onUndo,
-}: {
-  queue: { id: string; until: number }[];
-  onUndo: (id: string) => void;
-}) {
-  const latest = queue[queue.length - 1];
+export function UndoChip() {
+  const { undoQueue, undoDelete } = useCapture();
+  const latest = undoQueue[undoQueue.length - 1];
   if (!latest) return null;
   return (
     <div
@@ -942,7 +816,7 @@ export function UndoChip({
       memo removed ·{' '}
       <button
         type="button"
-        onClick={() => onUndo(latest.id)}
+        onClick={() => undoDelete(latest.id)}
         style={{
           color: accent,
           background: 'transparent',

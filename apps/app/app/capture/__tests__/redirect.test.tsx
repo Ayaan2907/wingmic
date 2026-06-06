@@ -1,10 +1,10 @@
 // @vitest-environment node
 //
-// PR β₁-B installed permanentRedirect('/chat?armRecord=1') at /capture so
-// the legacy bookmark + nav target funnels into /chat with the recorder
-// armed. This test is a regression guard: if anyone tweaks the redirect
-// target (drops the armRecord param, or swaps permanentRedirect → redirect)
-// the CI gate fires. Locked decision D3 from PR β₁ /plan-eng-review.
+// PR β₁-D rolled back the armRecord URL-param approach: the /capture
+// route now plain-redirects to /chat, and the global CaptureProvider
+// owns the recorder. Recording starts via the orb in the bottom nav
+// (live on every route), not via a deep-link param. This test guards
+// the redirect target.
 
 import { describe, it, expect, vi } from 'vitest';
 
@@ -25,7 +25,7 @@ vi.mock('next/navigation', () => ({
 import Page from '../page';
 
 describe('/capture redirect', () => {
-  it('permanently redirects to /chat?armRecord=1', () => {
+  it('permanently redirects to /chat (no armRecord param)', () => {
     try {
       Page();
     } catch (e) {
@@ -33,6 +33,6 @@ describe('/capture redirect', () => {
       expect((e as Error).message).toBe('NEXT_REDIRECT');
     }
     expect(permanentRedirectMock).toHaveBeenCalledTimes(1);
-    expect(permanentRedirectMock).toHaveBeenCalledWith('/chat?armRecord=1');
+    expect(permanentRedirectMock).toHaveBeenCalledWith('/chat');
   });
 });

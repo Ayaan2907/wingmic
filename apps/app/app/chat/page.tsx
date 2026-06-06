@@ -1,9 +1,9 @@
 // app/chat/page.tsx — chat surface (PR β₁-A).
 //
-// chat IS the capture surface. See design/v2/design.md §12 "one mic, one
-// surface". The /capture route still renders the same client for one
-// release; β₁-B replaces /capture/page.tsx with a redirect to
-// /chat?armRecord=1.
+// chat IS the capture surface for completed memos. PR β₁-D moved the
+// orb itself into the global BottomTabBar (live on every route); the
+// commit pipeline routes here after the recorder ends so the bubble +
+// extraction land in the thread.
 //
 // Server-prefetches the last 20 committed memos so the thread isn't
 // empty on load. Same Drizzle-direct pattern Home uses (apps/app/app/page.tsx).

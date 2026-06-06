@@ -51,7 +51,7 @@ export default function RecallClient() {
           wingmic<span style={{ color: 'var(--text-30)' }}>.xyz</span>
         </a>
         <a
-          href="/chat?armRecord=1"
+          href="/chat"
           className="mono"
           style={{
             fontSize: 11,
