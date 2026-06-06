@@ -52,12 +52,21 @@ export default function OnboardingClient() {
   const acknowledge = trpc.onboarding.acknowledge.useMutation();
   const [step, setStep] = React.useState(0);
   const [leaving, setLeaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
   const finish = React.useCallback(async () => {
     if (leaving) return;
     setLeaving(true);
-    await acknowledge.mutateAsync();
-    router.push('/');
+    setError(null);
+    try {
+      await acknowledge.mutateAsync();
+      router.push('/');
+    } catch {
+      // network/server failure — don't strand the user on the entry gate.
+      // re-enable the buttons so they can retry.
+      setLeaving(false);
+      setError("couldn't save — try again");
+    }
   }, [acknowledge, router, leaving]);
 
   const current = STEPS[step];
@@ -179,6 +188,22 @@ export default function OnboardingClient() {
           </button>
         )}
       </div>
+
+      {error && (
+        <p
+          role="alert"
+          className="mono"
+          style={{
+            font: '500 12px var(--font-mono)',
+            color: accent,
+            letterSpacing: 1,
+            margin: '12px 0 0',
+            textAlign: 'center',
+          }}
+        >
+          {error}
+        </p>
+      )}
 
       <button
         type="button"
