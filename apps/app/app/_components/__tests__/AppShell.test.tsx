@@ -1,6 +1,17 @@
 import { render, screen, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// next/link → plain <a> for tests (typedRoutes adds runtime indirection we
+// don't need; matches the entity detail test pattern). Needed for the
+// back-affordance test which renders EntityDetailScaffold.
+vi.mock('next/link', () => ({
+  default: ({ href, children, ...rest }: any) => (
+    <a href={typeof href === 'string' ? href : String(href)} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
 function mockPath(path: string) {
   vi.doMock('next/navigation', () => ({
     usePathname: () => path,
@@ -40,5 +51,15 @@ describe('AppShell', () => {
     render(<Shell><div>auth</div></Shell>);
     expect(screen.queryByLabelText('primary')).toBeNull();
     expect(screen.getByText('auth')).toBeTruthy();
+  });
+
+  it('entity back link is tagged .app-backlink for desktop hiding', async () => {
+    // EntityDetailScaffold renders <Link className="app-backlink">← back</Link>
+    const { EntityDetailScaffold } = await import('@/app/_components/entity/EntityDetailScaffold');
+    render(
+      <EntityDetailScaffold kind="person" hero={<span/>} eyebrow="PERSON" name="Ada" sub="" primaryCta={{label:'a'}} ghostCta={{label:'b'}} stats={[]} captures={[]} followups={[]} related={[]} />,
+    );
+    const back = screen.getByLabelText('back');
+    expect(back.className).toContain('app-backlink');
   });
 });

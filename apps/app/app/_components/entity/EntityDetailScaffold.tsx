@@ -206,6 +206,7 @@ function TopRow() {
       <Link
         href="/chat"
         aria-label="back"
+        className="app-backlink"
         style={{
           display: 'inline-flex',
           alignItems: 'center',
