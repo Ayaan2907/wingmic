@@ -13,6 +13,7 @@
 // stays at full opacity. design/v2/proto-screens-a.jsx §ScreenChatRecording
 // is the reference.
 
+import { memo } from 'react';
 import { useAudioRecorder } from '@/app/capture/_components/useAudioRecorder';
 import type {
   ThreadMessage,
@@ -42,7 +43,7 @@ interface ThreadViewProps {
   recorder: ReturnType<typeof useAudioRecorder>;
 }
 
-export function ChatThread(props: ThreadViewProps) {
+function ChatThreadInner(props: ThreadViewProps) {
   const { messages, recorder, threadEndRef } = props;
   const recording =
     recorder.status === 'recording' ||
@@ -101,6 +102,37 @@ export function ChatThread(props: ThreadViewProps) {
     </div>
   );
 }
+
+// Locked decision D5 from /plan-eng-review on 2026-06-06 (PR β₁-C):
+// React.memo with prop-equality so ChatClient re-renders for unrelated state
+// (undoQueue, paste state on other bubbles, etc.) don't trip the full thread
+// re-render. recorder is a fresh object literal per useAudioRecorder call, so
+// we compare the fields ChatThread + PhantomBubble actually read:
+//   · status — drives dimming + phantom-bubble visibility
+//   · duration, level — PhantomBubble's live counter + level meter
+//   · audioBlob, error — reserved (not read here today, but cheap to track)
+// The recorder *methods* (start/stop/...) are useCallback-stable in the
+// hook, so we don't compare them.
+export const ChatThread = memo(ChatThreadInner, (prev, next) => {
+  return (
+    prev.messages === next.messages &&
+    prev.pasteOpenForId === next.pasteOpenForId &&
+    prev.pasteDraft === next.pasteDraft &&
+    prev.onRetry === next.onRetry &&
+    prev.onDiscard === next.onDiscard &&
+    prev.onPaste === next.onPaste &&
+    prev.onDelete === next.onDelete &&
+    prev.setPasteDraft === next.setPasteDraft &&
+    prev.onPasteSubmit === next.onPasteSubmit &&
+    prev.onPasteCancel === next.onPasteCancel &&
+    prev.threadEndRef === next.threadEndRef &&
+    prev.recorder.status === next.recorder.status &&
+    prev.recorder.duration === next.recorder.duration &&
+    prev.recorder.level === next.recorder.level &&
+    prev.recorder.audioBlob === next.recorder.audioBlob &&
+    prev.recorder.error === next.recorder.error
+  );
+});
 
 function EmptyHero() {
   return (

@@ -17,7 +17,7 @@
 //   · ?armRecord=1 (set by the upcoming /capture redirect, β₁-B) starts
 //     the capture pipeline on mount, mirroring the keyboard-Space path.
 
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { trpc } from '@/lib/trpc/client';
 import { useAudioRecorder } from '@/app/capture/_components/useAudioRecorder';
@@ -279,42 +279,49 @@ function ChatClientInner({ userName, initialThread = [] }: ChatClientProps) {
     }
   }
 
-  function openPaste(id: string) {
+  const openPaste = useCallback((id: string) => {
     setPasteOpenForId(id);
     setPasteDraft('');
-  }
+  }, []);
 
-  async function submitPaste(id: string) {
-    const text = pasteDraft.trim();
-    if (!text) return;
+  const closePaste = useCallback(() => {
     setPasteOpenForId(null);
-    setPasteDraft('');
-    patch(id, {
-      status: 'linking',
-      transcript: text,
-      transcribeMs: 0,
-      fromPaste: true,
-      error: null,
-    });
-    const c0 = performance.now();
-    try {
-      const result = await commitMutation.mutateAsync({ transcript: text });
-      patch(id, {
-        status: 'committed',
-        commitMs: Math.round(performance.now() - c0),
-        graphResult: result as GraphResult,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'commit failed.';
-      patch(id, {
-        status: 'failed',
-        commitMs: Math.round(performance.now() - c0),
-        error: { code: 'commit_failed', message },
-      });
-    }
-  }
+  }, []);
 
-  async function retryBubble(id: string) {
+  const submitPaste = useCallback(
+    async (id: string) => {
+      const text = pasteDraft.trim();
+      if (!text) return;
+      setPasteOpenForId(null);
+      setPasteDraft('');
+      patch(id, {
+        status: 'linking',
+        transcript: text,
+        transcribeMs: 0,
+        fromPaste: true,
+        error: null,
+      });
+      const c0 = performance.now();
+      try {
+        const result = await commitMutation.mutateAsync({ transcript: text });
+        patch(id, {
+          status: 'committed',
+          commitMs: Math.round(performance.now() - c0),
+          graphResult: result as GraphResult,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'commit failed.';
+        patch(id, {
+          status: 'failed',
+          commitMs: Math.round(performance.now() - c0),
+          error: { code: 'commit_failed', message },
+        });
+      }
+    },
+    [pasteDraft, patch, commitMutation],
+  );
+
+  const retryBubble = useCallback(async (id: string) => {
     const msg = messages.find((m) => m.id === id);
     if (!msg) return;
     if (msg.error?.code === 'NotAllowedError') {
@@ -347,20 +354,20 @@ function ChatClientInner({ userName, initialThread = [] }: ChatClientProps) {
         });
       }
     }
-  }
+  }, [messages, patch, recorder, commitMutation]);
 
-  function discardBubble(id: string) {
+  const discardBubble = useCallback((id: string) => {
     const controller = pipelineControllersRef.current.get(id);
     if (controller) {
       controller.abort();
       pipelineControllersRef.current.delete(id);
     }
     setMessages((prev) => prev.filter((m) => m.id !== id));
-  }
+  }, []);
 
   const [undoQueue, setUndoQueue] = useState<{ id: string; until: number }[]>([]);
 
-  function softDelete(id: string) {
+  const softDelete = useCallback((id: string) => {
     patch(id, { status: 'deleted' });
     const until = Date.now() + UNDO_WINDOW_MS;
     setUndoQueue((q) => [...q, { id, until }]);
@@ -371,9 +378,9 @@ function ChatClientInner({ userName, initialThread = [] }: ChatClientProps) {
     const prev = undoTimersRef.current.get(id);
     if (prev) clearTimeout(prev);
     undoTimersRef.current.set(id, t);
-  }
+  }, [patch]);
 
-  function undoDelete(id: string) {
+  const undoDelete = useCallback((id: string) => {
     const t = undoTimersRef.current.get(id);
     if (t) {
       clearTimeout(t);
@@ -381,10 +388,18 @@ function ChatClientInner({ userName, initialThread = [] }: ChatClientProps) {
     }
     patch(id, { status: 'committed' });
     setUndoQueue((q) => q.filter((u) => u.id !== id));
-  }
+  }, [patch]);
 
   const recorderStatus = recorder.status;
   const isIdle = recorderStatus === 'idle' || recorderStatus === 'ready' || recorderStatus === 'error';
+
+  // Memoized so the filtered array reference is stable when no message
+  // status flips between 'deleted' ↔ other. ChatThread's React.memo
+  // equality compares messages by reference (PR β₁-C, D5).
+  const visibleMessages = useMemo(
+    () => messages.filter((m) => m.status !== 'deleted'),
+    [messages],
+  );
 
   return (
     <main
@@ -400,7 +415,7 @@ function ChatClientInner({ userName, initialThread = [] }: ChatClientProps) {
       <ChatHeader userName={userName} recorder={recorder} />
 
       <ChatThread
-        messages={messages.filter((m) => m.status !== 'deleted')}
+        messages={visibleMessages}
         onRetry={retryBubble}
         onDiscard={discardBubble}
         onPaste={openPaste}
@@ -409,7 +424,7 @@ function ChatClientInner({ userName, initialThread = [] }: ChatClientProps) {
         pasteDraft={pasteDraft}
         setPasteDraft={setPasteDraft}
         onPasteSubmit={submitPaste}
-        onPasteCancel={() => setPasteOpenForId(null)}
+        onPasteCancel={closePaste}
         threadEndRef={threadEndRef}
         recorder={recorder}
       />

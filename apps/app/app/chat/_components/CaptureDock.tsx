@@ -12,7 +12,7 @@
 // same element. Do not introduce wrapper divs between the dock root and
 // this <button> without re-validating pointer capture.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useAudioRecorder } from '@/app/capture/_components/useAudioRecorder';
 import { micOrbStateFor, type MicOrbState } from '@/app/capture/micOrbState';
 import {
@@ -25,15 +25,13 @@ import {
   TAB_BAR_HEIGHT_PX,
 } from './tokens';
 
-export function CaptureDock({
-  recorder,
-  isIdle,
-  onStart,
-}: {
+interface CaptureDockProps {
   recorder: ReturnType<typeof useAudioRecorder>;
   isIdle: boolean;
   onStart: () => void | Promise<void>;
-}) {
+}
+
+function CaptureDockInner({ recorder, isIdle, onStart }: CaptureDockProps) {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const originRef = useRef<{ x: number; y: number } | null>(null);
   const movedRef = useRef(false);
@@ -531,6 +529,22 @@ export function CaptureDock({
     </>
   );
 }
+
+// Locked decision D5 from /plan-eng-review on 2026-06-06 (PR β₁-C):
+// React.memo with prop-equality so ChatClient re-renders for unrelated state
+// (messages, undoQueue, paste state) don't trip the dock's re-render. The
+// dock reads recorder.status, recorder.level (for the level bars), and
+// recorder.error. recorder.duration is NOT read here — that's ChatHeader's
+// job (intentionally unwrapped per D5). Methods are useCallback-stable.
+export const CaptureDock = memo(CaptureDockInner, (prev, next) => {
+  return (
+    prev.isIdle === next.isIdle &&
+    prev.onStart === next.onStart &&
+    prev.recorder.status === next.recorder.status &&
+    prev.recorder.level === next.recorder.level &&
+    prev.recorder.error === next.recorder.error
+  );
+});
 
 function PrivacyAmbientLine() {
   return (
