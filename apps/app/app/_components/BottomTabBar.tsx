@@ -25,10 +25,10 @@ export function BottomTabBar({ active }: { active: BottomTabKey }) {
   //   baseline. graph + acts routes ship empty in v11/v12; hrefs 404 until then.
   const tabs: Array<{ key: BottomTabKey; glyph: string; label: string; href: string; big?: boolean }> = [
     { key: 'home', glyph: '⌂', label: 'home', href: '/' },
-    // TODO(v13): rename route from /recall to /chat once v13 lands. Label is
-    // already 'chat' (locked v2 token re-skin, 2026-05-25).
-    { key: 'chat', glyph: '⌕', label: 'chat', href: '/recall' },
-    { key: 'capture', glyph: '◉', label: 'capture', href: '/capture', big: true },
+    // chat slot: /chat is canonical post-β₁. /recall stays alive as the search surface until PR γ retargets it to /search.
+    { key: 'chat', glyph: '⌕', label: 'chat', href: '/chat' },
+    // capture slot: armRecord=1 triggers ChatClient to call beginCapture + recorder.lock on mount.
+    { key: 'capture', glyph: '◉', label: 'capture', href: '/chat?armRecord=1', big: true },
     { key: 'graph', glyph: '◈', label: 'graph', href: '/graph' },
     { key: 'acts', glyph: '◬', label: 'acts', href: '/acts' },
   ];

@@ -80,7 +80,7 @@ vi.mock('../_components/useAudioRecorder', () => {
   };
 });
 
-import CaptureClient from '../CaptureClient';
+import CaptureClient from '@/app/chat/ChatClient';
 
 function resetFakeRecorder() {
   fakeRecorder.status = 'idle';

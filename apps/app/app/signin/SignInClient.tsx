@@ -13,7 +13,7 @@ export default function SignInClient({
   searchParamsPromise: Promise<{ next?: string }>;
 }) {
   const sp = use(searchParamsPromise);
-  const next = sp?.next ?? '/capture';
+  const next = sp?.next ?? '/chat';
 
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<Status>('idle');

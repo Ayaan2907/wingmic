@@ -1,15 +1,11 @@
-import { redirect } from 'next/navigation';
-import { headers } from 'next/headers';
-import { auth } from '@/lib/auth';
-import CaptureClient from './CaptureClient';
+import { permanentRedirect } from 'next/navigation';
 
-export const metadata = {
-  title: 'capture',
-  description: 'speak. extract. commit. wingmic remembers.',
-};
+// /capture is permanently consolidated into /chat per design/v2/design.md §12.1
+// "one mic, one surface." Visiting /capture sends the user to /chat with the
+// recorder armed (armRecord=1). 308 + replace semantics so back-button from
+// /chat does not loop through this route. Locked decision D3 from PR β₁
+// /plan-eng-review on 2026-06-06.
 
-export default async function Page() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) redirect('/signin?next=/capture');
-  return <CaptureClient userName={session.user.name ?? null} />;
+export default function Page() {
+  permanentRedirect('/chat?armRecord=1');
 }
