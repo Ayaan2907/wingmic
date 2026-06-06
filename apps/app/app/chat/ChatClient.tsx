@@ -15,7 +15,6 @@
 
 import { useEffect, useRef } from 'react';
 import { useCapture } from '@/app/_components/CaptureProvider';
-import { BottomTabBar } from '@/app/_components/BottomTabBar';
 import { ChatHeader } from './_components/ChatHeader';
 import { ChatThread, UndoChip } from './_components/ChatThread';
 import type { ChatInitialItem } from './_components/types';
@@ -53,7 +52,6 @@ export default function ChatClient({ userName, initialThread = [] }: ChatClientP
       <ChatHeader userName={userName} />
       <ChatThread />
       <UndoChip />
-      <BottomTabBar active="capture" />
     </main>
   );
 }
