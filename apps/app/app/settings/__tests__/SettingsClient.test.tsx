@@ -65,4 +65,45 @@ describe('SettingsClient', () => {
     expect(screen.getByText('a@example.com')).toBeTruthy();
     expect(screen.getByText(/about/i)).toBeTruthy();
   });
+
+  it('blurring the linker model override persists the trimmed-as-typed value', () => {
+    render(<SettingsClient email="a@example.com" />);
+    const input = screen.getByPlaceholderText('default model') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'claude-haiku' } });
+    fireEvent.blur(input);
+    expect(mutateSpy).toHaveBeenCalledWith({ linkerModelOverride: 'claude-haiku' });
+  });
+
+  it('blurring an emptied linker model override persists null (clears the row)', () => {
+    getData = fixture({ linkerModelOverride: 'claude-haiku' });
+    render(<SettingsClient email="a@example.com" />);
+    const input = screen.getByPlaceholderText('default model') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '' } });
+    fireEvent.blur(input);
+    expect(mutateSpy).toHaveBeenCalledWith({ linkerModelOverride: null });
+  });
+
+  it('blurring the preferred mic device id persists the value', () => {
+    render(<SettingsClient email="a@example.com" />);
+    const input = screen.getByPlaceholderText('default') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'mic-abc123' } });
+    fireEvent.blur(input);
+    expect(mutateSpy).toHaveBeenCalledWith({ preferredMicDeviceId: 'mic-abc123' });
+  });
+
+  it('blurring a valid asr language (>= 2 chars) persists the trimmed value', () => {
+    render(<SettingsClient email="a@example.com" />);
+    const input = screen.getByPlaceholderText('en-US') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '  fr-FR  ' } });
+    fireEvent.blur(input);
+    expect(mutateSpy).toHaveBeenCalledWith({ asrLanguage: 'fr-FR' });
+  });
+
+  it('blurring an asr language under the 2-char minimum does NOT persist', () => {
+    render(<SettingsClient email="a@example.com" />);
+    const input = screen.getByPlaceholderText('en-US') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'x' } });
+    fireEvent.blur(input);
+    expect(mutateSpy).not.toHaveBeenCalled();
+  });
 });
