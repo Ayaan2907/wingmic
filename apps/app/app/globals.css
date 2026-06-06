@@ -238,13 +238,46 @@ a {
   }
 }
 
-/* Desktop nav swap — when on ≥768px, the bottom nav becomes a top bar. */
-@media (min-width: 768px) {
-  nav[aria-label='primary'] {
+/* ── λ-shell: responsive app chrome ─────────────────────────────────────
+   One nav element, two layouts. Mobile = fixed bottom bar. ≥1120px = fixed
+   left rail. CSS (not conditional render) repositions it so the capture orb
+   inside it is never unmounted across a viewport crossing 1120px. */
+:root { --rail-width: 248px; --nav-bar-height: 56px; }
+
+.app-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--nav-bar-height);
+  padding-top: 16px;
+  padding-bottom: env(safe-area-inset-bottom);
+  background: rgba(10, 10, 10, 0.92);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  align-items: flex-start;
+  z-index: 50;
+}
+
+/* Content gets bottom room for the bar on mobile. */
+.app-content { padding-bottom: 110px; min-height: 100dvh; }
+
+@media (min-width: 1120px) {
+  .app-nav {
     top: 0;
-    bottom: auto !important;
-    border-top: none !important;
-    border-bottom: 1px solid var(--border-soft);
-    height: 60px;
+    right: auto;
+    bottom: 0;
+    width: var(--rail-width);
+    height: 100dvh;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    padding: 24px 16px;
+    border-top: none;
+    border-right: 1px solid var(--border-soft);
   }
+  .app-content { padding-bottom: 0; padding-left: var(--rail-width); }
+  /* desktop: rail persists, in-page back arrow is redundant (design.md §14.2) */
+  .app-backlink { display: none; }
 }
