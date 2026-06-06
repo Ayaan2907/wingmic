@@ -108,7 +108,7 @@ Wingmic's brand voice extends to commit messages — lowercase confident, no AI 
 
 Before opening:
 
-- [ ] Branched from `main`
+- [ ] Branched from `staging`
 - [ ] One focused change
 - [ ] Tests added or updated (Vitest or Playwright)
 - [ ] `bun run typecheck` exits 0

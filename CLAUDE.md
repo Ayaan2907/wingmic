@@ -40,11 +40,28 @@ packages/brand        ← logos, favicons, OG, manifest
 packages/design-tokens
 packages/db           ← Drizzle schema + libSQL client + migrations
 packages/extractor    ← entity-detection pipeline: prompt + Zod + resolution + search/recall + eval
-packages/logger       ← (issue #12) Logger with analytics seam
-packages/env          ← (issue #12) Zod-validated env
+packages/logger       ← (planned, #12) Logger with analytics seam
+packages/env          ← (planned, #12) Zod-validated env
 packages/config/*     ← tsconfig + eslint + vitest presets
 design/               ← canonical mocks (do not edit without /design-review)
 docs/                 ← architecture.md, deploy.md, superpowers/
+```
+
+**apps/app route tree** (Next.js App Router):
+```
+/                     ← home dashboard (HomeClient.tsx)
+/chat                 ← main chat thread + capture (ChatClient.tsx)
+/capture              ← permanentRedirect → /chat?armRecord=1
+/recall               ← NL recall search (RecallClient.tsx)
+/dashboard            ← stats dashboard
+/person/[id]          ← person detail (PersonDetailClient.tsx)
+/company/[id]         ← company detail (CompanyDetailClient.tsx)
+/event/[id]           ← event detail (EventDetailClient.tsx)
+/signin               ← magic link auth (SignInClient.tsx)
+/api/capture/transcribe ← audio transcription endpoint
+/api/auth/[...all]    ← BetterAuth catch-all
+/api/trpc/[trpc]      ← tRPC handler
+/api/health           ← health check
 ```
 
 ## conventions — non-negotiable
@@ -113,8 +130,12 @@ docs/                 ← architecture.md, deploy.md, superpowers/
 - `CONTRIBUTING.md` — branch + commit conventions, PR checklist
 - `design/design-system.md` — brand voice + tokens (canonical handoff)
 - `design/brand/` — logo + mark usage docs
-- `docs/superpowers/plans/2026-05-03-v0.1.1-ga.md` — current implementation plan
+- `docs/superpowers/plans/2026-05-23-v0.1.1-hosted-capture.md` — current implementation plan (supersedes `2026-05-03-v0.1.1-ga.md`)
 - `packages/extractor/src/eval/fixtures.json` — regression baseline (do NOT edit casually)
+- `apps/app/app/_components/CaptureProvider.tsx` — global capture state (nav orb + record-in-place)
+- `apps/app/app/_components/entity/EntityDetailScaffold.tsx` — shared entity detail page layout
+- `apps/app/app/chat/ChatClient.tsx` — main chat thread UI (capture commits route here)
+- `apps/app/lib/trpc/routers/entity.ts` — tRPC router for entity detail queries
 
 ## scope guards
 
@@ -127,27 +148,34 @@ docs/                 ← architecture.md, deploy.md, superpowers/
 
 - `gh issue list --label "good first issue"` — beginner-friendly work
 - `gh issue list --label "wedge:<name>"` — work for one wedge
+- `bun run dev:app` — start product app via turbo (port 3211)
+- `bun run dev:web` — start landing app via turbo (port 3210)
+- `bun run dev` — start both apps
+- `bun run typecheck` — turbo typecheck across all packages
+- `bun run lint` — turbo lint across all packages
+- `bun run test` — turbo test across all packages
+- `bun run build:app` — build apps/app only
 - `bun run db:studio` — open Drizzle Studio
-- `bun --filter @wingmic/extractor test` — run extractor unit tests only
-- `bun --filter @wingmic/app dev` — start product app (port 3211)
-- `bun --filter @wingmic/web dev` — start landing app (port 3210)
+- `bun run db:generate` — generate Drizzle migrations
+- `bun run db:apply` — apply Drizzle migrations
 - `bun run extract:eval` — run extraction-accuracy harness (gate for releases)
+- `bun --filter @wingmic/extractor test` — run extractor unit tests only
+- Doppler variants: append `:doppler` to `dev`, `dev:app`, `dev:web`, `build`, `db:apply`, `db:studio`, `extract:eval` (e.g. `bun run dev:app:doppler`)
 
-## current blockers & plans
+## current status
 
-**v0.1.1 GA** (8 tasks, 0 checked):
-- Task 1: capture → resolution → recall integration test (#8)
-- Task 2: lazy-promotion (Company/Event union) (#2)
-- Task 3: modularize HomeClient.tsx (#1)
-- Task 4: text-input fallback (#5)
-- Task 5: confidence-prompt UI for 0.5–0.85 (#3)
-- Task 6: iOS Safari SpeechRecognition chunking (#4)
-- Task 7: Sentry + PostHog (#9, p2)
-- ~~Task 8: OpenNext + libSQL bundling (#7)~~ — obsolete; pivoted to Railway (Node.js runtime, no edge-bundling problem)
+Live sources — always check these instead of trusting stale snapshots:
+- `gh issue list --state open` — open work items
+- `gh pr list --state open` — in-flight PRs
+- `docs/superpowers/plans/` — implementation plans (latest: `2026-05-23-v0.1.1-hosted-capture.md`)
 
-**Critical blockers:**
-- None — landing live on Cloudflare Pages, apps/app deploys to Railway (no edge runtime constraints)
-- **#9** (Sentry/PostHog) — observability; p2, can slip to v0.1.2
+**Shipped recently (v0.1.2 PRs):**
+- PR #41 (alpha): /chat route, CaptureProvider, bottom nav, home dashboard, entity templates
+- PR #42 (beta2): entity detail pages (person/company/event), tRPC entity router
+
+**Not yet shipped:**
+- #2 lazy-promotion, #3 confidence-prompt, #5 text-input fallback, #8 integration test, #9 Sentry+PostHog
+- v0.2: contact imports (#10) · v0.3: Acts agent (#11)
 
 ## deployment
 
