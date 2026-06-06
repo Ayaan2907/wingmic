@@ -2,9 +2,12 @@
 
 // AppShell — the one shared chrome (PR λ-shell). Mounted once in layout.tsx
 // inside CaptureProvider + TRPCProvider. Renders a single nav whose layout
-// CSS-swaps bottom-bar (≤1119) ↔ left rail (≥1120) via .app-nav; the capture
-// orb inside it is never unmounted across a breakpoint cross, so
-// setPointerCapture and in-flight recordings survive resize (eng-review D1=A).
+// CSS-swaps bottom-bar (≤1119) ↔ left rail (≥1120) via .app-nav. The capture
+// orb is never unmounted across a viewport crossing 1120px (CSS repositions
+// the same element, so setPointerCapture and in-flight recordings survive
+// resize — eng-review D1=A). It is intentionally swapped for LockedBar only
+// during a locked recording, where capture state lives in CaptureProvider and
+// survives the swap.
 
 import * as React from 'react';
 import { usePathname } from 'next/navigation';

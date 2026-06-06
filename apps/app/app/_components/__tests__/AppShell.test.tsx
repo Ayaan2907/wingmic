@@ -53,10 +53,25 @@ describe('AppShell', () => {
     expect(screen.getByText('auth')).toBeTruthy();
   });
 
-  it('renders exactly one capture orb (single instance, no duplication)', async () => {
+  it('renders exactly one capture orb when a real screen mounts through the shell', async () => {
+    // Compose the shell with a real screen (HomeClient) to catch the actual
+    // regression: a screen also rendering an orb → two orbs on the page. We
+    // inline the composition rather than use the renderWithShell helper —
+    // that helper wraps in CaptureProvider, whose useRouter() throws under
+    // this file's per-test vi.doMock + dynamic-import pattern. AppShell's
+    // useCapture() resolves to the no-provider default here (same as the
+    // other tests), and HomeClient is presentational (renders no orb).
     mockPath('/');
     const { AppShell: Shell } = await import('../AppShell');
-    render(<Shell><div>x</div></Shell>);
+    const { default: HomeClient } = await import('@/app/HomeClient');
+    render(
+      <Shell>
+        <HomeClient
+          userName="Ada"
+          initialData={{ todayCount: 0, weekCount: 0, pendingActs: 0, recent: [] }}
+        />
+      </Shell>,
+    );
     const orbs = screen.getAllByRole('button', { name: /hold to record/i });
     expect(orbs).toHaveLength(1);
   });
