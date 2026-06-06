@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
 import { TRPCProvider } from '@/lib/trpc/client';
 import { CaptureProvider } from './_components/CaptureProvider';
+import { AppShell } from './_components/AppShell';
 import { RecordingOverlay } from './_components/RecordingOverlay';
 import './globals.css';
 
@@ -49,7 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <TRPCProvider>
           <CaptureProvider>
-            {children}
+            <AppShell>{children}</AppShell>
             <RecordingOverlay />
           </CaptureProvider>
         </TRPCProvider>
