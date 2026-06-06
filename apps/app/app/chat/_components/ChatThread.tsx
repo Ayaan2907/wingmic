@@ -593,7 +593,7 @@ function GraphCard({ message, result }: { message: ThreadMessage; result: GraphR
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {extracted.persons.map((p, i) => (
-              <PersonPill key={`${p.name}-${i}`} person={p} />
+              <PersonPill key={`${p.name}-${i}`} person={p} href={hrefFor('person', result.entityIds, i)} />
             ))}
           </div>
         </div>
@@ -602,12 +602,20 @@ function GraphCard({ message, result }: { message: ThreadMessage; result: GraphR
       {(extracted.companies.length > 0 || extracted.events.length > 0) && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {extracted.companies.map((c) => (
-            <TagPill key={`co-${c.name}`} color={blue}>
+            <TagPill
+              key={`co-${c.name}`}
+              color={blue}
+              href={hrefByName('company', extracted.companies, result.companyIds, c.name)}
+            >
               {c.name}
             </TagPill>
           ))}
           {extracted.events.map((e) => (
-            <TagPill key={`ev-${e.name}`} color={third}>
+            <TagPill
+              key={`ev-${e.name}`}
+              color={third}
+              href={hrefByName('event', extracted.events, result.eventIds, e.name)}
+            >
               {e.name}
             </TagPill>
           ))}
@@ -660,8 +668,46 @@ function GraphCard({ message, result }: { message: ThreadMessage; result: GraphR
   );
 }
 
+// Build a `/person/{id}` href from positional extracted.persons + entityIds.
+// Returns null when ids are missing (past-prefetch bubbles, tests) so the
+// pill renders as a non-navigable span instead of `/person/undefined`.
+function hrefFor(
+  kind: 'person',
+  ids: string[] | undefined,
+  i: number,
+): string | null {
+  const id = ids?.[i];
+  return id ? `/${kind}/${encodeURIComponent(id)}` : null;
+}
+
+// Build a /company/{id} or /event/{id} href by matching the chip's name to
+// the deduped name-ordered id list the server returns. The server (commit
+// in resolution.ts) builds a Map keyed by candidate name, so [...map.values()]
+// is in first-occurrence order — the same order we get from de-duping client
+// side. If the name isn't found (mismatch, tests), returns null.
+function hrefByName(
+  kind: 'company' | 'event',
+  items: Array<{ name: string }>,
+  ids: string[] | undefined,
+  name: string,
+): string | null {
+  if (!ids || !ids.length) return null;
+  const uniqueNames: string[] = [];
+  const seen = new Set<string>();
+  for (const x of items) {
+    if (!seen.has(x.name)) {
+      seen.add(x.name);
+      uniqueNames.push(x.name);
+    }
+  }
+  const idx = uniqueNames.indexOf(name);
+  const id = idx >= 0 ? ids[idx] : undefined;
+  return id ? `/${kind}/${encodeURIComponent(id)}` : null;
+}
+
 function PersonPill({
   person,
+  href,
 }: {
   person: {
     name: string;
@@ -669,6 +715,7 @@ function PersonPill({
     companyHint: string | null;
     topics: string[];
   };
+  href: string | null;
 }) {
   const monogram = person.name
     .split(/\s+/)
@@ -677,23 +724,21 @@ function PersonPill({
     .slice(0, 2)
     .join('')
     .toUpperCase();
-  return (
-    <a
-      href={`/entity/${encodeURIComponent(person.name)}`}
-      style={{
-        display: 'flex',
-        gap: 10,
-        padding: '8px 12px 8px 8px',
-        borderRadius: 999,
-        background: 'var(--surface-2)',
-        border: '1px solid var(--border-soft)',
-        borderLeft: `2px solid ${accent}`,
-        textDecoration: 'none',
-        color: 'inherit',
-        alignItems: 'center',
-        minHeight: 32,
-      }}
-    >
+  const pillStyle: React.CSSProperties = {
+    display: 'flex',
+    gap: 10,
+    padding: '8px 12px 8px 8px',
+    borderRadius: 999,
+    background: 'var(--surface-2)',
+    border: '1px solid var(--border-soft)',
+    borderLeft: `2px solid ${accent}`,
+    textDecoration: 'none',
+    color: 'inherit',
+    alignItems: 'center',
+    minHeight: 32,
+  };
+  const inner = (
+    <>
       <span
         style={{
           width: 28,
@@ -721,26 +766,50 @@ function PersonPill({
           </span>
         )}
       </span>
+    </>
+  );
+  return href ? (
+    <a href={href} style={pillStyle} data-entity-kind="person">
+      {inner}
     </a>
+  ) : (
+    <span style={pillStyle} data-entity-kind="person">
+      {inner}
+    </span>
   );
 }
 
-function TagPill({ color, children }: { color: string; children: React.ReactNode }) {
+function TagPill({
+  color,
+  children,
+  href,
+}: {
+  color: string;
+  children: React.ReactNode;
+  href?: string | null;
+}) {
+  const style: React.CSSProperties = {
+    padding: '3px 9px',
+    borderRadius: 999,
+    background: `${color}1f`,
+    color,
+    border: `1px solid ${color}40`,
+    fontSize: 10.5,
+    fontWeight: 600,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    textDecoration: 'none',
+    display: 'inline-block',
+  };
+  if (href) {
+    return (
+      <a className="mono" href={href} style={style}>
+        {children}
+      </a>
+    );
+  }
   return (
-    <span
-      className="mono"
-      style={{
-        padding: '3px 9px',
-        borderRadius: 999,
-        background: `${color}1f`,
-        color,
-        border: `1px solid ${color}40`,
-        fontSize: 10.5,
-        fontWeight: 600,
-        letterSpacing: 1,
-        textTransform: 'uppercase',
-      }}
-    >
+    <span className="mono" style={style}>
       {children}
     </span>
   );
