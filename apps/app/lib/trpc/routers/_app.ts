@@ -1,6 +1,7 @@
 import { router, publicProcedure, protectedProcedure } from '../trpc';
 import { captureRouter } from './capture';
 import { recallRouter } from './recall';
+import { entityRouter } from './entity';
 
 /**
  * Root tRPC router. Capture + recall wedges plus the `ping` / `me`
@@ -15,6 +16,7 @@ export const appRouter = router({
   })),
   capture: captureRouter,
   recall: recallRouter,
+  entity: entityRouter,
 });
 
 export type AppRouter = typeof appRouter;

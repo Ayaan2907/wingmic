@@ -40,6 +40,16 @@ export interface GraphResult {
   newEntities: number;
   matchedEntities: number;
   interactionId: string;
+  /**
+   * IDs surfaced by the commit pipeline (resolution.ts). Positional with
+   * `extracted.persons`. Companies/events are deduped by name on the server,
+   * so we ship `[...map.values()]` alongside the extracted arrays — the
+   * scaffold matches by index in the response, not by name. Optional for
+   * back-compat with past-prefetch bubbles and tests.
+   */
+  entityIds?: string[];
+  companyIds?: string[];
+  eventIds?: string[];
 }
 
 export interface ThreadMessage {
