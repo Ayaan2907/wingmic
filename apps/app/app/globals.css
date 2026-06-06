@@ -152,3 +152,99 @@ a {
     transform: translate(-1px, -1px);
   }
 }
+
+/* ─── wm-* keyframes — global, used by RecordingOverlay + chat surface ─────
+   Moved from chat/ChatClient.tsx DesktopStyles (PR β₁-D) so the global
+   RecordingOverlay's animations work on every route, not only /chat. */
+@keyframes wm-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes wm-pulse-d {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+@keyframes wm-pulse-s {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+@keyframes wm-drift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes wm-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+@keyframes wm-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+@keyframes wm-rise {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes wm-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes wm-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Desktop nav swap — when on ≥768px, the bottom nav becomes a top bar. */
+@media (min-width: 768px) {
+  nav[aria-label='primary'] {
+    top: 0;
+    bottom: auto !important;
+    border-top: none !important;
+    border-bottom: 1px solid var(--border-soft);
+    height: 60px;
+  }
+}

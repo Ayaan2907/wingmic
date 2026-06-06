@@ -2,6 +2,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor, cleanup } from '@testing-library/react';
 
+// ── Mock next/navigation ────────────────────────────────────────────────
+// PR β₁-D: CaptureProvider uses useRouter() + usePathname() to push to
+// /chat once the recorder transitions to `ready`. Jsdom has no Next router
+// context, so we stub all three hooks. pathname defaults to '/chat' so the
+// post-commit push is a no-op in these tests (the bubble lands on the
+// same page we're already on).
+const routerPushMock = vi.fn();
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => ({ get: (_: string) => null }),
+  useRouter: () => ({ push: routerPushMock, replace: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => '/chat',
+}));
+
 // ── Mock tRPC client ────────────────────────────────────────────────────
 const mutateAsyncMock = vi.fn();
 vi.mock('@/lib/trpc/client', () => ({
@@ -47,7 +60,7 @@ const fakeRecorder = {
 
 let setStatusHook: ((s: FakeStatus) => void) | null = null;
 
-vi.mock('../_components/useAudioRecorder', () => {
+vi.mock('@/app/capture/_components/useAudioRecorder', () => {
   const React = require('react') as typeof import('react');
   return {
     useAudioRecorder: () => {
@@ -72,7 +85,23 @@ vi.mock('../_components/useAudioRecorder', () => {
   };
 });
 
-import CaptureClient from '../CaptureClient';
+import ChatClient from '@/app/chat/ChatClient';
+import { CaptureProvider } from '@/app/_components/CaptureProvider';
+import { RecordingOverlay } from '@/app/_components/RecordingOverlay';
+import * as React from 'react';
+
+// Wrap renders in the provider — ChatClient now consumes useCapture() for
+// recorder + messages, and BottomTabBar's orb only works inside a provider.
+// RecordingOverlay is mounted so the live phantom-bubble + chrome render in
+// the test DOM as they would in production.
+function renderChat(props: { userName: string | null; initialThread?: Parameters<typeof ChatClient>[0]['initialThread'] }) {
+  return render(
+    <CaptureProvider>
+      <ChatClient {...props} />
+      <RecordingOverlay />
+    </CaptureProvider>,
+  );
+}
 
 function resetFakeRecorder() {
   fakeRecorder.status = 'idle';
@@ -92,7 +121,7 @@ function resetFakeRecorder() {
   }
 }
 
-describe('CaptureClient', () => {
+describe('ChatClient', () => {
   beforeEach(() => {
     resetFakeRecorder();
     mutateAsyncMock.mockReset();
@@ -105,24 +134,24 @@ describe('CaptureClient', () => {
   });
 
   it('renders empty thread + bottom tab bar on mount (idle)', () => {
-    render(<CaptureClient userName="ada" />);
+    renderChat({ userName: "ada" });
     // empty-hero copy
     expect(screen.getByText(/hold the button/i)).toBeTruthy();
-    // 4 nav tabs
+    // v8: 5-slot bottom nav — home / chat / capture / graph / acts.
+    // Center capture slot breaks the bar plane (lib-screens.jsx MobileNav).
     const nav = screen.getByLabelText('primary');
     expect(nav).toBeTruthy();
-    expect(nav.textContent).toContain('capture');
-    // H6: v2 nav-label rename — the `recall` slot now reads "chat"
-    // (locked 2026-05-25). The href stays /recall in v0.1.1; v8 in v0.1.2
-    // restructures to the 5-slot home/chat/capture/graph/acts bar.
+    expect(nav.textContent).toContain('home');
     expect(nav.textContent).toContain('chat');
-    // Regression guard: the old v1 label must not coexist with the new v2 label
+    expect(nav.textContent).toContain('capture');
+    expect(nav.textContent).toContain('graph');
+    expect(nav.textContent).toContain('acts');
+    // Regression guard: v1 label `recall` must not coexist with the v2 `chat` label.
     expect(nav.textContent).not.toContain('recall');
-    expect(nav.textContent).toContain('history');
-    expect(nav.textContent).toContain('settings');
-    // ambient privacy line
-    expect(screen.getByText(/audio → assemblyai/i)).toBeTruthy();
-    // hold-to-talk button
+    // Removed in v8 — these slots no longer exist in the 5-slot bar.
+    expect(nav.textContent).not.toContain('history');
+    expect(nav.textContent).not.toContain('settings');
+    // hold-to-talk orb lives in the bottom nav (PR β₁-D — the orb IS the dock).
     expect(screen.getByRole('button', { name: /hold to record/i })).toBeTruthy();
   });
 
@@ -151,7 +180,7 @@ describe('CaptureClient', () => {
       interactionId: 'int-1',
     });
 
-    render(<CaptureClient userName="ada" />);
+    renderChat({ userName: "ada" });
     const btn = screen.getByRole('button', { name: /hold to record/i });
 
     await act(async () => {
@@ -208,7 +237,7 @@ describe('CaptureClient', () => {
       interactionId: 'int-empty',
     });
 
-    render(<CaptureClient userName="ada" />);
+    renderChat({ userName: "ada" });
     const btn = screen.getByRole('button', { name: /hold to record/i });
     await act(async () => {
       fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
@@ -234,7 +263,7 @@ describe('CaptureClient', () => {
       ),
     ) as unknown as typeof fetch;
 
-    render(<CaptureClient userName="ada" />);
+    renderChat({ userName: "ada" });
     const btn = screen.getByRole('button', { name: /hold to record/i });
     await act(async () => {
       fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
@@ -264,7 +293,7 @@ describe('CaptureClient', () => {
       interactionId: 'k',
     });
 
-    render(<CaptureClient userName="ada" />);
+    renderChat({ userName: "ada" });
     await act(async () => {
       fireEvent.keyDown(window, { code: 'Space' });
       await Promise.resolve();
@@ -307,7 +336,7 @@ describe('CaptureClient', () => {
       throw new Error('commit should never be reached after discard');
     });
 
-    render(<CaptureClient userName="ada" />);
+    renderChat({ userName: "ada" });
     const btn = screen.getByRole('button', { name: /hold to record/i });
     await act(async () => {
       fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
@@ -351,7 +380,7 @@ describe('CaptureClient', () => {
       matchedEntities: 0,
       interactionId: 'k',
     });
-    const { unmount } = render(<CaptureClient userName="ada" />);
+    const { unmount } = renderChat({ userName: "ada" });
     const btn = screen.getByRole('button', { name: /hold to record/i });
     await act(async () => {
       fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
@@ -380,7 +409,7 @@ describe('CaptureClient', () => {
   });
 
   it('second-finger pointerdown does not start a second recording', async () => {
-    render(<CaptureClient userName="ada" />);
+    renderChat({ userName: "ada" });
     const btn = screen.getByRole('button', { name: /hold to record/i });
     await act(async () => {
       fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
@@ -394,7 +423,7 @@ describe('CaptureClient', () => {
   });
 
   it('escape while recording discards', async () => {
-    render(<CaptureClient userName="ada" />);
+    renderChat({ userName: "ada" });
     // put recorder into recording first via space keydown
     await act(async () => {
       fireEvent.keyDown(window, { code: 'Space' });
@@ -406,4 +435,103 @@ describe('CaptureClient', () => {
     });
     expect(fakeRecorder.discard).toHaveBeenCalled();
   });
+
+  // ── PR β₁-C sub-state coverage ──────────────────────────────────────────
+  // Locks in resting/recording/prefetched states for the new /chat surface.
+  // The single-source-of-truth principle ("one mic, one surface", D5) means
+  // ChatClient must render the right chrome for every cold-mount path.
+
+  it('resting state on cold mount with empty initialThread renders empty-hero + idle dock', () => {
+    renderChat({ userName: "ada", initialThread: [] });
+    // empty-hero copy is present
+    expect(screen.getByText(/hold the button/i)).toBeTruthy();
+    // dock is idle — orb state is `idle` (not recording/locked/sending)
+    const btn = screen.getByRole('button', { name: /hold to record/i });
+    expect(btn.getAttribute('data-orb-state')).toBe('idle');
+    // no recording chrome — header is not in recording mode
+    const recordingHeader = document.querySelector('[data-recording="true"]');
+    expect(recordingHeader).toBeNull();
+    // no phantom bubble
+    expect(screen.queryByText(/rec ·/i)).toBeNull();
+  });
+
+  it('resting state with 3 prefetched committed memos renders them oldest-first', () => {
+    const initialThread = [
+      {
+        id: 'i1',
+        transcript: 'met sarah at acme',
+        capturedAt: '2026-06-01T14:00:00Z',
+      },
+      {
+        id: 'i2',
+        transcript: 'priya knows compilers',
+        capturedAt: '2026-06-02T10:30:00Z',
+      },
+      {
+        id: 'i3',
+        transcript: 'marcus wants intro',
+        capturedAt: '2026-06-03T09:15:00Z',
+      },
+    ];
+    renderChat({ userName: 'ada', initialThread });
+    const m1 = screen.getByText('met sarah at acme');
+    const m2 = screen.getByText('priya knows compilers');
+    const m3 = screen.getByText('marcus wants intro');
+    expect(m1).toBeTruthy();
+    expect(m2).toBeTruthy();
+    expect(m3).toBeTruthy();
+    // Empty-hero is suppressed once any prefetched memo is present
+    expect(screen.queryByText(/hold the button/i)).toBeNull();
+    // DOM order: oldest-first → i1 before i2 before i3
+    const order = m1.compareDocumentPosition(m2);
+    // Node.DOCUMENT_POSITION_FOLLOWING === 4
+    // eslint-disable-next-line no-bitwise
+    expect(order & 4).toBeTruthy();
+    const order2 = m2.compareDocumentPosition(m3);
+    // eslint-disable-next-line no-bitwise
+    expect(order2 & 4).toBeTruthy();
+  });
+
+  it('thread dims (opacity 0.4, pointer-events none) when recorder transitions to recording', async () => {
+    renderChat({
+      userName: 'ada',
+      initialThread: [
+        { id: 'p1', transcript: 'past memo one', capturedAt: '2026-06-01T14:00:00Z' },
+      ],
+    });
+    const pastBubble = screen.getByText('past memo one');
+    // Walk up to the dim wrapper — it's the parent div with opacity:1 initially.
+    const dimWrapper = pastBubble.closest('div[style*="opacity"]') as HTMLElement | null;
+    expect(dimWrapper).toBeTruthy();
+    // Idle: opacity 1, pointer-events auto
+    expect(dimWrapper!.style.opacity).toBe('1');
+    expect(dimWrapper!.style.pointerEvents).toBe('auto');
+
+    // Transition the recorder into a recording status.
+    await act(async () => {
+      setStatusHook?.('recording');
+      await Promise.resolve();
+    });
+
+    // After transition, the same wrapper should have opacity 0.4.
+    const dimWrapperAfter = screen
+      .getByText('past memo one')
+      .closest('div[style*="opacity"]') as HTMLElement | null;
+    expect(dimWrapperAfter).toBeTruthy();
+    expect(dimWrapperAfter!.style.opacity).toBe('0.4');
+    expect(dimWrapperAfter!.style.pointerEvents).toBe('none');
+  });
+
+  // PR β₁-D rolled back the armRecord URL-param approach: recording now
+  // begins via the orb in the bottom nav (live on every route), so there
+  // is no deep-link to test. Intentionally omitted.
+
+  // Verifies the recorder hook is mounted by ChatClient exactly once, with
+  // CaptureDock + ChatHeader + ChatThread receiving it as a prop. Today this
+  // is enforced structurally (the imports of useAudioRecorder in the child
+  // files are typed-only); the runtime guard would need a module-level
+  // module-mock counter that survives jsdom reset. Recorded as a follow-up.
+  it.todo(
+    'useAudioRecorder is invoked exactly once per ChatClient mount (no double-mount in children)',
+  );
 });

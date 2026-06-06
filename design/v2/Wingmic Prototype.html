@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wingmic — Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { background: #050508; color: #f4f1ea; font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  ::selection { background: #FFC452; color: #000; }
+  button { font-family: inherit; }
+  input { font-family: inherit; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+  /* ── Wingmic animation cues ── */
+  @keyframes wm-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  @keyframes wm-pulse-d {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+  @keyframes wm-pulse-s {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+  }
+  @keyframes wm-drift {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+  @keyframes wm-ring {
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(2.5); opacity: 0; }
+  }
+  @keyframes wm-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  @keyframes wm-rise {
+    0% { transform: translateY(20px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes wm-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes wm-marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  /* Screen enter animation */
+  .screen-enter { animation: wm-rise 0.3s ease-out both; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Load all component modules in order -->
+<script type="text/babel" src="proto-tokens.jsx"></script>
+<script type="text/babel" src="proto-layout.jsx"></script>
+<script type="text/babel" src="proto-screens-a.jsx"></script>
+<script type="text/babel" src="proto-screens-b.jsx"></script>
+<script type="text/babel" src="proto-screens-c.jsx"></script>
+<script type="text/babel" src="proto-desktop.jsx"></script>
+<script type="text/babel" src="proto-app.jsx"></script>
+
+<script type="text/babel">
+(function () {
+  const root = ReactDOM.createRoot(document.getElementById('root'));
+
+  function Root() {
+    const [, forceUpdate] = React.useReducer(x => x + 1, 0);
+    React.useEffect(() => {
+      window.__forceUpdate = forceUpdate;
+      const handler = (e) => {
+        const all = ['onboarding','home','chat','chat-recording','chat-locked','chat-response','graph','person','company','event','acts','search','settings','desktop-home','desktop-chat','desktop-graph','desktop-person'];
+        const cur = localStorage.getItem('wm_screen') || 'onboarding';
+        const i = all.indexOf(cur);
+        if (e.key === 'ArrowRight' && i < all.length - 1) {
+          localStorage.setItem('wm_screen', all[i + 1]);
+          forceUpdate();
+        }
+        if (e.key === 'ArrowLeft' && i > 0) {
+          localStorage.setItem('wm_screen', all[i - 1]);
+          forceUpdate();
+        }
+      };
+      window.addEventListener('keydown', handler);
+      return () => window.removeEventListener('keydown', handler);
+    }, []);
+    return <WingmicApp />;
+  }
+
+  root.render(<Root />);
+})();
+</script>
+
+<template id="__bundler_thumbnail">
+  <svg viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg">
+    <rect width="120" height="80" fill="#0a0a0a"/>
+    <circle cx="60" cy="38" r="20" fill="#FFC452" opacity="0.15"/>
+    <circle cx="60" cy="38" r="14" fill="none" stroke="#FFC452" stroke-width="1.5" opacity="0.4"/>
+    <circle cx="60" cy="38" r="8" fill="#FFC452" opacity="0.8"/>
+    <text x="60" y="68" text-anchor="middle" fill="#FFC452" font-size="7" font-family="monospace" opacity="0.7">wingmic</text>
+  </svg>
+</template>
+</body>
+</html>

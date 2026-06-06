@@ -40,7 +40,7 @@ export default async function Page() {
           </span>
         </h1>
         <p style={{ marginTop: 14, color: 'var(--text-55)', fontSize: 15, lineHeight: 1.55 }}>
-          go to <a href="/capture" style={{ color: '#FFC452', textDecoration: 'underline' }}>/capture</a> or <a href="/recall" style={{ color: '#FFC452', textDecoration: 'underline' }}>/recall</a>.
+          go to <a href="/chat" style={{ color: '#FFC452', textDecoration: 'underline' }}>/chat</a> or <a href="/recall" style={{ color: '#FFC452', textDecoration: 'underline' }}>/recall</a>.
         </p>
       </div>
     </main>
