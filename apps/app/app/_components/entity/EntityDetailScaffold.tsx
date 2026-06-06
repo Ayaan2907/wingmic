@@ -14,7 +14,6 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { BottomTabBar } from '../BottomTabBar';
 import { PersonAvatar, CompanyTile, EventDiamond } from './EntityAvatar';
 import { accent, third, blue, violet } from '@/app/chat/_components/tokens';
 
@@ -89,7 +88,6 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
         flexDirection: 'column',
         background: 'var(--bg-page)',
         color: 'var(--ink)',
-        paddingBottom: 110,
       }}
     >
       <TopRow />
@@ -189,8 +187,6 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
           )}
         </Section>
       </section>
-
-      <BottomTabBar active="graph" />
     </main>
   );
 }

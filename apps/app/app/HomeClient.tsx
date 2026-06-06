@@ -21,7 +21,6 @@
  */
 
 import * as React from 'react';
-import { BottomTabBar } from './_components/BottomTabBar';
 import { PersonAvatar } from './_components/entity/EntityAvatar';
 
 // ── Tokens ──────────────────────────────────────────────────────────────
@@ -75,7 +74,6 @@ export default function HomeClient({ userName, initialData }: HomeClientProps) {
         flexDirection: 'column',
         background: 'var(--bg-page)',
         color: 'var(--ink)',
-        paddingBottom: 110,
       }}
       data-screen="home"
     >
@@ -95,8 +93,6 @@ export default function HomeClient({ userName, initialData }: HomeClientProps) {
         <ActsPending />
         <ActivityList items={recent} />
       </section>
-
-      <BottomTabBar active="home" />
     </main>
   );
 }
