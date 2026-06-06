@@ -16,7 +16,9 @@ export default async function Page({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = await auth.api.getSession({ headers: await headers() });
+  // Read request headers once, reuse for auth session + tRPC caller context.
+  const reqHeaders = await headers();
+  const session = await auth.api.getSession({ headers: reqHeaders });
   if (!session?.user) {
     redirect(`/signin?next=${encodeURIComponent(`/event/${id}`)}`);
   }
@@ -25,7 +27,7 @@ export default async function Page({
     db,
     session,
     user: session.user,
-    headers: await headers(),
+    headers: reqHeaders,
   } as Parameters<typeof entityRouter.createCaller>[0]);
 
   try {

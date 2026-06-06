@@ -38,7 +38,10 @@ type Capture = {
   interactionId: string;
   capturedAt: string; // ISO
   transcript: string;
-  eventName?: string | null;
+  // eventName intentionally omitted — there's no reliable interaction→event
+  // mapping today (sourceInteractionId lives on entityFacts/entityTopics but
+  // not on entityEvents). Don't fake it from events[0]; add the proper mapping
+  // when the extractor stamps event linkage onto interactions.
 };
 
 type Related = {
@@ -167,7 +170,6 @@ async function loadPerson(
     interactionId: i.id,
     capturedAt: (toDate(i.capturedAt) ?? new Date()).toISOString(),
     transcript: i.transcript ?? '',
-    eventName: events[0]?.name ?? null,
   }));
 
   // Stats
@@ -537,4 +539,9 @@ async function loadEvent(db: DB, userId: string, eventId: string) {
   };
 }
 
-export type EntityDetail = Awaited<ReturnType<typeof entityRouter.createCaller>['detail']>;
+// EntityDetail is the resolved payload from caller.detail(...) — note the
+// double ReturnType: outer one resolves the caller, inner one resolves the
+// `detail` method's return value. Awaited unwraps the Promise.
+export type EntityDetail = Awaited<
+  ReturnType<ReturnType<typeof entityRouter.createCaller>['detail']>
+>;

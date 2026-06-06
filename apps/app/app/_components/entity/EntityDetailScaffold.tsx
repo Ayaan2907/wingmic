@@ -338,8 +338,9 @@ function CtaRow({
   primary: { label: string };
   ghost: { label: string };
 }) {
-  // β₂: CTAs are surfaced but inert (acts agent ships v0.3). They click but do
-  // nothing — keeps the visual contract while we wait for the wire-up.
+  // β₂: CTAs are surfaced but rendered as `disabled` — visible chrome that
+  // signals "coming soon" without firing any action. The acts agent ships
+  // v0.3 (epic #11); PR γ will wire these to real handlers.
   return (
     <div style={{ display: 'flex', gap: 8, marginBottom: 24 }} data-testid="entity-ctas">
       <button
