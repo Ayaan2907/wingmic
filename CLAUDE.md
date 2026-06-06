@@ -137,6 +137,122 @@ docs/                 ← architecture.md, deploy.md, superpowers/
 - `apps/app/app/chat/ChatClient.tsx` — main chat thread UI (capture commits route here)
 - `apps/app/lib/trpc/routers/entity.ts` — tRPC router for entity detail queries
 
+## security guardrails — non-negotiable
+
+This is an **open source, MIT-licensed** repo. Every commit is public.
+Treat every diff as if it will be read by adversaries.
+
+1. **Never commit secrets.** No API keys, tokens, passwords, DSNs with
+   credentials, or `.env` contents in any file. If you see a secret in a
+   diff, stop and flag it — do not commit. Patterns to watch:
+   `sk-`, `ANTHROPIC_API_KEY=`, `OPENAI_API_KEY=`, `TURSO_AUTH_TOKEN=`,
+   `BETTER_AUTH_SECRET=`, `RESEND_API_KEY=`, `DATABASE_URL=`, `Bearer `,
+   `-----BEGIN`, base64 blobs that look like tokens.
+2. **Never read `.env` or `.env.local` into context.** Use `.env.example`
+   for reference. If you need to know what env vars exist, read the
+   example file — never the real one.
+3. **No PII in commits.** No real names, emails, phone numbers, or
+   personal data in test fixtures, comments, seeds, or logs. Use
+   obviously fake data (`Ada Lovelace`, `test@example.com`, `555-0100`).
+4. **No `dangerouslySetInnerHTML` or raw SQL interpolation.** Use
+   parameterized queries (Drizzle handles this). For HTML rendering, use
+   React components. If you must render dynamic HTML, flag it for review.
+5. **No `eval()`, `new Function()`, or dynamic `import()` from user
+   input.** These are injection vectors.
+6. **Validate at system boundaries.** All tRPC inputs use Zod schemas.
+   All API route handlers validate request bodies. Never trust client
+   input inside server code.
+7. **Auth checks on every protected route.** Use the middleware or
+   tRPC context auth — never assume the caller is authenticated.
+   Check: `apps/app/middleware.ts` and `apps/app/lib/trpc/context.ts`.
+8. **Dependency hygiene.** Before adding any dependency:
+   - Check it exists in the closest `package.json` first
+   - Verify the package on npm (author, downloads, last publish date)
+   - Only MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC licenses
+   - No packages with `postinstall` scripts that fetch remote code
+   - Prefer well-known packages over obscure alternatives
+   - Flag any new dependency to the user — do not silently add it
+9. **No secrets in error messages.** Error responses to clients must
+   never include stack traces, env var values, or internal paths in
+   production. Sanitize before returning.
+
+## sensitive data awareness
+
+Wingmic handles data that users consider private. Read `SECURITY.md` for
+the full threat surface. Key rules for agents:
+
+- **Voice transcripts** are user-scoped. Never write code that crosses
+  user boundaries (query without `userId` filter = security bug).
+- **Embeddings** are derived from private speech. Same scoping rules.
+- **Magic-link tokens** are single-use, 10-min TTL. Never log them.
+- **Session cookies** are httpOnly. Never expose them client-side.
+- When writing tests involving user data, use factory functions with
+  fake data — never copy real transcripts or entity records.
+
+## dependency & infrastructure rules
+
+1. **Frozen lockfile in CI.** `bun install --frozen-lockfile` runs in CI.
+   If you change dependencies, `bun.lockb` must be committed.
+2. **No version ranges for critical deps.** Pin exact versions for:
+   `next`, `drizzle-orm`, `@libsql/client`, `better-auth`, `ai` (Vercel
+   AI SDK). Use `~` or `^` only for dev/tooling deps.
+3. **Monorepo import rules.** Packages import each other via workspace
+   protocol (`@wingmic/db`, `@wingmic/extractor`). Never use relative
+   paths across package boundaries (`../../packages/db` is wrong).
+4. **No circular dependencies.** `packages/db` must not import from
+   `packages/extractor` or `apps/*`. Dependency flow:
+   `apps/app` → `packages/*` → `packages/config/*`. Never reverse.
+5. **Database migrations are append-only.** Never edit an existing
+   migration file. Generate a new migration with `bun run db:generate`.
+   Destructive schema changes (DROP TABLE, DROP COLUMN) require explicit
+   user approval and a data migration plan.
+
+## testing requirements
+
+1. **Every new code path gets a test.** Bug fix → regression test.
+   New feature → unit test at minimum. Visual change → screenshot or
+   Playwright E2E.
+2. **Run before committing.** Always run `bun run typecheck && bun run
+   lint && bun run test` before any commit. Do not commit if any fail.
+3. **Test the right layer.** tRPC routers → test with the router
+   directly (see `recall.test.ts`, `entity.test.ts`). React components →
+   test with `@testing-library/react`. Extractor logic → test with the
+   eval harness (`bun run extract:eval`).
+4. **No mocking the database in integration tests.** Use the real
+   libSQL client with an in-memory database. Tests must catch real
+   query/migration issues.
+5. **Eval fixtures are sacred.** `packages/extractor/src/eval/fixtures.json`
+   is the regression baseline. Never edit without explicit user direction
+   and a before/after eval run showing improvement.
+
+## dangerous operations — always confirm first
+
+These actions are irreversible or affect shared state. Never run them
+without explicit user approval:
+
+- `git push --force` or `git reset --hard` — destructive history rewrite
+- `bun run db:apply` on production — runs migrations against live data
+- Deleting branches, issues, or PRs on GitHub
+- Modifying `railway.json`, `wrangler.toml`, or CI workflow files
+- Changing auth middleware or session handling logic
+- Editing `SECURITY.md` or `LICENSE`
+- Any operation that touches the `main` branch directly
+
+## open source awareness
+
+1. **Everything is public.** Comments, commit messages, PR descriptions,
+   and code are visible to anyone. Write as if presenting to a stranger.
+2. **MIT license.** All contributed code is MIT. Do not copy code from
+   GPL, AGPL, LGPL, or proprietary sources into this repo.
+3. **Credit contributors.** Reference issues (`closes #N`) in PRs. If
+   building on someone's idea from a discussion, mention it.
+4. **No vendor lock-in in docs.** When referencing external services
+   (Anthropic, OpenAI, Railway, Turso), document the interface, not the
+   vendor. The community should be able to swap providers.
+5. **Issue-first workflow.** Every code change maps to an open issue.
+   No issue? File one first. This gives contributors visibility into
+   what's planned and avoids duplicate work.
+
 ## scope guards
 
 - Do NOT modify files in `design/` (mocks are canonical handoff)
