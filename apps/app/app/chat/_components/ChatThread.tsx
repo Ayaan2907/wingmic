@@ -125,10 +125,9 @@ function WingmicAvatar() {
 // ScreenChatResting). The prototype anchors a composer pill these chips would
 // fill; the shipped surface has no in-thread composer (one mic, one surface —
 // recording is the global nav orb), so chips link to the live query surface
-// (/recall) instead, carrying the query in `?q=` so intent survives the hop.
-// /recall doesn't read the param yet (RecallClient uses local state); wiring
-// that prefill is a ~5-line follow-up. Forward-compatible: when /search lands
-// (PR θ) the same hrefs point there.
+// (/search) instead, carrying the query in `?q=` so intent survives the hop.
+// /search reads the param (SearchClient seeds its input from `?q=`), so the
+// chip lands on a pre-run query (PR θ-search).
 const SUGGESTED_QUERIES = [
   'who was the rust person at acme?',
   "remind me of last week's coffee chats",
@@ -185,7 +184,7 @@ function WelcomeAgent() {
         {SUGGESTED_QUERIES.map((q) => (
           <a
             key={q}
-            href={`/recall?q=${encodeURIComponent(q)}`}
+            href={`/search?q=${encodeURIComponent(q)}`}
             data-testid="chat-suggestion"
             style={{
               alignSelf: 'flex-start',
