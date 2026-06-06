@@ -103,7 +103,7 @@ This means v0.1.1 is **user-facing identical to Framing A** — every user just 
 
 ## 3. schema map
 
-Full schema lives in [`packages/db/src/schema.ts`](../packages/db/src/schema.ts) (exported via `@wingmic/db`). 17 tables.
+Full schema lives in [`packages/db/src/schema.ts`](../packages/db/src/schema.ts) (exported via `@wingmic/db`). 18 tables. Several are forward-schema — present but not yet read/written by any app code (`identity_claim`, `entity_resolution`, `entity_note`, `entity_merge`, `connection_request`, plus the v0.1.2 user-preference and interaction threading/audio columns). They unlock with the v0.2 linking / v0.3 acts surfaces; treat them as dormant until the feature PR wires them.
 
 ### user layer (BetterAuth-managed core + wingmic identity)
 
@@ -158,9 +158,9 @@ All capture stages run inside `apps/app` (the dynamic product on Railway); `apps
    │
    ▼
  ┌──────────────────────────────────────────────────┐
- │  Browser SpeechRecognition (or BYO STT in v0.1.2)│
- │  Continuous mode, interim + final result paths   │
- │  apps/app/app/capture/_components/useSpeechRecognition.ts
+ │  AssemblyAI batch transcription (hosted ASR)     │
+ │  POST audio → /api/capture/transcribe            │
+ │  v0.1.1 locked decision #1                        │
  └─────────────────┬────────────────────────────────┘
                    │ transcript (string)
                    ▼
@@ -171,10 +171,11 @@ All capture stages run inside `apps/app` (the dynamic product on Railway); `apps
                    │
                    ▼
  ┌──────────────────────────────────────────────────┐
- │  extract(transcript)                             │
- │  @wingmic/extractor → src/client.ts              │
- │   • Vercel AI SDK generateObject                 │
- │   • Anthropic Claude Sonnet 4.6                  │
+ │  extractHybrid({ transcript, providerEntities }) │
+ │  @wingmic/extractor → src/hybrid.ts              │
+ │   • L1 AssemblyAI spans (stubbed — no text NER)  │
+ │   • L2 deterministic heuristics (verbs, topics)  │
+ │   • L3 Haiku relation linker via OpenRouter      │
  │   • Zod schema (ExtractionResult)                │
  │   → { persons[], companies[], events[],          │
  │       topics[], actions[] }                       │
@@ -185,7 +186,7 @@ All capture stages run inside `apps/app` (the dynamic product on Railway); `apps
  │  embedTexts(personDescriptors) +                 │
  │  embedText(transcript)                           │
  │  @wingmic/extractor → src/embeddings.ts          │
- │   • OpenAI text-embedding-3-small (1536-d)       │
+ │   • text-embedding-3-small (1536-d) via OpenRouter│
  └─────────────────┬────────────────────────────────┘
                    │
                    ▼
@@ -199,18 +200,19 @@ All capture stages run inside `apps/app` (the dynamic product on Railway); `apps
  │  2. upsert canonical Event (slug + date)          │
  │  3. upsert canonical Topic (exact slug)           │
  │  4. resolve Person against owner's entities       │
- │     score = 0.55*name + 0.25*embed + 0.2*company  │
- │     ≥0.85 → link, <0.85 → create new              │
+ │     score = 0.55*name + 0.25*embed (companyBoost  │
+ │     reserved, 0 in v0.1.x); ≥0.85 link else create│
  │  5. persist Interaction with full embedding       │
  │  6. wire EntityCompany / EntityEvent / EntityTopic│
  │  7. persist email / linkedin / notes as facts     │
+ │  NOTE: writes are sequential, not yet a single tx │
  └─────────────────┬────────────────────────────────┘
                    │
                    ▼
  ┌──────────────────────────────────────────────────┐
  │  CommitResult { interactionId, entityIds[],      │
  │    newEntities, matchedEntities, … }             │
- │  rendered in CaptureClient.tsx ResultPane        │
+ │  rendered inline in chat (ChatThread.tsx)        │
  └──────────────────────────────────────────────────┘
 ```
 
@@ -237,11 +239,11 @@ Runs in `apps/app`, same as capture.
                    │
                    ▼
  ┌──────────────────────────────────────────────────┐
- │  pull this user's entities (with embeddings)     │
- │  cosine similarity in JS, sort desc, take top N  │
- │                                                   │
- │  v0.1.1: in-memory cosine — fine at <5k entities  │
- │  v0.2:    swap to libSQL `vector_top_k(idx, q, k)`│
+ │  libSQL vector_top_k(idx, q, k) ANN over this     │
+ │  user's entity embeddings (k = limit*4, owner-     │
+ │  filtered), then a cosine rerank query for exact   │
+ │  scores the UI thresholds depend on               │
+ │  index: entity_embedding_vector_idx (migration 0002)│
  └─────────────────┬────────────────────────────────┘
                    │
                    ▼
@@ -267,7 +269,7 @@ Runs in `apps/app`, same as capture.
 ### Person resolution
 
 ```
-For each PersonCandidate from Claude:
+For each PersonCandidate from the extractor:
   Pull all entities owned by this user.
   For each existing entity:
     nameScore = max(nameSimilarity(cand.name, entity.name),
@@ -361,3 +363,4 @@ We trace these explicitly so the team knows where to look when something breaks.
 
 - 2026-05-03 — initial version (v0.1.1 as shipped). Update when schema, flow, or framing changes.
 - 2026-05-23 — `apps/app` migrated from Cloudflare Workers (OpenNext) to Railway (Node.js). Issue #7 closed as obsolete.
+- 2026-06-06 — synced doc to shipped v0.1.2: capture is AssemblyAI hosted ASR → `extractHybrid` (heuristics + Haiku linker via OpenRouter) → text-embedding-3-small via OpenRouter; recall runs libSQL `vector_top_k` + cosine rerank (no in-memory path); capture commits render inline in chat; schema is 18 tables with forward-schema flagged dormant. Known gaps tracked for follow-up: `commit()` is not yet transactional, `clientCaptureId` idempotency is unwired, hybrid Layer 1 is a no-op until text-input NER exists.

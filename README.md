@@ -78,9 +78,9 @@ That's the whole product. Hold a button. Talk for twenty seconds. Ask anything l
 
 | | |
 |---|---|
-| 🎤 **voice capture** | Browser SpeechRecognition by default. AssemblyAI / Deepgram BYO key in v0.1.2. |
-| 🧠 **claude extraction** | `generateObject` + Zod schema. Pulls people, companies, events, topics, follow-up actions. |
-| 🔍 **NL recall** | "who at acme ships rust?" → top matches in &lt; 500ms. OpenAI embeddings + libSQL vector. |
+| 🎤 **voice capture** | AssemblyAI hosted transcription. Swap providers via OpenRouter model env. |
+| 🧠 **hybrid extraction** | heuristics + Haiku relation linker (via OpenRouter) → Zod schema. Pulls people, companies, events, topics, follow-up actions. |
+| 🔍 **NL recall** | "who at acme ships rust?" → top matches in &lt; 500ms. text-embedding-3-small (via OpenRouter) + libSQL `vector_top_k`. |
 | 🔒 **private people, public facts** | Sarah-the-person stays yours alone. Acme-the-company is canonical, shared across users (lazy promotion). |
 | ✉️ **magic-link auth** | BetterAuth + Resend. No passwords, no OAuth, no install friction. |
 | 🌐 **mobile-first PWA** | Responsive web. No App Store, no DMG, no install. Visit and use. |
@@ -111,15 +111,15 @@ Roadmap and milestone progress live on the [project board](https://github.com/Ay
 
 | layer | choice | why |
 |---|---|---|
-| Web framework | **Next.js 15** (App Router + RSC) | Mature, edge-ready, Server Actions cover most APIs |
+| Web framework | **Next.js 15** (App Router + RSC) | Mature, edge-ready; tRPC covers the API surface |
 | Runtime + pkgs | **Bun 1.3** + workspaces | 10-20× faster install, native TS, native sqlite |
 | Styling | **Tailwind 3** + design tokens | App surface only — homepage uses inline styles by design |
 | DB + ORM | **Drizzle + libSQL/Turso** | Edge-native, ~50 KB runtime, sqlite-with-replicas |
-| LLM framework | **Vercel AI SDK v6** + Anthropic Claude Sonnet 4.6 | Single function call extraction; multi-provider config swap |
-| Embeddings | **OpenAI text-embedding-3-small** (1536-d) | $0.02 / 1M tokens, native libSQL `F32_BLOB(1536)` |
+| LLM framework | **Vercel AI SDK v6** via OpenRouter (Claude Haiku 4.5 linker) | Hybrid extraction; swap providers with one env value |
+| Embeddings | **text-embedding-3-small** (1536-d, via OpenRouter) | $0.02 / 1M tokens, native libSQL `F32_BLOB(1536)` |
 | Auth | **BetterAuth** + Resend | OSS, self-hostable, magic-link only |
-| API | **tRPC v11** + Server Actions hybrid | Typed end-to-end, multi-client (RN / MCP later) |
-| State | **Zustand** for ephemeral UI; React Query for server | Minimal, no Redux |
+| API | **tRPC v11** | Typed end-to-end, multi-client (RN / MCP later) |
+| State | **React Context** for capture state; React Query for server | Minimal, no Redux |
 | Hosting | **Cloudflare Pages** (landing) + **Railway** (product) | Static edge + Node.js runtime, Turso replicas for low-latency reads |
 | Tests | **Vitest** unit + **Playwright** E2E | Fastest TS testing, mobile + desktop projects |
 
@@ -173,20 +173,20 @@ Do this in order, stopping for me at each step:
      via `curl -fsSL https://bun.sh/install | bash`.
   2. Clone https://github.com/Ayaan2907/wingmic.git into ./wingmic if not already.
   3. Run `bun install` from the repo root.
-  4. Copy apps/web/.env.example to apps/web/.env.local.
-  5. Walk me through obtaining the 8 required secrets per docs/deploy.md § 2:
+  4. Copy apps/app/.env.example to apps/app/.env.local.
+  5. Walk me through obtaining the required secrets per docs/deploy.md § 2:
        - TURSO_DB_URL + TURSO_AUTH_TOKEN  (turso CLI)
        - BETTER_AUTH_SECRET                (openssl rand -base64 48)
-       - BETTER_AUTH_URL                   (http://localhost:3210 for local dev)
+       - BETTER_AUTH_URL                   (http://localhost:3211 for local dev)
        - RESEND_API_KEY + RESEND_FROM      (resend.com — domain must be verified)
-       - ANTHROPIC_API_KEY                 (console.anthropic.com)
-       - OPENAI_API_KEY                    (platform.openai.com)
+       - OPENROUTER_API_KEY                (openrouter.ai — LLM + embeddings)
+       - ASSEMBLYAI_API_KEY                (assemblyai.com — hosted ASR)
      Stop and ask me at each one — do NOT generate or fetch any keys yourself.
-     For local dev only ANTHROPIC_API_KEY and OPENAI_API_KEY are required;
+     For local dev only OPENROUTER_API_KEY and ASSEMBLYAI_API_KEY are required;
      the rest can be left blank with safe defaults.
-  6. Once .env.local is filled, run `cd apps/web && bun run db:apply` to create
-     a local SQLite at apps/web/local.db.
-  7. Run `bun run dev` from the repo root. Show me http://localhost:3210 once it's up.
+  6. Once .env.local is filled, run `bun run db:apply` to create
+     a local SQLite at apps/app/local.db.
+  7. Run `bun run dev:app` from the repo root. Show me http://localhost:3211 once it's up.
   8. Tell me to sign in: visit /signin, type any email, and check the dev-server
      console — the magic link is logged there since RESEND_API_KEY isn't set.
 
@@ -204,10 +204,10 @@ cd wingmic
 bun install
 
 cp apps/app/.env.example apps/app/.env.local
-# Fill in ANTHROPIC_API_KEY and OPENAI_API_KEY at minimum.
+# Fill in OPENROUTER_API_KEY and ASSEMBLYAI_API_KEY at minimum.
 # See docs/deploy.md for how to acquire each.
 
-bun --filter=@wingmic/app db:apply
+bun run db:apply
 
 bun run dev:app   # → http://localhost:3211 (product)
 # or: bun run dev:web  # → http://localhost:3210 (landing)
@@ -231,8 +231,8 @@ Help me make my first contribution to wingmic (github.com/Ayaan2907/wingmic).
        gh issue list --label "good first issue" --state open
   3. Ask me which issue number I want to tackle. Don't pick one for me.
   4. Read the issue body in full. Identify exact files to touch.
-  5. Branch from main: `git checkout -b feat/<short-name>` or fix/, docs/, chore/
-     per CONTRIBUTING.md branch conventions.
+  5. Branch from staging: `git checkout staging && git pull && git checkout -b feat/<short-name>`
+     (or fix/, docs/, chore/) per CONTRIBUTING.md branch conventions.
   6. Make the change. Add or update Vitest or Playwright tests for new behavior.
   7. Run the local CI checks before committing:
        - bun run typecheck

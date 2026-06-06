@@ -74,16 +74,16 @@ Wingmic v0.1.1 needs exactly 8 environment variables to run the product in produ
 | `BETTER_AUTH_URL` | The deployed origin (no trailing slash) | You set this | ✅ |
 | `RESEND_API_KEY` | Sends magic-link emails | [Resend dashboard](#resend) | ✅ |
 | `RESEND_FROM` | Sender display + address | After domain verified at Resend | ✅ |
-| `ANTHROPIC_API_KEY` | Claude extraction calls | [Anthropic console](#anthropic) | ✅ |
-| `OPENAI_API_KEY` | Embedding calls (text-embedding-3-small) | [OpenAI platform](#openai) | ✅ |
+| `OPENROUTER_API_KEY` | LLM extraction + embedding calls | [OpenRouter](https://openrouter.ai) | ✅ |
+| `ASSEMBLYAI_API_KEY` | Hosted audio transcription | [AssemblyAI](https://assemblyai.com) | ✅ |
 
 Optional:
 
 | Variable | Default | When to override |
 |---|---|---|
 | `NEXT_PUBLIC_APP_URL` | `https://app.wingmic.xyz` | If you self-host on your own domain |
-| `ANTHROPIC_EXTRACTION_MODEL` | `claude-sonnet-4-6` | Try a different Claude model |
-| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Try a different embedding model |
+| `EXTRACTION_MODEL` / `LINKER_MODEL` | OpenRouter model strings | Swap the LLM (e.g. `openai/gpt-4o-mini`) without code changes |
+| `EMBEDDING_MODEL` | `text-embedding-3-small` | Try a different embedding model |
 
 ### acquire each secret
 

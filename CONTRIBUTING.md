@@ -25,10 +25,11 @@ cd wingmic
 bun install
 
 # Required for local dev
-cp apps/web/.env.example apps/web/.env.local
-# fill in ANTHROPIC_API_KEY and OPENAI_API_KEY at minimum
+cp apps/app/.env.example apps/app/.env.local
+# fill in OPENROUTER_API_KEY and ASSEMBLYAI_API_KEY at minimum
 
-bun run dev   # → http://localhost:3210
+bun run dev:app   # → http://localhost:3211 (product)
+# or: bun run dev:web   # → http://localhost:3210 (landing)
 ```
 
 Required:
@@ -144,19 +145,19 @@ Wingmic's data model is **Framing D**: per-kind identity. People are private to 
 The flow on a capture:
 
 ```
-voice → SpeechRecognition → transcript
-       → Vercel AI SDK generateObject(Claude, schema)
+voice → AssemblyAI transcription → transcript
+       → extractHybrid (heuristics + Haiku linker via OpenRouter, Zod schema)
        → ExtractionResult { persons[], companies[], events[], topics[], actions[] }
        → resolution.ts (deterministic):
             upsert canonical Company / Event / Topic (lazy promotion)
-            score Person against owner's entities (name + embedding cosine + companyHint)
+            score Person against owner's entities (name + embedding cosine)
             link if score ≥ 0.85, create new otherwise
        → persist Interaction with full embedding
        → wire EntityCompany / EntityEvent / EntityTopic edges
        → return CommitResult to the client
 ```
 
-Recall uses the inverse: embed the query → cosine over the user's entities → hydrate edges → return ranked results. v0.1.1 is in-memory cosine; v0.2 swaps to libSQL `vector_top_k(idx, vector, k)`.
+Recall uses the inverse: embed the query → libSQL `vector_top_k(idx, vector, k)` + cosine rerank → hydrate edges → return ranked results.
 
 ---
 
