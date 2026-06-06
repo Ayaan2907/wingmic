@@ -5,6 +5,7 @@
 // existing recall surface; PR θ builds /search as the rich destination.
 
 import * as React from 'react';
+import type { Route } from 'next';
 import { useRouter } from 'next/navigation';
 
 export function CommandPalette() {
@@ -37,7 +38,9 @@ export function CommandPalette() {
     if (!term) return;
     setOpen(false);
     setQ('');
-    router.push(`/search?q=${encodeURIComponent(term)}`);
+    // /search ships in PR θ; typedRoutes can't know it yet, so cast the
+    // dynamic href (matches the plain-<a> typedRoutes dodge used elsewhere).
+    router.push(`/search?q=${encodeURIComponent(term)}` as Route);
   }
 
   return (

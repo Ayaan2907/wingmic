@@ -53,6 +53,14 @@ describe('AppShell', () => {
     expect(screen.getByText('auth')).toBeTruthy();
   });
 
+  it('renders exactly one capture orb (single instance, no duplication)', async () => {
+    mockPath('/');
+    const { AppShell: Shell } = await import('../AppShell');
+    render(<Shell><div>x</div></Shell>);
+    const orbs = screen.getAllByRole('button', { name: /hold to record/i });
+    expect(orbs).toHaveLength(1);
+  });
+
   it('entity back link is tagged .app-backlink for desktop hiding', async () => {
     // EntityDetailScaffold renders <Link className="app-backlink">← back</Link>
     const { EntityDetailScaffold } = await import('@/app/_components/entity/EntityDetailScaffold');
