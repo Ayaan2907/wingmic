@@ -135,8 +135,9 @@ describe('ChatClient', () => {
 
   it('renders empty thread + bottom tab bar on mount (idle)', () => {
     renderChat({ userName: "ada" });
-    // empty-hero copy
-    expect(screen.getByText(/hold the button/i)).toBeTruthy();
+    // PR ε welcome: agent bubble + 3 suggested-query chips on the empty thread.
+    expect(screen.getByText(/ask me anything/i)).toBeTruthy();
+    expect(screen.getAllByTestId('chat-suggestion')).toHaveLength(3);
     // v8: 5-slot bottom nav — home / chat / capture / graph / acts.
     // Center capture slot breaks the bar plane (lib-screens.jsx MobileNav).
     const nav = screen.getByLabelText('primary');
@@ -214,6 +215,15 @@ describe('ChatClient', () => {
     await waitFor(() => {
       expect(screen.getByText('sarah')).toBeTruthy();
     });
+    // PR ε: a templated agent reply lands under the committed memo, with a
+    // count summary built from the extraction (1 person + 1 company) and a
+    // disabled "coming soon · v0.3" action row.
+    const reply = await waitFor(() => screen.getByTestId('agent-reply'));
+    expect(reply.textContent).toMatch(/acknowledged/i);
+    expect(reply.textContent).toMatch(/1 person/);
+    expect(reply.textContent).toMatch(/1 company/);
+    const draftBtn = screen.getByRole('button', { name: /draft follow-up/i });
+    expect((draftBtn as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('renders an empty graph card footer when extracted entities are all empty', async () => {
@@ -443,8 +453,9 @@ describe('ChatClient', () => {
 
   it('resting state on cold mount with empty initialThread renders empty-hero + idle dock', () => {
     renderChat({ userName: "ada", initialThread: [] });
-    // empty-hero copy is present
-    expect(screen.getByText(/hold the button/i)).toBeTruthy();
+    // PR ε welcome agent + chips present on the empty thread
+    expect(screen.getByText(/ask me anything/i)).toBeTruthy();
+    expect(screen.getAllByTestId('chat-suggestion')).toHaveLength(3);
     // dock is idle — orb state is `idle` (not recording/locked/sending)
     const btn = screen.getByRole('button', { name: /hold to record/i });
     expect(btn.getAttribute('data-orb-state')).toBe('idle');
@@ -480,8 +491,8 @@ describe('ChatClient', () => {
     expect(m1).toBeTruthy();
     expect(m2).toBeTruthy();
     expect(m3).toBeTruthy();
-    // Empty-hero is suppressed once any prefetched memo is present
-    expect(screen.queryByText(/hold the button/i)).toBeNull();
+    // Welcome agent is suppressed once any prefetched memo is present
+    expect(screen.queryByText(/ask me anything/i)).toBeNull();
     // DOM order: oldest-first → i1 before i2 before i3
     const order = m1.compareDocumentPosition(m2);
     // Node.DOCUMENT_POSITION_FOLLOWING === 4
