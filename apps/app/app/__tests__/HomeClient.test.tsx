@@ -78,19 +78,10 @@ describe('HomeClient', () => {
     }
   });
 
-  it('renders bottom nav with home active', () => {
-    render(<HomeClient userName="ayaan" initialData={sampleData} />);
-    const nav = screen.getByLabelText('primary');
-    expect(nav).toBeTruthy();
-    // home tab should carry aria-current=page; other tabs should not.
-    const homeLink = nav.querySelector('a[href="/"]');
-    expect(homeLink?.getAttribute('aria-current')).toBe('page');
-    expect(nav.textContent?.toLowerCase()).toContain('home');
-    expect(nav.textContent?.toLowerCase()).toContain('chat');
-    expect(nav.textContent?.toLowerCase()).toContain('capture');
-    expect(nav.textContent?.toLowerCase()).toContain('graph');
-    expect(nav.textContent?.toLowerCase()).toContain('acts');
-  });
+  // PR λ-shell: the primary nav + active-from-pathname now belong to AppShell,
+  // asserted in app/_components/__tests__/AppShell.test.tsx. HomeClient no
+  // longer renders its own nav, so the former "renders bottom nav with home
+  // active" assertion moved there.
 
   it('shows an empty-state row when there are no recent commits', () => {
     render(<HomeClient userName={null} initialData={emptyData} />);
