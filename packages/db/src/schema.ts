@@ -1,4 +1,5 @@
 import { customType, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { createId } from '@paralleldrive/cuid2';
 
 /**
@@ -50,7 +51,7 @@ export const users = sqliteTable('user', {
   image: text('image'),
   createdAt: ts('created_at'),
   updatedAt: ts('updated_at'),
-  // v0.1.2 additions (PR α α-0)
+  // v0.1.2 additions
   audioRetentionMode: text('audio_retention_mode', { enum: ['24h', '7d', 'forever', 'never'] }).notNull().default('24h'),
   linkerModelOverride: text('linker_model_override'),
   preferredMicDeviceId: text('preferred_mic_device_id'),
@@ -237,9 +238,9 @@ export const interactions = sqliteTable(
     capturedAt: integer('captured_at', { mode: 'timestamp' }).notNull(),
     embedding: float32Blob(1536)('embedding'),
     createdAt: ts('created_at'),
-    // v0.1.2 additions (PR α α-0)
-    parentInteractionId: text('parent_interaction_id').references((): any => interactions.id, { onDelete: 'set null' }),
-    threadRootId: text('thread_root_id').references((): any => interactions.id, { onDelete: 'set null' }),
+    // v0.1.2 additions
+    parentInteractionId: text('parent_interaction_id').references((): AnySQLiteColumn => interactions.id, { onDelete: 'set null' }),
+    threadRootId: text('thread_root_id').references((): AnySQLiteColumn => interactions.id, { onDelete: 'set null' }),
     audioStorageKey: text('audio_storage_key'),
     audioRetentionExpiry: integer('audio_retention_expiry', { mode: 'timestamp' }),
     // NOTE: plan §18 specifies NOT NULL + unique with userId, but we make this nullable so
