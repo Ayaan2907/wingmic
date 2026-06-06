@@ -34,10 +34,14 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  min-width: 0;
 }
 
 html {
   scroll-behavior: smooth;
+  background: var(--bg-page);
+  overflow-x: clip;
+  width: 100%;
 }
 
 body {
@@ -45,7 +49,9 @@ body {
   color: var(--ink);
   font-family: var(--font-inter), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
+  overflow-x: clip;
+  width: 100%;
+  max-width: 100vw;
   background-image:
     radial-gradient(ellipse at 20% 0%, rgba(255, 196, 82, 0.04) 0%, transparent 50%),
     radial-gradient(ellipse at 80% 100%, rgba(255, 107, 107, 0.03) 0%, transparent 50%);
@@ -150,5 +156,198 @@ a {
   }
   75% {
     transform: translate(-1px, -1px);
+  }
+}
+
+
+/* Defaults that only matter at narrow widths */
+.wm-mobile-menu-btn {
+  display: none;
+}
+.wm-mobile-menu {
+  display: none;
+}
+
+/* ── Tablet ─────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .wm-stack-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .wm-nav-links {
+    gap: 18px !important;
+  }
+  .wm-nav-links a {
+    font-size: 12.5px !important;
+  }
+}
+
+/* ── Mobile (phone + small tablet) ──────────────────────── */
+@media (max-width: 768px) {
+  /* Top announcement bar */
+  .wm-topbar {
+    padding: 6px 14px !important;
+    gap: 10px !important;
+    font-size: 11px !important;
+  }
+  .wm-topbar-tag {
+    display: none !important;
+  }
+  .wm-topbar-dot {
+    display: none !important;
+  }
+
+  /* Nav */
+  .wm-nav {
+    padding: 12px 16px !important;
+  }
+  .wm-nav-links {
+    display: none !important;
+  }
+  .wm-nav-cta {
+    padding: 7px 12px !important;
+    font-size: 12.5px !important;
+  }
+  .wm-mobile-menu-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    cursor: pointer;
+    margin-left: 8px;
+  }
+  .wm-mobile-menu {
+    display: flex !important;
+    flex-direction: column;
+    position: fixed;
+    top: 84px;
+    left: 12px;
+    right: 12px;
+    z-index: 99;
+    padding: 16px;
+    gap: 6px;
+    background: #0a0a0a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  }
+  .wm-mobile-menu a {
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  /* Sections — clamp width so no inline grid template can overflow viewport */
+  section,
+  footer {
+    max-width: 100vw !important;
+    overflow-x: clip;
+  }
+  .wm-section {
+    padding-left: 18px !important;
+    padding-right: 18px !important;
+    padding-top: 64px !important;
+    padding-bottom: 64px !important;
+  }
+  .wm-section-h2 {
+    font-size: clamp(32px, 8vw, 44px) !important;
+    margin-bottom: 32px !important;
+  }
+
+  /* Hero */
+  .wm-hero {
+    padding-top: 110px !important;
+    padding-bottom: 64px !important;
+    min-height: auto !important;
+  }
+  .wm-hero-grid {
+    grid-template-columns: 1fr !important;
+    gap: 40px !important;
+    padding: 0 18px !important;
+  }
+  .wm-hero-phone-wrap {
+    transform: scale(0.85) rotate(2deg) !important;
+    transform-origin: top center;
+  }
+
+  /* Generic stackers */
+  .wm-stack,
+  .wm-stack-4,
+  .wm-footer-grid {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+  }
+
+  /* How-it-works step rows — stack, visual under copy */
+  .wm-step-grid {
+    grid-template-columns: 1fr !important;
+    gap: 28px !important;
+    padding: 40px 0 !important;
+  }
+  .wm-step-grid > * {
+    order: 2;
+  }
+  .wm-step-grid > .wm-step-copy {
+    order: 1;
+  }
+  .wm-step-grid h3 {
+    font-size: 26px !important;
+  }
+  .wm-step-grid .serif {
+    font-size: 72px !important;
+  }
+
+  /* Imports left column unsticks */
+  .wm-imports-sticky {
+    position: static !important;
+  }
+
+  /* Acts wide card collapses to single column slot */
+  .wm-acts-wide {
+    grid-column: auto !important;
+  }
+
+  /* Decorative elements hidden on small screens */
+  .wm-hide-mobile {
+    display: none !important;
+  }
+
+  /* Waitlist form stacks */
+  .wm-waitlist-form {
+    flex-direction: column !important;
+    padding: 8px !important;
+  }
+  .wm-waitlist-form input,
+  .wm-waitlist-form button {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  /* Code blocks shouldn't overflow viewport */
+  pre {
+    font-size: 11px !important;
+  }
+}
+
+/* ── Phone (≤480px) ─────────────────────────────────────── */
+@media (max-width: 480px) {
+  .wm-section {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+  .wm-hero-grid {
+    padding: 0 14px !important;
+  }
+  .wm-hero-phone-wrap {
+    transform: scale(0.72) rotate(2deg) !important;
+  }
+  .wm-step-grid .serif {
+    font-size: 60px !important;
   }
 }
