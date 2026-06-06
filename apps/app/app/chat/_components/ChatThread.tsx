@@ -68,7 +68,7 @@ export function ChatThread() {
       }}
     >
       <div style={dimStyle}>
-        {visibleMessages.length === 0 && !recording && <EmptyHero />}
+        {visibleMessages.length === 0 && !recording && <WelcomeAgent />}
 
         {visibleMessages.map((m) => (
           <MessageBubble
@@ -90,34 +90,118 @@ export function ChatThread() {
   );
 }
 
-function EmptyHero() {
+// The wingmic agent mark — a small italic-serif "W" sticker. Mirrors the
+// recording-state avatar in ChatHeader so the agent reads as one identity
+// across the surface. Used by the welcome row + every agent reply.
+function WingmicAvatar() {
   return (
-    <div style={{ padding: '60px 8px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div
-        className="mono"
-        style={{ fontSize: 11, letterSpacing: 2, color: accent, textTransform: 'uppercase' }}
-      >
-        start here
+    <span
+      aria-hidden="true"
+      style={{
+        width: 28,
+        height: 28,
+        background: accent,
+        border: '1.5px solid #000',
+        boxShadow: '2px 2px 0 #000',
+        borderRadius: 6,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#fff',
+        fontFamily: 'Newsreader, Georgia, serif',
+        fontStyle: 'italic',
+        fontSize: 14,
+        fontWeight: 600,
+        lineHeight: 1,
+        flexShrink: 0,
+      }}
+    >
+      W
+    </span>
+  );
+}
+
+// Suggested queries shown on the empty thread (PR ε, per proto-screens-a.jsx
+// ScreenChatResting). The prototype anchors a composer pill these chips would
+// fill; the shipped surface has no in-thread composer (one mic, one surface —
+// recording is the global nav orb), so chips link to the live query surface
+// (/recall) instead, carrying the query in `?q=` so intent survives the hop.
+// /recall doesn't read the param yet (RecallClient uses local state); wiring
+// that prefill is a ~5-line follow-up. Forward-compatible: when /search lands
+// (PR θ) the same hrefs point there.
+const SUGGESTED_QUERIES = [
+  'who was the rust person at acme?',
+  "remind me of last week's coffee chats",
+  'who should i introduce to priya?',
+] as const;
+
+function WelcomeAgent() {
+  return (
+    <div style={{ padding: '24px 0 8px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+        <WingmicAvatar />
+        <div style={{ maxWidth: 340 }}>
+          <div
+            style={{
+              padding: '12px 14px',
+              borderRadius: '4px 14px 14px 14px',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border-mid)',
+              fontSize: 14.5,
+              lineHeight: 1.55,
+              color: 'var(--text-85)',
+            }}
+          >
+            morning.{' '}
+            <span className="serif" style={{ fontStyle: 'italic', color: accent }}>
+              ask me anything
+            </span>{' '}
+            — who you met, what was said, who to thread. or just hold the mic and tell me about
+            a new contact.
+          </div>
+        </div>
       </div>
-      <h1
+      <div
         style={{
-          fontSize: 28,
-          fontWeight: 800,
-          letterSpacing: '-0.02em',
-          lineHeight: 1.15,
+          marginLeft: 38,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          alignItems: 'flex-start',
         }}
       >
-        hold the button.{' '}
-        <span className="serif" style={{ fontStyle: 'italic', color: accent, fontWeight: 400 }}>
-          talk for thirty seconds about someone you just met.
-        </span>
-      </h1>
-      <p style={{ fontSize: 15, color: 'var(--text-70)', lineHeight: 1.55, maxWidth: 520 }}>
-        i&apos;ll sort the names, companies, follow-ups. you&apos;ll see it land below.
-      </p>
-      <p style={{ fontSize: 14.5, color: 'var(--text-40)', lineHeight: 1.55 }}>
-        short is fine. ten seconds counts.
-      </p>
+        <div
+          className="mono"
+          style={{
+            fontSize: 10,
+            letterSpacing: 1,
+            textTransform: 'uppercase',
+            color: 'var(--text-40)',
+            marginBottom: 2,
+          }}
+        >
+          ↪ try
+        </div>
+        {SUGGESTED_QUERIES.map((q) => (
+          <a
+            key={q}
+            href={`/recall?q=${encodeURIComponent(q)}`}
+            data-testid="chat-suggestion"
+            style={{
+              alignSelf: 'flex-start',
+              padding: '8px 13px',
+              borderRadius: 999,
+              background: 'var(--surface-1)',
+              border: '1px solid var(--border-mid)',
+              fontSize: 13,
+              color: 'var(--text-85)',
+              textDecoration: 'none',
+            }}
+          >
+            {q}
+          </a>
+        ))}
+      </div>
     </div>
   );
 }
@@ -137,6 +221,15 @@ interface MessageBubbleProps {
   onPasteCancel: () => void;
 }
 
+function isEmptyExtraction(e: GraphResult['extracted']): boolean {
+  return (
+    e.persons.length === 0 &&
+    e.companies.length === 0 &&
+    e.events.length === 0 &&
+    e.actions.length === 0
+  );
+}
+
 function MessageBubble(props: MessageBubbleProps) {
   const { message: m } = props;
 
@@ -145,57 +238,159 @@ function MessageBubble(props: MessageBubbleProps) {
   const showSkeleton = m.status === 'uploading' || m.status === 'transcribing';
   const showLinkSweep = m.status === 'linking';
   const isCommitted = m.status === 'committed';
+  // Agent reply renders only for freshly-committed memos that found something.
+  // Prefetched-history bubbles (graphResult === null) and empty extractions
+  // skip it — the user bubble's "no entities found" footer carries those.
+  const g = m.graphResult;
+  const showAgentReply = isCommitted && g != null && !isEmptyExtraction(g.extracted);
 
   return (
-    <div style={{ alignSelf: 'flex-end', maxWidth: '92%', width: '100%' }}>
-      <div
-        style={{
-          alignSelf: 'flex-end',
-          padding: '14px 16px',
-          borderRadius: '18px 18px 4px 18px',
-          background: accent,
-          color: '#fff',
-          border: '1.5px solid #000',
-          boxShadow: '3px 3px 0 #000',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 10,
-          position: 'relative',
-        }}
-      >
-        <BubbleHeader m={m} onDelete={props.onDelete} />
-        {showSkeleton ? (
-          <Skeleton />
-        ) : m.transcript ? (
-          <p
-            style={{
-              fontSize: 15.5,
-              lineHeight: 1.55,
-              color: '#fff',
-              whiteSpace: 'pre-wrap',
-              margin: 0,
-            }}
-          >
-            {m.transcript}
-          </p>
-        ) : null}
-        {showLinkSweep && (
-          <div
-            aria-hidden="true"
-            style={{
-              height: 2,
-              background:
-                'linear-gradient(90deg, transparent, rgba(255,255,255,0.8), transparent)',
-              backgroundSize: '200% 100%',
-              borderRadius: 2,
-              animation: 'wm-shimmer 1.8s linear infinite',
-            }}
-          />
-        )}
-        <BubbleFooter m={m} />
+    <>
+      <div style={{ alignSelf: 'flex-end', maxWidth: '92%', width: '100%' }}>
+        <div
+          style={{
+            alignSelf: 'flex-end',
+            padding: '14px 16px',
+            borderRadius: '18px 18px 4px 18px',
+            background: accent,
+            color: '#fff',
+            border: '1.5px solid #000',
+            boxShadow: '3px 3px 0 #000',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+            position: 'relative',
+          }}
+        >
+          <BubbleHeader m={m} onDelete={props.onDelete} />
+          {showSkeleton ? (
+            <Skeleton />
+          ) : m.transcript ? (
+            <p
+              style={{
+                fontSize: 15.5,
+                lineHeight: 1.55,
+                color: '#fff',
+                whiteSpace: 'pre-wrap',
+                margin: 0,
+              }}
+            >
+              {m.transcript}
+            </p>
+          ) : null}
+          {showLinkSweep && (
+            <div
+              aria-hidden="true"
+              style={{
+                height: 2,
+                background:
+                  'linear-gradient(90deg, transparent, rgba(255,255,255,0.8), transparent)',
+                backgroundSize: '200% 100%',
+                borderRadius: 2,
+                animation: 'wm-shimmer 1.8s linear infinite',
+              }}
+            />
+          )}
+          <BubbleFooter m={m} />
+        </div>
       </div>
-      {isCommitted && m.graphResult && <GraphCard message={m} result={m.graphResult} />}
+      {showAgentReply && <AgentReply message={m} result={g} />}
+    </>
+  );
+}
+
+// AgentReply — the templated "wingmic" reply that lands under a committed
+// memo (PR ε, per proto-screens-b.jsx ScreenChatResponse). A short
+// acknowledgement line built from the extracted counts, the extraction
+// detail card, and a suggested-action row. The action buttons are disabled
+// "coming soon · v0.3" chrome (the acts agent ships v0.3, epic #11) —
+// matching the entity-detail CTA pattern from PR β₂.
+function AgentReply({ message, result }: { message: ThreadMessage; result: GraphResult }) {
+  const { extracted } = result;
+  const counts: string[] = [];
+  if (extracted.persons.length) {
+    counts.push(`${extracted.persons.length} ${extracted.persons.length === 1 ? 'person' : 'people'}`);
+  }
+  if (extracted.companies.length) {
+    counts.push(
+      `${extracted.companies.length} ${extracted.companies.length === 1 ? 'company' : 'companies'}`,
+    );
+  }
+  if (extracted.events.length) {
+    counts.push(`${extracted.events.length} ${extracted.events.length === 1 ? 'event' : 'events'}`);
+  }
+  const summary = counts.length ? `captured ${counts.join(', ')}. tap to open.` : 'captured your memo.';
+  const time = message.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <div
+      data-testid="agent-reply"
+      style={{
+        alignSelf: 'flex-start',
+        maxWidth: '92%',
+        width: '100%',
+        display: 'flex',
+        gap: 10,
+        alignItems: 'flex-start',
+      }}
+    >
+      <WingmicAvatar />
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+          <span
+            className="mono"
+            style={{ fontSize: 12, fontWeight: 700, color: accent, letterSpacing: 0.4 }}
+          >
+            wingmic
+          </span>
+          <span className="mono" style={{ fontSize: 10, color: 'var(--text-30)' }}>
+            {time}
+          </span>
+        </div>
+        <div
+          style={{
+            padding: '12px 14px',
+            borderRadius: '4px 14px 14px 14px',
+            background: 'var(--surface-2)',
+            border: '1px solid var(--border-mid)',
+            color: 'var(--text-85)',
+            fontSize: 14.5,
+            lineHeight: 1.55,
+          }}
+        >
+          acknowledged. {summary}
+        </div>
+        <GraphCard message={message} result={result} />
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <DisabledAction label="draft follow-up →" />
+          <DisabledAction label="open card" ghost />
+        </div>
+      </div>
     </div>
+  );
+}
+
+function DisabledAction({ label, ghost }: { label: string; ghost?: boolean }) {
+  return (
+    <button
+      type="button"
+      disabled
+      title="coming soon · v0.3"
+      aria-label={`${label} — coming soon, v0.3`}
+      style={{
+        padding: '8px 13px',
+        borderRadius: 999,
+        background: ghost ? 'transparent' : accent,
+        color: ghost ? 'var(--text-70)' : '#000',
+        border: ghost ? '1px solid var(--border-mid)' : '1.5px solid #000',
+        boxShadow: ghost ? 'none' : '3px 3px 0 #000',
+        font: '700 12px Inter, system-ui, sans-serif',
+        cursor: 'not-allowed',
+        opacity: ghost ? 0.7 : 0.85,
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -561,13 +756,7 @@ function PasteInline({
 
 function GraphCard({ message, result }: { message: ThreadMessage; result: GraphResult }) {
   const { extracted } = result;
-  const isEmpty =
-    extracted.persons.length === 0 &&
-    extracted.companies.length === 0 &&
-    extracted.events.length === 0 &&
-    extracted.actions.length === 0;
-
-  if (isEmpty) return null;
+  if (isEmptyExtraction(extracted)) return null;
 
   return (
     <div

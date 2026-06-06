@@ -6,15 +6,18 @@
  * Source of truth: design/v2/library/lib-screens.jsx ScreenHome.
  * Plan: docs/superpowers/plans/*.md §18 v9.
  *
- * Renders three sections:
+ * Renders, top to bottom (order matches design/v2 proto-screens-a.jsx ScreenHome):
  *   1. Stats row — today + this week capture counts as italic-serif numerals.
- *   2. Recent activity — last 5 interactions with time + transcript preview
+ *   2. Agent stripe — mocked "wingmic read your graph" preview signal (PR ε).
+ *   3. Acts pending — 3 mocked draft cards with disabled "coming soon · v0.3"
+ *      send buttons (the acts agent ships v0.3, epic #11).
+ *   4. Recent activity — last 5 interactions with time + transcript preview
  *      + entity-count badge (PersonAvatar where a person dominates the memo).
- *   3. Acts inbox — empty state ("the acts agent arrives v0.3 — coming soon.")
- *      because the acts table doesn't exist yet (v0.3 epic #11).
  *
  * Bottom-nav is the shared BottomTabBar with `active="home"`.
- * Pure presentation: all data comes from the server page via `initialData`.
+ * Real data: stats + activity come from the server page via `initialData`.
+ * Mock data: the agent stripe + acts cards are seeded previews (PR ε) — they
+ * swap for real `ctx.db` queries in the v0.1.3 backend-wireup phase.
  */
 
 import * as React from 'react';
@@ -26,6 +29,8 @@ import { PersonAvatar } from './_components/entity/EntityAvatar';
 const accent = '#FFC452';
 const second = '#86efac';
 const third = '#FF8FAB';
+const blue = '#7DD3FC';
+const violet = '#A78BFA';
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -86,8 +91,9 @@ export default function HomeClient({ userName, initialData }: HomeClientProps) {
         }}
       >
         <StatsRow today={todayCount} week={weekCount} />
+        <AgentStripe />
+        <ActsPending />
         <ActivityList items={recent} />
-        <ActsEmpty />
       </section>
 
       <BottomTabBar active="home" />
@@ -311,36 +317,207 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
   );
 }
 
-// ─── Acts empty ──────────────────────────────────────────────────────────
+// ─── Agent stripe ────────────────────────────────────────────────────────
 
-function ActsEmpty() {
+function AgentStripe() {
+  // Mocked agent-activity stripe (PR ε, per design/v2 proto-screens-a.jsx
+  // ScreenHome). Deliberately non-interactive: the acts surface (/acts) ships
+  // as its own mock PR, so this is a static preview signal, not a link —
+  // avoids dead navigation while the destination doesn't exist yet.
   return (
-    <div style={{ marginBottom: 24 }} data-testid="home-acts-empty">
-      <div
-        className="mono"
+    <div
+      data-testid="home-agent-stripe"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '12px 14px',
+        borderRadius: 12,
+        marginBottom: 20,
+        background: `linear-gradient(90deg, ${accent}1a, transparent)`,
+        border: `1px solid ${accent}4d`,
+      }}
+    >
+      <span
+        aria-hidden="true"
         style={{
-          fontSize: 11,
-          color: 'var(--text-55)',
-          letterSpacing: 2,
-          textTransform: 'uppercase',
+          width: 7,
+          height: 7,
+          borderRadius: '50%',
+          background: accent,
+          animation: 'wm-pulse-d 1.6s infinite',
+          flexShrink: 0,
+        }}
+      />
+      <div className="mono" style={{ flex: 1, fontSize: 12, color: 'var(--text-85)' }}>
+        <span style={{ color: accent, fontWeight: 700 }}>wingmic</span> · read your graph 06:12 ·
+        3 drafts pending
+      </div>
+    </div>
+  );
+}
+
+// ─── Acts pending (mock) ───────────────────────────────────────────────────
+
+type PendingAct = {
+  kind: string;
+  glyph: string;
+  name: string;
+  why: string;
+  conf: number;
+  accent: 'amber' | 'blue' | 'violet';
+  color: string;
+};
+
+// Seeded preview data (PR ε). Fictional demo contacts, consistent with the
+// design prototype. Real acts wire in v0.3 (epic #11); every CTA here is
+// disabled "coming soon · v0.3" chrome — matching the entity-detail pattern.
+const PENDING_ACTS: PendingAct[] = [
+  {
+    kind: 'check-in',
+    glyph: '↗',
+    name: 'Sarah Chen',
+    why: '7d since devconnect · you owe her a repo',
+    conf: 92,
+    accent: 'amber',
+    color: accent,
+  },
+  {
+    kind: 'reminder',
+    glyph: '◷',
+    name: 'Marcus Rivera',
+    why: 'coffee mon · no invite sent',
+    conf: 88,
+    accent: 'blue',
+    color: blue,
+  },
+  {
+    kind: 'intro',
+    glyph: '⇌',
+    name: 'Priya → Deepak',
+    why: 'both work on voice + mcp',
+    conf: 74,
+    accent: 'violet',
+    color: violet,
+  },
+];
+
+function ActsPending() {
+  return (
+    <div style={{ marginBottom: 24 }} data-testid="home-acts">
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
           marginBottom: 10,
         }}
       >
-        ◆ acts · pending
+        <span
+          className="mono"
+          style={{
+            fontSize: 11,
+            color: 'var(--text-55)',
+            letterSpacing: 2,
+            textTransform: 'uppercase',
+          }}
+        >
+          ◆ acts · pending
+        </span>
+        <span
+          className="mono"
+          style={{
+            fontSize: 10,
+            color: 'var(--text-40)',
+            letterSpacing: 1,
+            textTransform: 'uppercase',
+          }}
+        >
+          preview · v0.3
+        </span>
       </div>
-      <div
-        style={{
-          padding: 18,
-          borderRadius: 14,
-          background: 'var(--surface-1, rgba(255,255,255,0.02))',
-          border: '1px dashed var(--border-mid, rgba(255,255,255,0.12))',
-          color: 'var(--text-55)',
-          fontSize: 14,
-          lineHeight: 1.5,
-          textAlign: 'center',
-        }}
-      >
-        the acts agent arrives v0.3 — coming soon.
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {PENDING_ACTS.map((a) => (
+          <div
+            key={a.name}
+            style={{
+              padding: 14,
+              borderRadius: 14,
+              background: 'var(--surface-1, rgba(255,255,255,0.02))',
+              border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            <span aria-hidden="true" style={{ display: 'inline-flex' }}>
+              <PersonAvatar name={a.name} accent={a.accent} size={36} />
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 2 }}>
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: 9.5,
+                    fontWeight: 700,
+                    color: a.color,
+                    letterSpacing: 0.6,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {a.glyph} {a.kind}
+                </span>
+                <span className="mono" style={{ fontSize: 9.5, color: 'var(--text-40)' }}>
+                  · {a.conf}%
+                </span>
+              </div>
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: 'var(--ink)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {a.name}
+              </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  lineHeight: 1.3,
+                  color: 'var(--text-55)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {a.why}
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled
+              title="coming soon · v0.3"
+              aria-label={`send ${a.kind} for ${a.name} — coming soon, v0.3`}
+              style={{
+                padding: '7px 11px',
+                borderRadius: 8,
+                background: accent,
+                color: '#000',
+                border: '1.5px solid #000',
+                boxShadow: '2px 2px 0 #000',
+                font: '700 11px Inter, system-ui, sans-serif',
+                cursor: 'not-allowed',
+                opacity: 0.85,
+                flexShrink: 0,
+              }}
+            >
+              send →
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, within } from '@testing-library/react';
 
 import HomeClient, { type HomeInitialData } from '../HomeClient';
 
@@ -55,10 +55,27 @@ describe('HomeClient', () => {
     expect(list.textContent).toContain('2');
   });
 
-  it('renders the acts empty-state with the v0.3 copy', () => {
+  it('renders the mocked agent stripe (PR ε preview)', () => {
     render(<HomeClient userName="ayaan" initialData={sampleData} />);
-    const empty = screen.getByTestId('home-acts-empty');
-    expect(empty.textContent).toContain('the acts agent arrives v0.3');
+    const stripe = screen.getByTestId('home-agent-stripe');
+    expect(stripe.textContent).toContain('wingmic');
+    expect(stripe.textContent).toContain('3 drafts pending');
+  });
+
+  it('renders 3 pending-acts mock cards with disabled coming-soon CTAs', () => {
+    render(<HomeClient userName="ayaan" initialData={sampleData} />);
+    const acts = screen.getByTestId('home-acts');
+    // honest preview marker — the acts agent is not wired until v0.3.
+    expect(acts.textContent?.toLowerCase()).toContain('v0.3');
+    expect(acts.textContent).toContain('Sarah Chen');
+    expect(acts.textContent).toContain('Marcus Rivera');
+    expect(acts.textContent).toContain('Priya → Deepak');
+    // every send button is disabled chrome (no dead action on stub data).
+    const sendButtons = within(acts).getAllByRole('button', { name: /coming soon/i });
+    expect(sendButtons).toHaveLength(3);
+    for (const b of sendButtons) {
+      expect((b as HTMLButtonElement).disabled).toBe(true);
+    }
   });
 
   it('renders bottom nav with home active', () => {
