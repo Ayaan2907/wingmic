@@ -77,4 +77,24 @@ describe('OnboardingClient', () => {
       pushSpy.mock.invocationCallOrder[0],
     );
   });
+
+  it('acknowledge rejection re-enables buttons, shows error, and does NOT push', async () => {
+    mutateAsyncSpy.mockRejectedValueOnce(new Error('network down'));
+    render(<OnboardingClient />);
+    // walk to the last step so "get started" is the primary action
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    fireEvent.click(screen.getByRole('button', { name: /get started/i }));
+
+    await waitFor(() => expect(mutateAsyncSpy).toHaveBeenCalledTimes(1));
+    // inline error surfaces for retry
+    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeTruthy());
+    // not stranded: get-started + skip buttons are enabled again
+    const getStartedBtn = screen.getByRole('button', { name: /get started/i }) as HTMLButtonElement;
+    const skipBtn = screen.getByRole('button', { name: /skip/i }) as HTMLButtonElement;
+    expect(getStartedBtn.disabled).toBe(false);
+    expect(skipBtn.disabled).toBe(false);
+    // navigation never happened
+    expect(pushSpy).not.toHaveBeenCalled();
+  });
 });
