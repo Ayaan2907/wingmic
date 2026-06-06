@@ -2,6 +2,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor, cleanup } from '@testing-library/react';
 
+// ── Mock next/navigation ────────────────────────────────────────────────
+// After PR β₁-A, CaptureClient is a re-export of ChatClient which reads
+// useSearchParams() to handle the ?armRecord=1 deep link. Jsdom has no
+// Next router context, so we stub the hook to a noop query bag.
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => ({ get: (_: string) => null }),
+}));
+
 // ── Mock tRPC client ────────────────────────────────────────────────────
 const mutateAsyncMock = vi.fn();
 vi.mock('@/lib/trpc/client', () => ({
