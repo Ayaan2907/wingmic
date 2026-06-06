@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { trpc } from '@/lib/trpc/client';
 import { accent, second, third, violet, blue } from '@/app/chat/_components/tokens';
@@ -40,11 +40,20 @@ const GROUPINGS: Array<{ key: Grouping; label: string }> = [
 export default function SearchClient() {
   const params = useSearchParams();
   const [q, setQ] = useState(() => params?.get('q') ?? '');
+  // The queried term lags the input by 350ms so live typing doesn't fire an
+  // embedding API call per keystroke. Seeded from `q`, so the `?q=` seed (⌘K /
+  // chat chip) queries immediately on mount — only live typing is debounced.
+  const [debouncedQ, setDebouncedQ] = useState(q);
   const [grouping, setGrouping] = useState<Grouping>('recent');
 
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedQ(q), 350);
+    return () => clearTimeout(id);
+  }, [q]);
+
   const search = trpc.recall.query.useQuery(
-    { q: q.trim(), limit: 20 },
-    { enabled: q.trim().length > 0, staleTime: 60_000 },
+    { q: debouncedQ.trim(), limit: 20 },
+    { enabled: debouncedQ.trim().length > 0, staleTime: 60_000 },
   );
 
   function onSubmit(e: FormEvent) {
@@ -52,7 +61,7 @@ export default function SearchClient() {
   }
 
   const entities = (search.data?.entities ?? []) as Entity[];
-  const hasQuery = q.trim().length > 0;
+  const hasQuery = debouncedQ.trim().length > 0;
 
   return (
     <main

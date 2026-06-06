@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { act, render, screen, fireEvent, cleanup } from '@testing-library/react';
 
 // ── Mutable mock state (set per-test) ───────────────────────────────────
 // next/navigation + tRPC closures read these module-level vars, so each
@@ -14,6 +14,10 @@ type QueryState = {
 };
 let queryResult: QueryState = { data: undefined, isFetching: false, error: null };
 
+// Spy so the debounce test can assert the args/`enabled` flag the component
+// actually passes (the seeded vs. live-typed term).
+const useQuerySpy = vi.fn((_input?: unknown, _opts?: unknown) => queryResult);
+
 vi.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: (_: string) => searchQ }),
 }));
@@ -22,7 +26,7 @@ vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     recall: {
       query: {
-        useQuery: () => queryResult,
+        useQuery: (input: unknown, opts: unknown) => useQuerySpy(input, opts),
       },
     },
   },
@@ -48,15 +52,21 @@ describe('SearchClient', () => {
   beforeEach(() => {
     searchQ = null;
     queryResult = { data: undefined, isFetching: false, error: null };
+    useQuerySpy.mockClear();
   });
   afterEach(() => cleanup());
 
-  it('seeds the query input from ?q=', () => {
+  it('seeds the query input from ?q= and queries that term immediately', () => {
     searchQ = 'rust';
     queryResult = { data: { entities: [entity()], durationMs: 12 }, isFetching: false, error: null };
     render(<SearchClient />);
     const input = screen.getByRole('textbox') as HTMLInputElement;
     expect(input.value).toBe('rust');
+    // seed must fire on mount — no timer advance needed
+    expect(useQuerySpy).toHaveBeenCalledWith(
+      { q: 'rust', limit: 20 },
+      expect.objectContaining({ enabled: true }),
+    );
   });
 
   it('renders all four segmented-control options and defaults to recent', () => {
@@ -104,5 +114,34 @@ describe('SearchClient', () => {
     queryResult = { data: { entities: [], durationMs: 5 }, isFetching: false, error: null };
     render(<SearchClient />);
     expect(screen.getByText(/no matches/i)).toBeTruthy();
+  });
+
+  it('debounces live typing — the query stays disabled until ~350ms idle', () => {
+    vi.useFakeTimers();
+    try {
+      searchQ = null;
+      render(<SearchClient />);
+      const input = screen.getByRole('textbox') as HTMLInputElement;
+
+      fireEvent.change(input, { target: { value: 'rust' } });
+      // input is instantly responsive…
+      expect(input.value).toBe('rust');
+      // …but the queried term hasn't caught up yet: still disabled/empty.
+      expect(useQuerySpy).toHaveBeenLastCalledWith(
+        { q: '', limit: 20 },
+        expect.objectContaining({ enabled: false }),
+      );
+
+      // advance past the debounce window → the query fires for 'rust'.
+      act(() => {
+        vi.advanceTimersByTime(350);
+      });
+      expect(useQuerySpy).toHaveBeenLastCalledWith(
+        { q: 'rust', limit: 20 },
+        expect.objectContaining({ enabled: true }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
