@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PROTECTED_PATHS = ['/capture', '/recall', '/dashboard', '/graph'];
+const PROTECTED_PATHS = ['/capture', '/recall', '/search', '/dashboard', '/graph'];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -24,5 +24,11 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/capture/:path*', '/recall/:path*', '/dashboard/:path*', '/graph/:path*'],
+  matcher: [
+    '/capture/:path*',
+    '/recall/:path*',
+    '/search/:path*',
+    '/dashboard/:path*',
+    '/graph/:path*',
+  ],
 };
