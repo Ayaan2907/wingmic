@@ -56,9 +56,11 @@ export function GraphClient({ data }: { data: GraphData }) {
   const filtered = useMemo(() => {
     const nodes = data.nodes.filter((n) => active.has(n.kind));
     const visibleIds = new Set(nodes.map((n) => n.id));
-    const links = data.links.filter(
-      (l) => visibleIds.has(l.source) && visibleIds.has(l.target),
-    );
+    const links = data.links.filter((l) => {
+      const sourceId = typeof l.source === 'string' ? l.source : (l.source as any).id;
+      const targetId = typeof l.target === 'string' ? l.target : (l.target as any).id;
+      return visibleIds.has(sourceId) && visibleIds.has(targetId);
+    });
     return { nodes, links };
   }, [data, active]);
 
