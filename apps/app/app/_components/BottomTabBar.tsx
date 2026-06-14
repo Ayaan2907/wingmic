@@ -40,115 +40,40 @@ function vibrate(pattern: number | number[]) {
   }
 }
 
-export function BottomTabBar({ active }: { active: BottomTabKey }) {
-  const { recorder, beginCapture } = useCapture();
-  const status = recorder.status;
+export const NAV_TABS: Array<{ key: BottomTabKey; glyph: string; label: string; href: string; big?: boolean }> = [
+  { key: 'home', glyph: '⌂', label: 'home', href: '/' },
+  { key: 'chat', glyph: '⌕', label: 'chat', href: '/chat' },
+  { key: 'capture', glyph: '◉', label: 'capture', href: '/chat', big: true },
+  { key: 'graph', glyph: '◈', label: 'graph', href: '/graph' },
+  { key: 'acts', glyph: '◬', label: 'acts', href: '/acts' },
+];
 
-  // Hide the regular bar content during `locked` — render the locked pill
-  // chrome in its place, in the same DOM nav element (keeps button identity
-  // stable for any post-locked pointer events).
-  if (status === 'locked') {
-    return <LockedBar onStop={() => recorder.stop()} onDiscard={() => recorder.discard()} duration={recorder.duration} />;
-  }
-
-  return <DefaultBar active={active} recorder={recorder} beginCapture={beginCapture} />;
-}
-
-interface DefaultBarProps {
-  active: BottomTabKey;
-  recorder: ReturnType<typeof useCapture>['recorder'];
-  beginCapture: ReturnType<typeof useCapture>['beginCapture'];
-}
-
-function DefaultBar({ active, recorder, beginCapture }: DefaultBarProps) {
-  const tabs: Array<{ key: BottomTabKey; glyph: string; label: string; href: string; big?: boolean }> = [
-    { key: 'home', glyph: '⌂', label: 'home', href: '/' },
-    { key: 'chat', glyph: '⌕', label: 'chat', href: '/chat' },
-    // capture slot: this is the orb itself, not a link. href kept for SR
-    // semantics but the button intercepts pointer events.
-    { key: 'capture', glyph: '◉', label: 'capture', href: '/chat', big: true },
-    { key: 'graph', glyph: '◈', label: 'graph', href: '/graph' },
-    { key: 'acts', glyph: '◬', label: 'acts', href: '/acts' },
-  ];
-
+export function NavLink({ tab, active }: { tab: (typeof NAV_TABS)[number]; active: boolean }) {
   return (
-    <nav
-      aria-label="primary"
+    <a
+      href={tab.href}
+      aria-current={active ? 'page' : undefined}
       style={{
-        position: 'fixed',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        height: TAB_BAR_HEIGHT_PX,
-        paddingTop: 16,
-        paddingBottom: 'env(safe-area-inset-bottom)',
-        background: 'rgba(10,10,10,0.92)',
-        backdropFilter: 'blur(20px)',
-        borderTop: '1px solid var(--border-soft)',
+        flex: 1,
         display: 'flex',
-        alignItems: 'flex-start',
-        zIndex: 50,
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 2,
+        textDecoration: 'none',
+        position: 'relative',
+        fontFamily: 'JetBrains Mono, monospace',
+        fontSize: 9,
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
       }}
     >
-      {tabs.map((t) => {
-        const isActive = t.key === active;
-        if (t.big) {
-          return (
-            <CaptureOrb
-              key={t.key}
-              isActive={isActive}
-              label={t.label}
-              recorder={recorder}
-              beginCapture={beginCapture}
-            />
-          );
-        }
-        return (
-          <a
-            key={t.key}
-            href={t.href}
-            aria-current={isActive ? 'page' : undefined}
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 2,
-              textDecoration: 'none',
-              position: 'relative',
-              fontFamily: 'JetBrains Mono, monospace',
-              fontSize: 9,
-              letterSpacing: 0.5,
-              textTransform: 'uppercase',
-            }}
-          >
-            {isActive && (
-              <span
-                aria-hidden="true"
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  width: 18,
-                  height: 2,
-                  background: accent,
-                  borderRadius: 999,
-                }}
-              />
-            )}
-            <span
-              aria-hidden="true"
-              style={{ fontSize: 20, color: isActive ? accent : 'var(--text-55)' }}
-            >
-              {t.glyph}
-            </span>
-            <span style={{ color: isActive ? accent : 'var(--text-40)' }}>{t.label}</span>
-          </a>
-        );
-      })}
-    </nav>
+      {active && (
+        <span aria-hidden="true" style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: 18, height: 2, background: accent, borderRadius: 999 }} />
+      )}
+      <span aria-hidden="true" style={{ fontSize: 20, color: active ? accent : 'var(--text-55)' }}>{tab.glyph}</span>
+      <span style={{ color: active ? accent : 'var(--text-40)' }}>{tab.label}</span>
+    </a>
   );
 }
 
@@ -159,7 +84,7 @@ interface CaptureOrbProps {
   beginCapture: ReturnType<typeof useCapture>['beginCapture'];
 }
 
-function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureOrbProps) {
+export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureOrbProps) {
   const buttonRef = React.useRef<HTMLButtonElement | null>(null);
   const originRef = React.useRef<{ x: number; y: number } | null>(null);
   const movedRef = React.useRef(false);
@@ -428,28 +353,20 @@ interface LockedBarProps {
   duration: number;
 }
 
-function LockedBar({ onStop, onDiscard, duration }: LockedBarProps) {
+export function LockedBar({ onStop, onDiscard, duration }: LockedBarProps) {
   const totalSec = Math.floor(duration / 1000);
   const mm = Math.floor(totalSec / 60);
   const ss = (totalSec % 60).toString().padStart(2, '0');
   return (
     <nav
       aria-label="primary"
+      className="app-nav"
       style={{
-        position: 'fixed',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        height: TAB_BAR_HEIGHT_PX,
-        paddingBottom: 'env(safe-area-inset-bottom)',
-        background: 'rgba(10,10,10,0.92)',
-        backdropFilter: 'blur(20px)',
-        borderTop: '1px solid var(--border-soft)',
-        display: 'flex',
         alignItems: 'center',
         gap: 10,
         padding: '0 12px',
-        zIndex: 50,
+        paddingTop: 0,
+        paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
       <span
@@ -530,5 +447,3 @@ function LockedBar({ onStop, onDiscard, duration }: LockedBarProps) {
     </nav>
   );
 }
-
-export default BottomTabBar;

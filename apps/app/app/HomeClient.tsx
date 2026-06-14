@@ -14,14 +14,14 @@
  *   4. Recent activity — last 5 interactions with time + transcript preview
  *      + entity-count badge (PersonAvatar where a person dominates the memo).
  *
- * Bottom-nav is the shared BottomTabBar with `active="home"`.
+ * Bottom-nav / desktop rail is owned by the shared AppShell (PR λ-shell),
+ * mounted once in the root layout — this screen no longer renders it.
  * Real data: stats + activity come from the server page via `initialData`.
  * Mock data: the agent stripe + acts cards are seeded previews (PR ε) — they
  * swap for real `ctx.db` queries in the v0.1.3 backend-wireup phase.
  */
 
 import * as React from 'react';
-import { BottomTabBar } from './_components/BottomTabBar';
 import { PersonAvatar } from './_components/entity/EntityAvatar';
 
 // ── Tokens ──────────────────────────────────────────────────────────────
@@ -75,7 +75,6 @@ export default function HomeClient({ userName, initialData }: HomeClientProps) {
         flexDirection: 'column',
         background: 'var(--bg-page)',
         color: 'var(--ink)',
-        paddingBottom: 110,
       }}
       data-screen="home"
     >
@@ -95,8 +94,6 @@ export default function HomeClient({ userName, initialData }: HomeClientProps) {
         <ActsPending />
         <ActivityList items={recent} />
       </section>
-
-      <BottomTabBar active="home" />
     </main>
   );
 }

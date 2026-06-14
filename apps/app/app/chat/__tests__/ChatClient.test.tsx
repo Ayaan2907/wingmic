@@ -86,20 +86,21 @@ vi.mock('@/app/capture/_components/useAudioRecorder', () => {
 });
 
 import ChatClient from '@/app/chat/ChatClient';
-import { CaptureProvider } from '@/app/_components/CaptureProvider';
 import { RecordingOverlay } from '@/app/_components/RecordingOverlay';
+import { renderWithShell } from '@/test/renderWithShell';
 import * as React from 'react';
 
-// Wrap renders in the provider — ChatClient now consumes useCapture() for
-// recorder + messages, and BottomTabBar's orb only works inside a provider.
-// RecordingOverlay is mounted so the live phantom-bubble + chrome render in
-// the test DOM as they would in production.
+// PR λ-shell: the capture orb + primary nav now live in AppShell, not in
+// ChatClient. renderWithShell mounts the screen the way production does —
+// inside CaptureProvider + AppShell — so orb-dependent assertions keep
+// working. RecordingOverlay is mounted alongside so the live phantom-bubble
+// + chrome render in the test DOM as they would in production.
 function renderChat(props: { userName: string | null; initialThread?: Parameters<typeof ChatClient>[0]['initialThread'] }) {
-  return render(
-    <CaptureProvider>
+  return renderWithShell(
+    <>
       <ChatClient {...props} />
       <RecordingOverlay />
-    </CaptureProvider>,
+    </>,
   );
 }
 

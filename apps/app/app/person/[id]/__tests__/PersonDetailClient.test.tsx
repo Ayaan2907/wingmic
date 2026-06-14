@@ -14,12 +14,8 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-// BottomTabBar pulls in useCapture context; stub so the scaffold mounts
-// without a provider for these focused tests.
-vi.mock('@/app/_components/BottomTabBar', () => ({
-  BottomTabBar: () => <nav data-testid="bottom-tab-bar" />,
-  TAB_BAR_HEIGHT_PX: 56,
-}));
+// PR λ-shell: EntityDetailScaffold no longer renders BottomTabBar (the nav +
+// orb live in AppShell, asserted in AppShell.test.tsx). No mock needed.
 
 import PersonDetailClient from '../PersonDetailClient';
 
