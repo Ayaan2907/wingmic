@@ -279,5 +279,5 @@ a {
   }
   .app-content { padding-bottom: 0; padding-left: var(--rail-width); }
   /* desktop: rail persists, in-page back arrow is redundant (design.md §14.2) */
-  .app-backlink { display: none; }
+  .app-backlink { display: none !important; }
 }
