@@ -42,9 +42,21 @@ function App() {
   const [submitted, setSubmitted] = useState(false);
   const [pending, setPending] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const accent = tweaks.accentColor;
   const second = tweaks.secondColor;
   const third = tweaks.thirdColor;
+
+  const navLinks = [
+    { href: '#how', label: 'How' },
+    { href: '#api', label: 'API' },
+    { href: '#mcp', label: 'MCP' },
+    { href: '#imports', label: 'Imports' },
+    { href: '#acts', label: 'Acts' },
+    { href: '#testimonials', label: 'Voices' },
+  ];
+
+  const handleMobileLinkClick = () => setMobileMenuOpen(false);
 
   useEffect(() => {
     const handler = (e) => {
@@ -96,7 +108,7 @@ function App() {
     <div style={{ minHeight: '100vh', position: 'relative' }}>
 
       {/* ─────────────────── TOP BAR ─────────────────── */}
-      <div style={{
+      <div className="wm-topbar" style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 101,
         padding: '6px 32px', textAlign: 'center', fontSize: 12.5,
         background: '#0a0a0a',
@@ -104,12 +116,12 @@ function App() {
         color: '#fff', fontWeight: 500,
         display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24
       }}>
-        <span style={{ color: 'rgba(255,255,255,0.5)' }} className="mono">v0.1.0-beta · capture + recall ship first · waves of 50</span>
-        <span style={{ width: 4, height: 4, borderRadius: '50%', background: accent }} />
+        <span className="mono wm-topbar-tag" style={{ color: 'rgba(255,255,255,0.5)' }}>v0.1.0-beta · capture + recall ship first · waves of 50</span>
+        <span className="wm-topbar-dot" style={{ width: 4, height: 4, borderRadius: '50%', background: accent }} />
         <a href="#waitlist" style={{ color: accent, fontWeight: 600 }}>get an invite →</a>
       </div>
 
-      <nav style={{
+      <nav className="wm-nav" style={{
         position: 'fixed', top: 30, left: 0, right: 0, zIndex: 100,
         padding: '14px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: 'rgba(10,10,10,0.85)', backdropFilter: 'blur(20px)',
@@ -126,44 +138,66 @@ function App() {
             wingmic<span style={{ color: 'rgba(255,255,255,0.35)' }}>.xyz</span>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 28, alignItems: 'center' }}>
-          <a href="#how" style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)' }}>How</a>
-          <a href="#api" style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)' }}>API</a>
-          <a href="#mcp" style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)' }}>MCP</a>
-          <a href="#imports" style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)' }}>Imports</a>
-          <a href="#acts" style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)' }}>Acts</a>
-          <a href="#testimonials" style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)' }}>Voices</a>
-          <a href="#" style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)', display: 'flex', alignItems: 'center', gap: 5 }}>
+        <div className="wm-nav-links" style={{ display: 'flex', gap: 28, alignItems: 'center' }}>
+          {navLinks.map((l) =>
+            <a key={l.href} href={l.href} style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)' }}>{l.label}</a>
+          )}
+          <a href="https://github.com/Ayaan2907/wingmic" target="_blank" rel="noreferrer" style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)', display: 'flex', alignItems: 'center', gap: 5 }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.6-.3-5.4-1.3-5.4-5.9 0-1.3.5-2.4 1.2-3.2-.1-.4-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 016 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.8.1 3.2.7.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0012 .3" /></svg>
             GitHub
           </a>
-          <a href="#waitlist" style={{
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <a href="#waitlist" className="wm-nav-cta" style={{
             padding: '8px 16px', borderRadius: 8,
             background: '#fff', color: '#000',
             fontSize: 13.5, fontWeight: 600,
             border: '1px solid rgba(255,255,255,0.2)'
           }}>Get beta access</a>
+          <button
+            type="button"
+            className="wm-mobile-menu-btn"
+            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileMenuOpen}
+            onClick={() => setMobileMenuOpen((v) => !v)}
+          >
+            {mobileMenuOpen ?
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> :
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            }
+          </button>
         </div>
       </nav>
 
+      {mobileMenuOpen &&
+        <div className="wm-mobile-menu" role="menu">
+          {navLinks.map((l) =>
+            <a key={l.href} href={l.href} role="menuitem" onClick={handleMobileLinkClick}>{l.label}</a>
+          )}
+          <a href="https://github.com/Ayaan2907/wingmic" target="_blank" rel="noreferrer" role="menuitem" onClick={handleMobileLinkClick}>GitHub</a>
+        </div>
+      }
+
       {/* ─────────────────── HERO — editorial brutalist ─────────────────── */}
-      <section style={{
+      <section className="grid-bg wm-hero" style={{
         position: 'relative', minHeight: '100vh', paddingTop: 120, paddingBottom: 60,
         overflow: 'hidden'
-      }} className="grid-bg">
+      }}>
 
         <div style={{ position: 'absolute', inset: 0, opacity: 0.6 }}>
           <LiveGraph accent={accent} second={second} third={third} />
         </div>
 
-        {/* Floating stickers */}
-        <Sticker color={accent} rotate={-8} x="6%" y="14%" size="lg">v0.1 BETA · LIVE</Sticker>
-        <Sticker color="#fff" rotate={5} x="88%" y="18%">VOICE FIRST</Sticker>
-        <Sticker color={second} rotate={-3} x="4%" y="78%">MCP READY</Sticker>
-        <Sticker color={third} rotate={4} x="86%" y="80%">OPEN BETA</Sticker>
+        {/* Floating stickers — decorative, hidden on small screens */}
+        <div className="wm-hide-mobile">
+          <Sticker color={accent} rotate={-8} x="6%" y="14%" size="lg">v0.1 BETA · LIVE</Sticker>
+          <Sticker color="#fff" rotate={5} x="88%" y="18%">VOICE FIRST</Sticker>
+          <Sticker color={second} rotate={-3} x="4%" y="78%">MCP READY</Sticker>
+          <Sticker color={third} rotate={4} x="86%" y="80%">OPEN BETA</Sticker>
+        </div>
 
         {/* Center hero */}
-        <div style={{
+        <div className="wm-hero-grid" style={{
           maxWidth: 1280, margin: '0 auto', padding: '0 32px',
           display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 40, alignItems: 'center',
           position: 'relative'
@@ -236,13 +270,13 @@ function App() {
 
           {/* Right — phone */}
           <div style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>
-            <div style={{ position: 'relative', transform: 'rotate(2deg)' }}>
+            <div className="wm-hero-phone-wrap" style={{ position: 'relative', transform: 'rotate(2deg)' }}>
               <MiniPhone accent={accent} />
               {/* tape strip */}
               <div className="tape" style={{ top: -12, left: '40%', transform: 'rotate(-6deg)' }} />
             </div>
             {/* Floating data chips */}
-            <div className="mono" style={{
+            <div className="mono wm-hide-mobile" style={{
               position: 'absolute', top: 20, right: -30,
               padding: '8px 12px', borderRadius: 8,
               background: '#0a0a0a', border: `1px solid ${accent}40`,
@@ -252,7 +286,7 @@ function App() {
             }}>
               + 3 nodes
             </div>
-            <div className="mono" style={{
+            <div className="mono wm-hide-mobile" style={{
               position: 'absolute', bottom: 80, left: -40,
               padding: '8px 12px', borderRadius: 8,
               background: '#0a0a0a', border: `1px solid ${third}40`,
@@ -267,7 +301,7 @@ function App() {
       </section>
 
       {/* ─────────────────── PROBLEM — editorial big numbers ─────────────────── */}
-      <section style={{
+      <section className="wm-section" style={{
         padding: '120px 32px',
         borderTop: `2px solid ${accent}30`,
         background: '#06060a',
@@ -278,7 +312,7 @@ function App() {
           <div className="mono" style={{ fontSize: 11, color: '#FF6B6B', marginBottom: 16, letterSpacing: 2, textTransform: 'uppercase' }}>
             ◆ The handshake memory leak
           </div>
-          <h2 style={{
+          <h2 className="wm-section-h2" style={{
             fontSize: 'clamp(36px, 5vw, 68px)',
             fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 80, maxWidth: 900
           }}>
@@ -286,13 +320,13 @@ function App() {
             Conferences are <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: accent }}>memory pressure</span>.
           </h2>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 48, marginBottom: 80 }}>
+          <div className="wm-stack" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 48, marginBottom: 80 }}>
             <StatBlock value="12" label="people met" sub="conference Tuesday" color={accent} rotate={-3} />
             <StatBlock value="3" label="names recalled" sub="by Friday morning" color="#FF6B6B" rotate={2} />
             <StatBlock value="0" label="follow-ups sent" sub="of 5 you promised" color={third} rotate={-1} />
           </div>
 
-          <div style={{
+          <div className="wm-stack" style={{
             display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16,
             maxWidth: 900, margin: '0 auto'
           }}>
@@ -316,12 +350,12 @@ function App() {
       </section>
 
       {/* ─────────────────── HOW IT WORKS — diagonal flow ─────────────────── */}
-      <section id="how" style={{ padding: '120px 32px', background: '#0a0a0a', borderTop: `2px solid ${accent}30` }}>
+      <section id="how" className="wm-section" style={{ padding: '120px 32px', background: '#0a0a0a', borderTop: `2px solid ${accent}30` }}>
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
           <div className="mono" style={{ fontSize: 11, color: accent, marginBottom: 16, letterSpacing: 2, textTransform: 'uppercase' }}>
             ◆ How it works
           </div>
-          <h2 style={{
+          <h2 className="wm-section-h2" style={{
             fontSize: 'clamp(36px, 5vw, 68px)', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 16
           }}>
             Three verbs. <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: accent }}>Speak. Extract. Query.</span>
@@ -332,11 +366,11 @@ function App() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {/* Step 01 - Speak */}
-            <div style={{
+            <div className="wm-step-grid" style={{
               display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 60, alignItems: 'center',
               padding: '60px 0', borderTop: '1px solid rgba(255,255,255,0.08)'
             }}>
-              <div>
+              <div className="wm-step-copy">
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, marginBottom: 16 }}>
                   <span className="serif" style={{ fontSize: 100, fontStyle: 'italic', color: accent, lineHeight: 1, letterSpacing: '-0.04em' }}>01</span>
                   <div className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: 2, textTransform: 'uppercase' }}>speak</div>
@@ -376,7 +410,7 @@ function App() {
             </div>
 
             {/* Step 02 - Extract */}
-            <div style={{
+            <div className="wm-step-grid" style={{
               display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 60, alignItems: 'center',
               padding: '60px 0', borderTop: '1px solid rgba(255,255,255,0.08)'
             }}>
@@ -437,7 +471,7 @@ function App() {
                 </div>
               </div>
 
-              <div>
+              <div className="wm-step-copy">
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, marginBottom: 16 }}>
                   <span className="serif" style={{ fontSize: 100, fontStyle: 'italic', color: accent, lineHeight: 1, letterSpacing: '-0.04em' }}>02</span>
                   <div className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: 2, textTransform: 'uppercase' }}>extract</div>
@@ -452,11 +486,11 @@ function App() {
             </div>
 
             {/* Step 03 - Query */}
-            <div style={{
+            <div className="wm-step-grid" style={{
               display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 60, alignItems: 'center',
               padding: '60px 0', borderTop: '1px solid rgba(255,255,255,0.08)'
             }}>
-              <div>
+              <div className="wm-step-copy">
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, marginBottom: 16 }}>
                   <span className="serif" style={{ fontSize: 100, fontStyle: 'italic', color: accent, lineHeight: 1, letterSpacing: '-0.04em' }}>03</span>
                   <div className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: 2, textTransform: 'uppercase' }}>query</div>
@@ -504,14 +538,14 @@ function App() {
       </section>
 
       {/* ─────────────────── API — developer first ─────────────────── */}
-      <section id="api" style={{ padding: '120px 32px', background: '#06060a', borderTop: `2px solid ${accent}30`, position: 'relative' }}>
+      <section id="api" className="wm-section" style={{ padding: '120px 32px', background: '#06060a', borderTop: `2px solid ${accent}30`, position: 'relative' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 64, flexWrap: 'wrap', gap: 24 }}>
             <div>
               <div className="mono" style={{ fontSize: 11, color: third, marginBottom: 16, letterSpacing: 2, textTransform: 'uppercase' }}>
                 ◆ API · SDK · Webhooks
               </div>
-              <h2 style={{
+              <h2 className="wm-section-h2" style={{
                 fontSize: 'clamp(36px, 5vw, 68px)', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 16, maxWidth: 800
               }}>
                 Your network is <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: third }}>queryable</span>.
@@ -529,7 +563,7 @@ function App() {
             </a>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 24 }}>
+          <div className="wm-stack" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 24 }}>
             {/* Code */}
             <CodeBlock
               accent={accent}
@@ -584,7 +618,7 @@ function App() {
           </div>
 
           {/* Feature row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginTop: 32 }}>
+          <div className="wm-stack-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginTop: 32 }}>
             {[
             { k: 'TypeScript SDK', v: 'Fully typed, zero deps' },
             { k: 'Webhooks', v: 'Real-time, retries built-in' },
@@ -607,10 +641,10 @@ function App() {
       </section>
 
       {/* ─────────────────── MCP SHOWCASE ─────────────────── */}
-      <section id="mcp" style={{ padding: '120px 32px', background: '#0a0a0a', borderTop: `2px solid ${accent}30`, position: 'relative', overflow: 'hidden' }}>
+      <section id="mcp" className="wm-section" style={{ padding: '120px 32px', background: '#0a0a0a', borderTop: `2px solid ${accent}30`, position: 'relative', overflow: 'hidden' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto', position: 'relative' }}>
           {/* Decorative orbit */}
-          <div style={{
+          <div className="wm-hide-mobile" style={{
             position: 'absolute', top: '50%', right: -200, transform: 'translateY(-50%)',
             width: 600, height: 600, borderRadius: '50%',
             border: '1px dashed rgba(167,139,250,0.15)',
@@ -619,12 +653,12 @@ function App() {
             <div style={{ position: 'absolute', top: 0, left: '50%', width: 12, height: 12, borderRadius: '50%', background: '#A78BFA', transform: 'translateX(-50%)' }} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 60, alignItems: 'center', position: 'relative' }}>
+          <div className="wm-stack" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 60, alignItems: 'center', position: 'relative' }}>
             <div>
               <div className="mono" style={{ fontSize: 11, color: '#A78BFA', marginBottom: 16, letterSpacing: 2, textTransform: 'uppercase' }}>
                 ◆ MCP · Model Context Protocol
               </div>
-              <h2 style={{
+              <h2 className="wm-section-h2" style={{
                 fontSize: 'clamp(36px, 5vw, 64px)', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 24
               }}>
                 Your agent already <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: '#A78BFA' }}>knows</span> your network.
@@ -688,15 +722,15 @@ function App() {
       </section>
 
       {/* ─────────────────── CONTACTS IMPORT ─────────────────── */}
-      <section id="imports" style={{ padding: '120px 32px', background: '#0a0a0a', borderTop: `2px solid ${accent}30`, position: 'relative', overflow: 'hidden' }}>
+      <section id="imports" className="wm-section" style={{ padding: '120px 32px', background: '#0a0a0a', borderTop: `2px solid ${accent}30`, position: 'relative', overflow: 'hidden' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto', position: 'relative' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.2fr)', gap: 80, alignItems: 'flex-start' }}>
+          <div className="wm-stack" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.2fr)', gap: 80, alignItems: 'flex-start' }}>
             {/* Left — pitch */}
-            <div style={{ position: 'sticky', top: 100 }}>
+            <div className="wm-imports-sticky" style={{ position: 'sticky', top: 100 }}>
               <div className="mono" style={{ fontSize: 11, color: accent, marginBottom: 16, letterSpacing: 2, textTransform: 'uppercase' }}>
                 ◆ Connect everything
               </div>
-              <h2 style={{
+              <h2 className="wm-section-h2" style={{
                 fontSize: 'clamp(40px, 5.5vw, 72px)', fontWeight: 900, letterSpacing: '-0.035em', lineHeight: 0.95, marginBottom: 24,
                 fontFamily: 'system-ui',
               }}>
@@ -872,7 +906,7 @@ function App() {
       </section>
 
       {/* ─────────────────── WINGMIC ACTS ─────────────────── */}
-      <section id="acts" style={{ padding: '140px 32px 120px', background: '#06060a', borderTop: `2px solid ${accent}30`, position: 'relative', overflow: 'hidden' }}>
+      <section id="acts" className="wm-section" style={{ padding: '140px 32px 120px', background: '#06060a', borderTop: `2px solid ${accent}30`, position: 'relative', overflow: 'hidden' }}>
         {/* Decorative back-glow */}
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none',
@@ -886,7 +920,7 @@ function App() {
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: third, animation: 'pulse-d 1.5s infinite' }} />
                 ◆ It's not just memory.
               </div>
-              <h2 style={{
+              <h2 className="wm-section-h2" style={{
                 fontSize: 'clamp(48px, 6.5vw, 88px)', fontWeight: 900,
                 letterSpacing: '-0.04em', lineHeight: 0.92, marginBottom: 24,
                 fontFamily: 'system-ui',
@@ -918,9 +952,9 @@ function App() {
           </div>
 
           {/* THREE-CARD SHOWCASE */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24, marginBottom: 80 }}>
+          <div className="wm-stack" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24, marginBottom: 80 }}>
             {/* Card 1 — Auto checkin email draft */}
-            <div style={{
+            <div className="wm-acts-wide" style={{
               gridColumn: 'span 2',
               padding: 32, borderRadius: 16,
               background: '#0a0a0a', border: `1px solid ${accent}30`,
@@ -1145,15 +1179,15 @@ function App() {
       </section>
 
       {/* ─────────────────── LIVE FEED + BIG NUMBERS ─────────────────── */}
-      <section style={{ padding: '120px 32px', background: '#06060a', borderTop: `2px solid ${accent}30` }}>
+      <section className="wm-section" style={{ padding: '120px 32px', background: '#06060a', borderTop: `2px solid ${accent}30` }}>
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'center' }}>
+          <div className="wm-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'center' }}>
             <div>
               <div className="mono" style={{ fontSize: 11, color: accent, marginBottom: 16, letterSpacing: 2, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, animation: 'pulse-d 1.5s infinite' }} />
                 Live · last 24h
               </div>
-              <h2 style={{
+              <h2 className="wm-section-h2" style={{
                 fontSize: 'clamp(36px, 5vw, 60px)', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 24
               }}>
                 Beta is <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: accent }}>cooking</span>.
@@ -1183,11 +1217,11 @@ function App() {
 
       {/* ─────────────────── TESTIMONIALS — kinetic marquee ─────────────────── */}
       <section id="testimonials" style={{ padding: '120px 0', background: '#0a0a0a', borderTop: `2px solid ${accent}30`, overflow: 'hidden' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 32px', marginBottom: 48 }}>
+        <div className="wm-section" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 32px', marginBottom: 48 }}>
           <div className="mono" style={{ fontSize: 11, color: accent, marginBottom: 16, letterSpacing: 2, textTransform: 'uppercase' }}>
             ◆ Real users · real graphs
           </div>
-          <h2 style={{
+          <h2 className="wm-section-h2" style={{
             fontSize: 'clamp(36px, 5vw, 68px)', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1
           }}>
             What devs are <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: accent }}>saying.</span>
@@ -1200,7 +1234,7 @@ function App() {
       </section>
 
       {/* ─────────────────── WAITLIST ─────────────────── */}
-      <section id="waitlist" style={{
+      <section id="waitlist" className="wm-section" style={{
         padding: '140px 32px', background: '#06060a',
         borderTop: `2px solid ${accent}30`, position: 'relative', overflow: 'hidden'
       }}>
@@ -1211,7 +1245,9 @@ function App() {
           maxWidth: 720, margin: '0 auto', textAlign: 'center', position: 'relative'
         }}>
 
-          <Sticker color={accent} rotate={-8} x="-30px" y="0">JOIN ▸</Sticker>
+          <div className="wm-hide-mobile">
+            <Sticker color={accent} rotate={-8} x="-30px" y="0">JOIN ▸</Sticker>
+          </div>
 
           <div className="mono" style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 999,
@@ -1234,7 +1270,7 @@ function App() {
           </p>
 
           {!submitted ?
-          <form onSubmit={(e) => {e.preventDefault();submitWaitlist();}} style={{
+          <form onSubmit={(e) => {e.preventDefault();submitWaitlist();}} className="wm-waitlist-form" style={{
             display: 'flex', gap: 8, padding: 6, borderRadius: 12,
             background: '#0a0a0a', border: `1.5px solid ${accent}50`,
             maxWidth: 500, margin: '0 auto',
@@ -1288,11 +1324,11 @@ function App() {
       </section>
 
       {/* ─────────────────── FOOTER ─────────────────── */}
-      <footer style={{
+      <footer className="wm-section" style={{
         padding: '60px 32px 40px', borderTop: '1px solid rgba(255,255,255,0.06)',
         background: '#0a0a0a'
       }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 40, marginBottom: 40 }}>
+        <div className="wm-footer-grid" style={{ maxWidth: 1280, margin: '0 auto', display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 40, marginBottom: 40 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
               <div style={{ width: 32, height: 32, borderRadius: 8, background: accent, color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 18 }}>W</div>
