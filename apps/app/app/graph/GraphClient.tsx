@@ -26,7 +26,7 @@ export type GraphData = { nodes: GraphNode[]; links: GraphLink[] };
 const KIND_COLOR: Record<NodeKind, string> = {
   person: accent, // #FFC452
   company: blue, // #7DD3FC
-  event: 'var(--text-55)',
+  event: '#8c8c8c',
   topic: violet, // #A78BFA
 };
 
