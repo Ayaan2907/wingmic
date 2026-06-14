@@ -27,10 +27,8 @@ export const graphRouter = router({
 
     // People = the user's own, non-deleted entities.
     const people = await db.query.entities.findMany({
-      where: and(
-        eq(schema.entities.ownerUserId, userId),
-        isNull(schema.entities.deletedAt),
-      ),
+      columns: { id: true, name: true },
+      where: and(eq(schema.entities.ownerUserId, userId), isNull(schema.entities.deletedAt)),
     });
 
     if (people.length === 0) {
