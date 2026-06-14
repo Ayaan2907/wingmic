@@ -211,7 +211,7 @@ export function GraphClient({ data }: { data: GraphData }) {
             {selected.label}
           </div>
           <a
-            href={'/' + selected.kind + '/' + selected.id}
+            href={selected.kind === 'topic' ? '/recall' : '/' + selected.kind + '/' + selected.id}
             style={{
               color: accent,
               fontSize: 14,
