@@ -1,0 +1,20 @@
+docs/superpowers/plans/2026-05-23-v0.1.1-hosted-capture.md
+  s_4581ffe1e23c29::t_052519b0a5c805 661-662,664
+  s_4581ffe1e23c29::t_571731307a827b 616-640
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "27546137bd4d510d12bcd529c48c338af94efb24",
+  "prompts": {},
+  "sessions": {
+    "s_4581ffe1e23c29": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a2238454-0812-45a8-a12e-7fffcc0e43c5",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
