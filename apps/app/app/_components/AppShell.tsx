@@ -31,7 +31,6 @@ function activeFor(pathname: string): BottomTabKey | null {
   if (pathname.startsWith('/acts')) return 'acts';
   return null; // entity / search / etc — no tab highlighted
 }
-}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? '/';
