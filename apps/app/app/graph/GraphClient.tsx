@@ -62,6 +62,21 @@ export function GraphClient({ data }: { data: GraphData }) {
     return { nodes, links };
   }, [data, active]);
 
+  // Edges touching the selected node, for the desktop detail rail. Real data,
+  // derived from data.links. react-force-graph mutates link.source/target from
+  // id strings into node objects after first render, so normalise both.
+  const nodeById = useMemo(() => new Map(data.nodes.map((n) => [n.id, n])), [data.nodes]);
+  const selectedEdges = useMemo(() => {
+    if (!selected) return [] as Array<{ rel: LinkRel; label: string }>;
+    const idOf = (end: string | { id: string }) => (typeof end === 'object' ? end.id : end);
+    return data.links
+      .filter((l) => idOf(l.source) === selected.id || idOf(l.target) === selected.id)
+      .map((l) => {
+        const otherId = idOf(l.source) === selected.id ? idOf(l.target) : idOf(l.source);
+        return { rel: l.rel, label: nodeById.get(otherId)?.label ?? otherId };
+      });
+  }, [selected, data.links, nodeById]);
+
   if (data.nodes.length === 0) {
     return (
       <main
@@ -101,7 +116,11 @@ export function GraphClient({ data }: { data: GraphData }) {
   }
 
   return (
+    // Desktop (≥1120px) splits into [canvas | detail rail]; on mobile the
+    // rail is display:none and the selected node uses the floating card.
+    <div className="surface-split">
     <main
+      className="surface-primary"
       style={{
         position: 'relative',
         minHeight: '100dvh',
@@ -157,9 +176,11 @@ export function GraphClient({ data }: { data: GraphData }) {
         backgroundColor="rgba(0,0,0,0)"
       />
 
-      {/* Selected-node floating card (above the nav on mobile). */}
+      {/* Selected-node floating card (above the nav on mobile). Hidden on
+          desktop — the persistent detail rail replaces it there. */}
       {selected && (
         <div
+          className="graph-mobile-card"
           style={{
             position: 'absolute',
             left: 16,
@@ -222,5 +243,150 @@ export function GraphClient({ data }: { data: GraphData }) {
         </div>
       )}
     </main>
+
+      {/* Desktop detail rail (proto-desktop.jsx ScreenDesktopGraph 265–291). */}
+      <aside
+        className="desktop-pane detail-rail"
+        style={{ padding: '20px 18px', background: 'rgba(255,255,255,0.01)' }}
+        aria-label="selected node"
+      >
+        {selected ? (
+          <>
+            <div
+              className="mono"
+              style={{
+                fontSize: 10,
+                letterSpacing: 2,
+                textTransform: 'uppercase',
+                color: 'rgba(255,255,255,0.3)',
+                marginBottom: 14,
+              }}
+            >
+              ◉ selected
+            </div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 14 }}>
+              <span
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: selected.kind === 'company' ? 12 : '50%',
+                  background: KIND_COLOR[selected.kind],
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#000',
+                  fontWeight: 800,
+                  fontSize: 20,
+                  flexShrink: 0,
+                }}
+              >
+                {selected.label.charAt(0).toUpperCase()}
+              </span>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em' }}>
+                  {selected.label}
+                </div>
+                <div
+                  className="mono"
+                  style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 4 }}
+                >
+                  {selected.kind}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+              <button
+                type="button"
+                disabled
+                title="coming soon · v0.3"
+                className="serif"
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 10,
+                  background: accent,
+                  color: '#000',
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  border: '1.5px solid #000',
+                  boxShadow: '3px 3px 0 #000',
+                  opacity: 0.55,
+                  cursor: 'not-allowed',
+                }}
+              >
+                draft check-in →
+              </button>
+              <a
+                href={'/' + selected.kind + '/' + selected.id}
+                className="mono"
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 10,
+                  color: 'rgba(255,255,255,0.55)',
+                  fontSize: 12,
+                  textDecoration: 'none',
+                  border: '1px solid var(--hair)',
+                }}
+              >
+                open
+              </a>
+            </div>
+            <div
+              className="mono"
+              style={{
+                fontSize: 10,
+                letterSpacing: 1.5,
+                textTransform: 'uppercase',
+                color: 'rgba(255,255,255,0.3)',
+                marginBottom: 10,
+              }}
+            >
+              ◆ edges · {selectedEdges.length}
+            </div>
+            {selectedEdges.map((e, i) => (
+              <div
+                key={i}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 0',
+                  borderBottom: '1px solid rgba(255,255,255,0.05)',
+                }}
+              >
+                <span
+                  className="mono"
+                  style={{
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                    background: `${accent}26`,
+                    fontSize: 9,
+                    color: accent,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                    flexShrink: 0,
+                  }}
+                >
+                  {e.rel}
+                </span>
+                <span style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.7)' }}>{e.label}</span>
+              </div>
+            ))}
+          </>
+        ) : (
+          <div
+            className="mono"
+            style={{
+              fontSize: 12,
+              color: 'rgba(255,255,255,0.4)',
+              marginTop: 40,
+              textAlign: 'center',
+            }}
+          >
+            tap a node to inspect
+          </div>
+        )}
+      </aside>
+    </div>
   );
 }

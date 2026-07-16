@@ -17,6 +17,7 @@ import { useEffect, useRef } from 'react';
 import { useCapture } from '@/app/_components/CaptureProvider';
 import { ChatHeader } from './_components/ChatHeader';
 import { ChatThread, UndoChip } from './_components/ChatThread';
+import { ChatEntityRail } from './_components/ChatEntityRail';
 import type { ChatInitialItem } from './_components/types';
 
 interface ChatClientProps {
@@ -40,18 +41,24 @@ export default function ChatClient({ userName, initialThread = [] }: ChatClientP
   }, [initialThread, seedThreadOnce]);
 
   return (
-    <main
-      style={{
-        minHeight: '100dvh',
-        display: 'flex',
-        flexDirection: 'column',
-        background: 'var(--bg-page)',
-        color: 'var(--ink)',
-      }}
-    >
-      <ChatHeader userName={userName} />
-      <ChatThread />
-      <UndoChip />
-    </main>
+    // Desktop (≥1120px) splits into [thread | entity rail]; on mobile the
+    // rail is display:none and the thread is the full-width column.
+    <div className="surface-split">
+      <main
+        className="surface-primary"
+        style={{
+          minHeight: '100dvh',
+          display: 'flex',
+          flexDirection: 'column',
+          background: 'var(--bg-page)',
+          color: 'var(--ink)',
+        }}
+      >
+        <ChatHeader userName={userName} />
+        <ChatThread />
+        <UndoChip />
+      </main>
+      <ChatEntityRail />
+    </div>
   );
 }
