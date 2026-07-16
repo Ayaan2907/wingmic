@@ -40,8 +40,19 @@ describe('GraphClient', () => {
   it('tapping a node shows a card linking to its entity page', () => {
     render(<GraphClient data={DATA} />);
     fireEvent.click(screen.getByText('Ada'));
-    const open = screen.getByRole('link', { name: /open/i });
-    expect(open.getAttribute('href')).toBe('/person/p1');
+    // Two open links render (mobile floating card + desktop detail rail);
+    // CSS shows one per breakpoint. Both must point at the entity page.
+    const opens = screen.getAllByRole('link', { name: /open/i });
+    expect(opens.length).toBeGreaterThan(0);
+    expect(opens.every((a) => a.getAttribute('href') === '/person/p1')).toBe(true);
+  });
+
+  it('desktop detail rail lists the selected node edges derived from links', () => {
+    render(<GraphClient data={DATA} />);
+    fireEvent.click(screen.getByText('Ada'));
+    // p1→c1 works_at is the only edge touching Ada.
+    expect(screen.getByText(/edges · 1/i)).toBeTruthy();
+    expect(screen.getByText('works_at')).toBeTruthy();
   });
 
   it('shows an empty state with no nodes', () => {
