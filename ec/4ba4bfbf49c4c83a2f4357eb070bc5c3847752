@@ -1,0 +1,37 @@
+apps/app/app/person/[id]/_components/PersonListRail.tsx
+  s_4581ffe1e23c29::t_1024978129a34c 1-87
+apps/app/app/graph/__tests__/GraphClient.test.tsx
+  s_4581ffe1e23c29::t_ff2fe41a94ae79 43-55
+apps/app/app/chat/ChatClient.tsx
+  s_4581ffe1e23c29::t_47b7d6cdf0703c 44-62
+  s_4581ffe1e23c29::t_fd61f84a8d32b2 20
+apps/app/app/chat/_components/ChatEntityRail.tsx
+  s_4581ffe1e23c29::t_4f7fb0eca82905 1-114
+apps/app/app/person/[id]/PersonDetailClient.tsx
+  s_4581ffe1e23c29::t_bc9ee074d802ef 36-56
+  s_4581ffe1e23c29::t_d8e53d562f1f41 12
+apps/app/app/globals.css
+  s_4581ffe1e23c29::t_51d9f1bf9031e7 301-302
+  s_4581ffe1e23c29::t_6afba42c3dd87d 284-300,303
+apps/app/app/graph/GraphClient.tsx
+  s_4581ffe1e23c29::t_b8ac00f65246fe 65-79
+  s_4581ffe1e23c29::t_26aadfc70fce96 119-121,123
+  s_4581ffe1e23c29::t_7fb1333ccae3a0 179-180,183
+  s_4581ffe1e23c29::t_2049793c59bc45 246-390
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "ec4ba4bfbf49c4c83a2f4357eb070bc5c3847752",
+  "prompts": {},
+  "sessions": {
+    "s_4581ffe1e23c29": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a2238454-0812-45a8-a12e-7fffcc0e43c5",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
