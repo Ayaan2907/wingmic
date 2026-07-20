@@ -13,6 +13,7 @@ import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { and, count, desc, eq, gte, inArray, isNull } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
+import { requireOnboarded } from '@/lib/onboarding-guard';
 import { db, schema } from '@wingmic/db';
 import HomeClient, { type HomeInitialData, type HomeRecentItem } from './HomeClient';
 
@@ -29,6 +30,10 @@ const PREVIEW_CHARS = 60;
 export default async function Page() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) redirect('/signin');
+
+  // First-run gate: un-acknowledged users are sent to /onboarding. Called only
+  // here (the primary post-signin landing), never from /onboarding (loop).
+  await requireOnboarded(session.user.id);
 
   const initialData = await loadHomeData(session.user.id);
   return <HomeClient userName={session.user.name ?? null} initialData={initialData} />;

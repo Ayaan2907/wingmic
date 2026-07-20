@@ -2,6 +2,9 @@ import { router, publicProcedure, protectedProcedure } from '../trpc';
 import { captureRouter } from './capture';
 import { recallRouter } from './recall';
 import { entityRouter } from './entity';
+import { graphRouter } from './graph';
+import { settingsRouter } from './settings';
+import { onboardingRouter } from './onboarding';
 
 /**
  * Root tRPC router. Capture + recall wedges plus the `ping` / `me`
@@ -17,6 +20,9 @@ export const appRouter = router({
   capture: captureRouter,
   recall: recallRouter,
   entity: entityRouter,
+  graph: graphRouter,
+  settings: settingsRouter,
+  onboarding: onboardingRouter,
 });
 
 export type AppRouter = typeof appRouter;

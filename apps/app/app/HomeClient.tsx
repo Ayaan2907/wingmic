@@ -23,6 +23,7 @@
 
 import * as React from 'react';
 import { PersonAvatar } from './_components/entity/EntityAvatar';
+import { ActCard, type PendingAct } from './_components/ActCard';
 
 // ── Tokens ──────────────────────────────────────────────────────────────
 // Mirror the accent palette used elsewhere in apps/app (capture, entity).
@@ -356,15 +357,8 @@ function AgentStripe() {
 
 // ─── Acts pending (mock) ───────────────────────────────────────────────────
 
-type PendingAct = {
-  kind: string;
-  glyph: string;
-  name: string;
-  why: string;
-  conf: number;
-  accent: 'amber' | 'blue' | 'violet';
-  color: string;
-};
+// `PendingAct` + the card markup live in the shared ActCard (PR ζ-acts), so
+// Home's 3-card preview and the /acts inbox stay byte-identical.
 
 // Seeded preview data (PR ε). Fictional demo contacts, consistent with the
 // design prototype. Real acts wire in v0.3 (epic #11); every CTA here is
@@ -435,85 +429,7 @@ function ActsPending() {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {PENDING_ACTS.map((a) => (
-          <div
-            key={a.name}
-            style={{
-              padding: 14,
-              borderRadius: 14,
-              background: 'var(--surface-1, rgba(255,255,255,0.02))',
-              border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-            }}
-          >
-            <span aria-hidden="true" style={{ display: 'inline-flex' }}>
-              <PersonAvatar name={a.name} accent={a.accent} size={36} />
-            </span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', gap: 5, alignItems: 'center', marginBottom: 2 }}>
-                <span
-                  className="mono"
-                  style={{
-                    fontSize: 9.5,
-                    fontWeight: 700,
-                    color: a.color,
-                    letterSpacing: 0.6,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {a.glyph} {a.kind}
-                </span>
-                <span className="mono" style={{ fontSize: 9.5, color: 'var(--text-40)' }}>
-                  · {a.conf}%
-                </span>
-              </div>
-              <div
-                style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: 'var(--ink)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {a.name}
-              </div>
-              <div
-                style={{
-                  fontSize: 12,
-                  lineHeight: 1.3,
-                  color: 'var(--text-55)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {a.why}
-              </div>
-            </div>
-            <button
-              type="button"
-              disabled
-              title="coming soon · v0.3"
-              aria-label={`send ${a.kind} for ${a.name} — coming soon, v0.3`}
-              style={{
-                padding: '7px 11px',
-                borderRadius: 8,
-                background: accent,
-                color: '#000',
-                border: '1.5px solid #000',
-                boxShadow: '2px 2px 0 #000',
-                font: '700 11px Inter, system-ui, sans-serif',
-                cursor: 'not-allowed',
-                opacity: 0.85,
-                flexShrink: 0,
-              }}
-            >
-              send →
-            </button>
-          </div>
+          <ActCard key={a.name} act={a} />
         ))}
       </div>
     </div>
