@@ -153,7 +153,7 @@ describe('ChatClient', () => {
     expect(nav.textContent).not.toContain('history');
     expect(nav.textContent).not.toContain('settings');
     // hold-to-talk orb lives in the bottom nav (PR β₁-D — the orb IS the dock).
-    expect(screen.getByRole('button', { name: /hold to record/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /record voice memo/i })).toBeTruthy();
   });
 
   it('runs the full record → transcribe → commit cycle and renders a committed bubble + graph card', async () => {
@@ -182,10 +182,10 @@ describe('ChatClient', () => {
     });
 
     renderChat({ userName: "ada" });
-    const btn = screen.getByRole('button', { name: /hold to record/i });
+    const btn = screen.getByRole('button', { name: /record voice memo/i });
 
     await act(async () => {
-      fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
+      fireEvent.click(btn);
     });
     // recorder transitions through ready, useEffect kicks off pipeline
     await act(async () => {
@@ -248,9 +248,9 @@ describe('ChatClient', () => {
     });
 
     renderChat({ userName: "ada" });
-    const btn = screen.getByRole('button', { name: /hold to record/i });
+    const btn = screen.getByRole('button', { name: /record voice memo/i });
     await act(async () => {
-      fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
+      fireEvent.click(btn);
     });
     await act(async () => {
       setStatusHook?.('ready');
@@ -274,9 +274,9 @@ describe('ChatClient', () => {
     ) as unknown as typeof fetch;
 
     renderChat({ userName: "ada" });
-    const btn = screen.getByRole('button', { name: /hold to record/i });
+    const btn = screen.getByRole('button', { name: /record voice memo/i });
     await act(async () => {
-      fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
+      fireEvent.click(btn);
     });
     await act(async () => {
       setStatusHook?.('ready');
@@ -347,9 +347,9 @@ describe('ChatClient', () => {
     });
 
     renderChat({ userName: "ada" });
-    const btn = screen.getByRole('button', { name: /hold to record/i });
+    const btn = screen.getByRole('button', { name: /record voice memo/i });
     await act(async () => {
-      fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
+      fireEvent.click(btn);
     });
     await act(async () => {
       setStatusHook?.('ready');
@@ -391,9 +391,9 @@ describe('ChatClient', () => {
       interactionId: 'k',
     });
     const { unmount } = renderChat({ userName: "ada" });
-    const btn = screen.getByRole('button', { name: /hold to record/i });
+    const btn = screen.getByRole('button', { name: /record voice memo/i });
     await act(async () => {
-      fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
+      fireEvent.click(btn);
     });
     await act(async () => {
       setStatusHook?.('ready');
@@ -418,18 +418,21 @@ describe('ChatClient', () => {
     clearTimeoutSpy.mockRestore();
   });
 
-  it('second-finger pointerdown does not start a second recording', async () => {
+  it('tap toggles recording: first tap starts, second tap stops (never double-starts)', async () => {
     renderChat({ userName: "ada" });
-    const btn = screen.getByRole('button', { name: /hold to record/i });
+    const btn = screen.getByRole('button', { name: /record voice memo/i });
+    // First tap starts the recorder (mock start() flips status → recording).
     await act(async () => {
-      fireEvent.pointerDown(btn, { clientX: 100, clientY: 500, pointerId: 1 });
+      fireEvent.click(btn);
     });
     expect(fakeRecorder.start).toHaveBeenCalledTimes(1);
-    // second finger arrives mid-record
+    // Second tap, now that we're recording, stops + sends — it does NOT begin
+    // a fresh recording.
     await act(async () => {
-      fireEvent.pointerDown(btn, { clientX: 200, clientY: 500, pointerId: 2 });
+      fireEvent.click(btn);
     });
     expect(fakeRecorder.start).toHaveBeenCalledTimes(1);
+    expect(fakeRecorder.stop).toHaveBeenCalledTimes(1);
   });
 
   it('escape while recording discards', async () => {
@@ -457,7 +460,7 @@ describe('ChatClient', () => {
     expect(screen.getByText(/ask me anything/i)).toBeTruthy();
     expect(screen.getAllByTestId('chat-suggestion')).toHaveLength(3);
     // dock is idle — orb state is `idle` (not recording/locked/sending)
-    const btn = screen.getByRole('button', { name: /hold to record/i });
+    const btn = screen.getByRole('button', { name: /record voice memo/i });
     expect(btn.getAttribute('data-orb-state')).toBe('idle');
     // no recording chrome — header is not in recording mode
     const recordingHeader = document.querySelector('[data-recording="true"]');

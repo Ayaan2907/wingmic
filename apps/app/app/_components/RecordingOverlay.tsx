@@ -61,14 +61,11 @@ export function RecordingOverlay() {
       {/* Phantom bubble — live duration + level meter. */}
       <PhantomBubble level={recorder.level} duration={recorder.duration} />
 
-      {/* Hold-only chrome: slide-cancel + lock circle. Suppressed once the
-          recorder is locked because the user's finger is already up. */}
-      {isHeld && (
-        <>
-          <LockCircle />
-          <SlideCancelHint />
-        </>
-      )}
+      {/* Tap-to-dictate hint. Shown while the mic is hot but not locked —
+          i.e. after a tap on the orb, which is now the stop button. The
+          locked path (spacebar hold) shows the locked-pill send/discard
+          controls in BottomTabBar instead, so no hint is rendered there. */}
+      {isHeld && <TapStopHint />}
     </>
   );
 }
@@ -145,69 +142,18 @@ function PhantomBubble({ level, duration }: { level: number[]; duration: number 
   );
 }
 
-function LockCircle() {
-  // Floats just above the bottom-nav orb (which lives at top:-28 inside the
-  // 56px-high nav). Centered horizontally over the orb.
+function TapStopHint() {
+  // Centered just above the bottom-nav orb (which lives at top:-28 inside the
+  // 56px-high nav). Points the user back at the orb to stop, and notes the
+  // keyboard escape hatch for cancelling.
   return (
     <div
       aria-hidden="true"
       style={{
         position: 'fixed',
         left: '50%',
-        bottom: TAB_BAR_HEIGHT_PX + 48,
+        bottom: TAB_BAR_HEIGHT_PX + 44,
         transform: 'translateX(-50%)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 4,
-        pointerEvents: 'none',
-        zIndex: 56,
-      }}
-    >
-      <span
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: 999,
-          background: 'var(--surface-1)',
-          border: `1.5px solid ${accent}`,
-          boxShadow: '2px 2px 0 #000',
-          color: accent,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          animation: 'wm-pulse-s 1.4s ease-in-out infinite',
-        }}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <rect x="5" y="11" width="14" height="9" rx="2" stroke={accent} strokeWidth="1.8" />
-          <path d="M8 11V8a4 4 0 0 1 8 0v3" stroke={accent} strokeWidth="1.8" />
-        </svg>
-      </span>
-      <span
-        className="mono"
-        style={{
-          fontSize: 9,
-          letterSpacing: 0.5,
-          color: 'var(--text-55)',
-          textTransform: 'uppercase',
-        }}
-      >
-        ↑ lock
-      </span>
-    </div>
-  );
-}
-
-function SlideCancelHint() {
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        position: 'fixed',
-        left: 16,
-        right: 'auto',
-        bottom: TAB_BAR_HEIGHT_PX + 10,
         pointerEvents: 'none',
         zIndex: 56,
       }}
@@ -221,9 +167,10 @@ function SlideCancelHint() {
           background: 'rgba(10,10,10,0.6)',
           padding: '4px 10px',
           borderRadius: 999,
+          whiteSpace: 'nowrap',
         }}
       >
-        ← slide to cancel
+        tap ◉ to stop · esc to cancel
       </span>
     </div>
   );

@@ -20,7 +20,6 @@
 import * as React from 'react';
 import { useCapture } from './CaptureProvider';
 import { micOrbStateFor, type MicOrbState } from '@/app/capture/micOrbState';
-import { HOLD_THRESHOLDS, POINTER_WATCHDOG_MS } from '@/app/chat/_components/tokens';
 
 const accent = '#FFC452';
 const coral = '#FF6B6B';
@@ -160,157 +159,28 @@ interface CaptureOrbProps {
 }
 
 function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureOrbProps) {
-  const buttonRef = React.useRef<HTMLButtonElement | null>(null);
-  const originRef = React.useRef<{ x: number; y: number } | null>(null);
-  const movedRef = React.useRef(false);
-  const pointerIdRef = React.useRef<number | null>(null);
-  const fallbackUpRef = React.useRef<((ev: PointerEvent) => void) | null>(null);
-  const fallbackCancelRef = React.useRef<((ev: PointerEvent) => void) | null>(null);
-  const watchdogRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isHovered, setIsHovered] = React.useState(false);
 
   const status = recorder.status;
-  const isIdle = status === 'idle' || status === 'ready' || status === 'error';
   const orbState: MicOrbState = micOrbStateFor(status, isHovered);
   const isActiveRec = orbState === 'recording';
   const isSending = orbState === 'sending';
 
-  const clearFallbackListeners = React.useCallback(() => {
-    if (fallbackUpRef.current) {
-      window.removeEventListener('pointerup', fallbackUpRef.current);
-      fallbackUpRef.current = null;
-    }
-    if (fallbackCancelRef.current) {
-      window.removeEventListener('pointercancel', fallbackCancelRef.current);
-      fallbackCancelRef.current = null;
-    }
-    if (watchdogRef.current) {
-      clearTimeout(watchdogRef.current);
-      watchdogRef.current = null;
-    }
-  }, []);
-
-  React.useEffect(() => {
-    return () => {
-      clearFallbackListeners();
-    };
-  }, [clearFallbackListeners]);
-
-  const handleRelease = React.useCallback(
-    (kind: 'up' | 'cancel') => {
-      const s = recorder.status;
-      const wasCancelArmed = s === 'cancel_armed';
-      const wasLockArmed = s === 'lock_armed';
-      originRef.current = null;
-      pointerIdRef.current = null;
-      if (kind === 'cancel') {
-        if (s === 'recording' || s === 'lock_armed' || s === 'cancel_armed' || s === 'arming') {
-          recorder.discard();
-        }
-        return;
-      }
-      if (wasCancelArmed) {
-        vibrate([30, 20, 30]);
-        recorder.discard();
-        return;
-      }
-      if (wasLockArmed || s === 'locked') {
-        return;
-      }
-      if (s === 'recording' || s === 'arming') {
-        vibrate(12);
-        recorder.stop();
-      }
-    },
-    [recorder],
-  );
-
-  function onPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
-    if (!isIdle) return;
-    if (pointerIdRef.current !== null) return;
-    originRef.current = { x: e.clientX, y: e.clientY };
-    movedRef.current = false;
-    pointerIdRef.current = e.pointerId;
-    if (typeof e.currentTarget.setPointerCapture === 'function') {
-      try {
-        e.currentTarget.setPointerCapture(e.pointerId);
-      } catch {
-        // jsdom — fall through to window fallback.
-      }
-    }
-    const onWinUp = (ev: PointerEvent) => {
-      if (ev.pointerId !== pointerIdRef.current) return;
-      clearFallbackListeners();
-      handleRelease('up');
-    };
-    const onWinCancel = (ev: PointerEvent) => {
-      if (ev.pointerId !== pointerIdRef.current) return;
-      clearFallbackListeners();
-      handleRelease('cancel');
-    };
-    fallbackUpRef.current = onWinUp;
-    fallbackCancelRef.current = onWinCancel;
-    window.addEventListener('pointerup', onWinUp);
-    window.addEventListener('pointercancel', onWinCancel);
-    watchdogRef.current = setTimeout(() => {
-      clearFallbackListeners();
-      const s = recorder.status;
-      if (s === 'recording' || s === 'lock_armed' || s === 'cancel_armed' || s === 'arming') {
-        recorder.stop();
-      }
-      pointerIdRef.current = null;
-      originRef.current = null;
-    }, POINTER_WATCHDOG_MS);
-    vibrate(8);
-    void beginCapture();
-  }
-
-  function onPointerMove(e: React.PointerEvent<HTMLButtonElement>) {
-    if (!originRef.current) return;
-    if (e.pointerId !== pointerIdRef.current) return;
-    const dx = e.clientX - originRef.current.x;
-    const dy = e.clientY - originRef.current.y;
-    movedRef.current = true;
-
-    if (dy < -HOLD_THRESHOLDS.commitPx) {
-      vibrate([15, 40, 15]);
-      recorder.lock();
-      originRef.current = null;
+  // Tap-to-dictate: one tap starts recording, the next tap stops + sends.
+  // Replaces the old press-and-hold gesture — its release relied on a
+  // pointerup/pointercancel that could be dropped on touch (or handled by a
+  // stale closure), leaving the recorder running with no way to stop. A plain
+  // toggle reads the live status on each tap, so it can't get stuck.
+  function onOrbClick() {
+    const s = recorder.status;
+    if (s === 'idle' || s === 'ready' || s === 'error') {
+      vibrate(8);
+      void beginCapture();
       return;
     }
-    if (dx < -HOLD_THRESHOLDS.commitPx) {
-      vibrate([30, 20, 30]);
-      recorder.discard();
-      originRef.current = null;
-      return;
-    }
-    if (dy < -HOLD_THRESHOLDS.armPx) {
-      recorder.setLockArmed(true);
-      recorder.setCancelArmed(false);
-    } else if (dx < -HOLD_THRESHOLDS.armPx) {
-      recorder.setCancelArmed(true);
-      recorder.setLockArmed(false);
-    } else {
-      recorder.setLockArmed(false);
-      recorder.setCancelArmed(false);
-    }
-  }
-
-  function onPointerUp(e: React.PointerEvent<HTMLButtonElement>) {
-    if (e.pointerId !== pointerIdRef.current) return;
-    if (!originRef.current && recorder.status !== 'locked') {
-      pointerIdRef.current = null;
-      clearFallbackListeners();
-      return;
-    }
-    clearFallbackListeners();
-    handleRelease('up');
-  }
-
-  function onPointerCancel(e: React.PointerEvent<HTMLButtonElement>) {
-    if (e.pointerId !== pointerIdRef.current) return;
-    clearFallbackListeners();
-    handleRelease('cancel');
+    // Any hot state (arming/recording/locked/…) → stop and hand off to commit.
+    vibrate(12);
+    recorder.stop();
   }
 
   return (
@@ -324,23 +194,19 @@ function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureOrbProps
       }}
     >
       <button
-        ref={buttonRef}
         type="button"
         aria-label={
           isActiveRec
-            ? 'recording — release to send, swipe up to lock, swipe left to cancel'
+            ? 'recording — tap to stop and send'
             : isSending
               ? 'sending recording'
-              : 'hold to record voice memo, tap to use lock mode'
+              : 'tap to record voice memo'
         }
         aria-keyshortcuts="Space"
         aria-pressed={isActiveRec}
         aria-current={isActive ? 'page' : undefined}
         data-orb-state={orbState}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerCancel}
+        onClick={onOrbClick}
         onPointerEnter={() => setIsHovered(true)}
         onPointerLeave={() => setIsHovered(false)}
         onFocus={() => setIsHovered(true)}
