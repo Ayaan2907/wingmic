@@ -1,0 +1,19 @@
+apps/app/app/_components/__tests__/AppShell.test.tsx
+  s_fd528823e8d35d::t_90a883c12f29a4 36,75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "c659c6295ab65d514d60a380259e2f943cde33ac",
+  "prompts": {},
+  "sessions": {
+    "s_fd528823e8d35d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "",
+        "model": "unknown"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
