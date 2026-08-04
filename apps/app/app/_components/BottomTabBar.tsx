@@ -84,13 +84,6 @@ interface CaptureOrbProps {
 }
 
 export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureOrbProps) {
-  const buttonRef = React.useRef<HTMLButtonElement | null>(null);
-  const originRef = React.useRef<{ x: number; y: number } | null>(null);
-  const movedRef = React.useRef(false);
-  const pointerIdRef = React.useRef<number | null>(null);
-  const fallbackUpRef = React.useRef<((ev: PointerEvent) => void) | null>(null);
-  const fallbackCancelRef = React.useRef<((ev: PointerEvent) => void) | null>(null);
-  const watchdogRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isHovered, setIsHovered] = React.useState(false);
 
   const status = recorder.status;
