@@ -85,6 +85,24 @@ docs/                 ← architecture.md, deploy.md, superpowers/
 9. **One mic, one surface.** Any mic affordance lands in chat with the
    mic engaged — never build a separate capture screen. See
    `design/design-system.md §12` for the full contract.
+10. **Primitives over wrappers.** Never build wrapper components or
+    patch-layers around existing code. Build small, primitive, reusable
+    components and functions, imported per use-case. If a change seems to
+    want a wrapper, extract the primitive instead.
+
+## agent roles
+
+Fixed division of labour on this project. Each agent stays in its lane.
+
+| Agent | Role |
+|---|---|
+| **Claude** | **Planner.** Writes plans to `docs/superpowers/plans/`, files the issue tree, defines work packages. Does not write product code. |
+| **Cursor** | **Executor.** Implements the planned work packages, owns branches, commits, and PRs. |
+| **Codex + Grok** | **External reviewers** via their CLIs. Review each plan before execution starts, and each PR diff before merge. |
+
+Claude's deliverable is a plan an executor can follow cold: exact files,
+reusable primitives already in the codebase, verification steps, and the
+open questions that need a human call.
 
 ## execution principles — apply to every task
 
