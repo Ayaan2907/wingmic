@@ -33,7 +33,7 @@ describe('AppShell', () => {
     const { AppShell: Shell } = await import('../AppShell');
     render(<Shell><div>page</div></Shell>);
     expect(screen.getByLabelText('primary')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /hold to record/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /record voice memo/i })).toBeTruthy();
     expect(screen.getByText('page')).toBeTruthy();
   });
 
@@ -72,7 +72,7 @@ describe('AppShell', () => {
         />
       </Shell>,
     );
-    const orbs = screen.getAllByRole('button', { name: /hold to record/i });
+    const orbs = screen.getAllByRole('button', { name: /record voice memo/i });
     expect(orbs).toHaveLength(1);
   });
 
