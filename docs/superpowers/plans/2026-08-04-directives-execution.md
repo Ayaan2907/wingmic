@@ -72,7 +72,7 @@ Output the ExtractionResult JSON schema.
 
 6. **Eval:** fixtures are untouchable. Run `bun run extract:eval:doppler` before/after (needs `OPENROUTER_API_KEY` — Claude's environment has none; Cursor/user runs it) and paste results in the PR.
 
-Issue: file `[feat](extractor): LLM-first extraction + graph context + junk guard`. Commit: `feat(extractor): …` one PR.
+Issue: **#58**. One PR, commit `feat(extractor): …`.
 
 ---
 
@@ -124,7 +124,7 @@ Routing points:
 ### Phase 2 (plan later, do not build now)
 Synthesized answers: Sonnet with `recall.query`/`entity.detail`/`graph.get` as AI-SDK tools, streamed into the thread; thread history persistence (`interactions.kind` column, new append-only migration) for coreference ("who else worked *there*?"). Plan when phase 1 merges.
 
-Issue: `[feat](chat): dual-function thread — intent router + inline answers (phase 1)`. Suggested split: 2 PRs (composer+router+provider · ask UI+tests) or 1 if the diff stays reviewable.
+Issue: **#59**. Suggested split: 2 PRs (composer+router+provider · ask UI+tests) or 1 if the diff stays reviewable.
 
 ---
 
@@ -137,7 +137,7 @@ Issue: `[feat](chat): dual-function thread — intent router + inline answers (p
 3. Test (`recall.test.ts`): `embedText` mock `mockImplementationOnce(throw)` → `mode:'text'`, "alice" finds `e1` by name; next query recovers to `mode:'semantic'` with correct ranking.
 4. **Ops task (likely the actual prod bug):** verify Railway has a valid `OPENROUTER_API_KEY` and that `bun run db:apply` ran against prod Turso (migration `0002_vector_top_k_entity_embedding`). Also applies to WP-6.
 
-Issue: `[fix](recall): text fallback when semantic path unavailable`.
+Issue: **#60**.
 
 ---
 
@@ -150,7 +150,7 @@ Plain `<a href>` in the nav causes a full document load per tap. Standard SPA be
 - Optional same-PR: `ChatThread` suggestion chips → `Link` with `{ pathname: '/search', query: { q } }`.
 - Tests unaffected (`AppShell.test` already mocks `next/link`; others assert render-only). Verify by eye in the running app: tab taps must not flash a document reload.
 
-Issue: `[perf](app): client-side nav transitions`.
+Issue: **#61**.
 
 ---
 
@@ -158,11 +158,11 @@ Issue: `[perf](app): client-side nav transitions`.
 
 `apps/app/lib/auth.ts` session block gains `expiresIn: 60*60*24*30` and `updateAge: 60*60*24` (keep `cookieCache` as-is): sign in once, stay signed in while active. This is a session-handling change — dangerous-ops class — but explicitly user-directed; note that in the PR body. Future options already discussed (not in scope): Google OAuth one-tap (needs user's credentials), passkeys plugin, localStorage email prefill.
 
-Issue: `[feat](auth): 30-day sliding sessions`.
+Issue: **#62**.
 
 ---
 
-## WP-6 — Graph "not there" verification (directive 4 — no code by default)
+## WP-6 — Graph "not there" verification (directive 4 — no code by default) · issue **#63**
 
 `/graph` shipped (#47, real `graph.get` + `react-force-graph-2d`) and reached main via #57 *minutes* before the report. Checklist: prod deploy is at/after #57 · migrations applied · `bun install` ran (new dep) · signed-in user with ≥1 entity sees nodes. Only file a bug if it still fails after that.
 
@@ -170,7 +170,7 @@ Issue: `[feat](auth): 30-day sliding sessions`.
 
 ## Execution protocol (Cursor)
 
-1. Order: WP-0 → WP-1 → WP-3 → WP-4 → WP-5 → WP-2 (largest last, lands on a healthy base) · WP-6 checklist anytime.
+1. Order: WP-0 (done, `23b2338`) → WP-1 (#58) → WP-3 (#60) → WP-4 (#61) → WP-5 (#62) → WP-2 (#59, largest last, lands on a healthy base) · WP-6 (#63) checklist anytime.
 2. Per WP: file the issue → branch `feat/...` → implement → gate `bun run typecheck && bun run lint && bun run test` (turbo-first; bare vitest fails on unbuilt workspace deps; after dep changes re-run `bun install --frozen-lockfile` and clear `apps/app/.next`) → drive it live once (runbook in `docs/superpowers/plans/2026-08-04-v0.1.x-completion-handoff.md` §3: magic-link sign-in with zero secrets, Playwright `executablePath: /opt/pw-browsers/chromium-1194/chrome-linux/chrome`, orb needs `click({force:true})`) → PR to `staging` referencing the issue.
 3. External review: Codex + Grok CLIs review this plan before execution starts, and each PR diff before merge.
 4. Conventions: conventional commits, no AI trailers, brand voice, primitives over wrappers, never touch `design/**` / eval fixtures / existing migrations.
