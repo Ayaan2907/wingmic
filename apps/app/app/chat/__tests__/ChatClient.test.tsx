@@ -139,15 +139,16 @@ describe('ChatClient', () => {
     // PR ε welcome: agent bubble + 3 suggested-query chips on the empty thread.
     expect(screen.getByText(/ask me anything/i)).toBeTruthy();
     expect(screen.getAllByTestId('chat-suggestion')).toHaveLength(3);
-    // v8: 5-slot bottom nav — home / chat / capture / graph / acts.
-    // Center capture slot breaks the bar plane (lib-screens.jsx MobileNav).
+    // 5-slot bottom nav — home / chat / capture / graph / search (2026-08-04
+    // arrangement: search replaced the v0.3-preview acts slot so recall has a
+    // mobile entry point; acts stays reachable from home's pending section).
     const nav = screen.getByLabelText('primary');
     expect(nav).toBeTruthy();
     expect(nav.textContent).toContain('home');
     expect(nav.textContent).toContain('chat');
     expect(nav.textContent).toContain('capture');
     expect(nav.textContent).toContain('graph');
-    expect(nav.textContent).toContain('acts');
+    expect(nav.textContent).toContain('search');
     // Regression guard: v1 label `recall` must not coexist with the v2 `chat` label.
     expect(nav.textContent).not.toContain('recall');
     // Removed in v8 — these slots no longer exist in the 5-slot bar.

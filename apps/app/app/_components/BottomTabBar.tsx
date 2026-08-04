@@ -27,7 +27,7 @@ const coral = '#FF6B6B';
 /** Bottom-nav height — kept in sync with chat/_components/tokens.ts. */
 export const TAB_BAR_HEIGHT_PX = 56;
 
-export type BottomTabKey = 'home' | 'chat' | 'capture' | 'graph' | 'acts';
+export type BottomTabKey = 'home' | 'chat' | 'capture' | 'graph' | 'search' | 'acts';
 
 function vibrate(pattern: number | number[]) {
   if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
@@ -39,12 +39,17 @@ function vibrate(pattern: number | number[]) {
   }
 }
 
+// Tab arrangement (2026-08-04, user direction): `search` takes the fifth slot
+// — recall is a core verb and previously had no mobile entry point at all
+// (⌘K is desktop-only). `/acts` is a disabled-CTA preview until v0.3, so it
+// moves off the bar; it stays reachable from Home's pending-acts section.
+// Chat's glyph becomes ≡ (the thread) so ⌕ can mean search unambiguously.
 export const NAV_TABS: Array<{ key: BottomTabKey; glyph: string; label: string; href: string; big?: boolean }> = [
   { key: 'home', glyph: '⌂', label: 'home', href: '/' },
-  { key: 'chat', glyph: '⌕', label: 'chat', href: '/chat' },
+  { key: 'chat', glyph: '≡', label: 'chat', href: '/chat' },
   { key: 'capture', glyph: '◉', label: 'capture', href: '/chat', big: true },
   { key: 'graph', glyph: '◈', label: 'graph', href: '/graph' },
-  { key: 'acts', glyph: '◬', label: 'acts', href: '/acts' },
+  { key: 'search', glyph: '⌕', label: 'search', href: '/search' },
 ];
 
 export function NavLink({ tab, active }: { tab: (typeof NAV_TABS)[number]; active: boolean }) {
