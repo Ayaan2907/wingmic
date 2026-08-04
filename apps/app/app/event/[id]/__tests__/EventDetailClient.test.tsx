@@ -11,10 +11,8 @@ vi.mock('next/link', () => ({
     </a>
   ),
 }));
-vi.mock('@/app/_components/BottomTabBar', () => ({
-  BottomTabBar: () => <nav data-testid="bottom-tab-bar" />,
-  TAB_BAR_HEIGHT_PX: 56,
-}));
+// PR λ-shell: EntityDetailScaffold no longer renders BottomTabBar (nav + orb
+// live in AppShell, asserted in AppShell.test.tsx). No mock needed.
 
 import EventDetailClient from '../EventDetailClient';
 
