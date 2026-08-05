@@ -29,7 +29,7 @@ const coral = '#FF6B6B';
 /** Bottom-nav height — kept in sync with chat/_components/tokens.ts. */
 export const TAB_BAR_HEIGHT_PX = 56;
 
-export type BottomTabKey = 'home' | 'chat' | 'capture' | 'graph' | 'acts';
+export type BottomTabKey = 'home' | 'chat' | 'capture' | 'graph' | 'search' | 'acts';
 
 function vibrate(pattern: number | number[]) {
   if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
@@ -41,12 +41,14 @@ function vibrate(pattern: number | number[]) {
   }
 }
 
+// Tab arrangement (2026-08-04): search on the fifth slot — recall had no mobile
+// entry (⌘K is desktop-only). Acts stays reachable from home pending section.
 export const NAV_TABS: Array<{ key: BottomTabKey; glyph: string; label: string; href: string; big?: boolean }> = [
   { key: 'home', glyph: '⌂', label: 'home', href: '/' },
-  { key: 'chat', glyph: '⌕', label: 'chat', href: '/chat' },
+  { key: 'chat', glyph: '≡', label: 'chat', href: '/chat' },
   { key: 'capture', glyph: '◉', label: 'capture', href: '/chat', big: true },
   { key: 'graph', glyph: '◈', label: 'graph', href: '/graph' },
-  { key: 'acts', glyph: '◬', label: 'acts', href: '/acts' },
+  { key: 'search', glyph: '⌕', label: 'search', href: '/search' },
 ];
 
 export function NavLink({ tab, active }: { tab: (typeof NAV_TABS)[number]; active: boolean }) {
