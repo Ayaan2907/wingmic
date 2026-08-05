@@ -22,6 +22,7 @@
  */
 
 import * as React from 'react';
+import Link from 'next/link';
 import { PersonAvatar } from './_components/entity/EntityAvatar';
 import { ActCard, type PendingAct } from './_components/ActCard';
 
@@ -118,13 +119,13 @@ function Header({ userName }: { userName: string | null }) {
         gap: 12,
       }}
     >
-      <a
+      <Link
         href="/"
         className="mono"
         style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.5, color: 'var(--ink)' }}
       >
         wingmic<span style={{ color: 'var(--text-30)' }}>.xyz</span>
-      </a>
+      </Link>
       <span
         className="mono"
         style={{

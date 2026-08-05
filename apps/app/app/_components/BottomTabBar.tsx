@@ -18,6 +18,8 @@
 // identity no longer matters.
 
 import * as React from 'react';
+import Link from 'next/link';
+import type { Route } from 'next';
 import { useCapture } from './CaptureProvider';
 import { micOrbStateFor, type MicOrbState } from '@/app/capture/micOrbState';
 
@@ -49,8 +51,8 @@ export const NAV_TABS: Array<{ key: BottomTabKey; glyph: string; label: string; 
 
 export function NavLink({ tab, active }: { tab: (typeof NAV_TABS)[number]; active: boolean }) {
   return (
-    <a
-      href={tab.href}
+    <Link
+      href={tab.href as Route}
       aria-current={active ? 'page' : undefined}
       style={{
         flex: 1,
@@ -72,7 +74,7 @@ export function NavLink({ tab, active }: { tab: (typeof NAV_TABS)[number]; activ
       )}
       <span aria-hidden="true" style={{ fontSize: 20, color: active ? accent : 'var(--text-55)' }}>{tab.glyph}</span>
       <span style={{ color: active ? accent : 'var(--text-40)' }}>{tab.label}</span>
-    </a>
+    </Link>
   );
 }
 

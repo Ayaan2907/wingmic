@@ -8,6 +8,7 @@
 // dimming applies cleanly to the message list without needing an inner
 // "stays full opacity" carve-out.
 
+import Link from 'next/link';
 import { useCapture } from '@/app/_components/CaptureProvider';
 import type {
   ThreadMessage,
@@ -182,9 +183,9 @@ function WelcomeAgent() {
           ↪ try
         </div>
         {SUGGESTED_QUERIES.map((q) => (
-          <a
+          <Link
             key={q}
-            href={`/search?q=${encodeURIComponent(q)}`}
+            href={{ pathname: '/search', query: { q } }}
             data-testid="chat-suggestion"
             style={{
               alignSelf: 'flex-start',
@@ -198,7 +199,7 @@ function WelcomeAgent() {
             }}
           >
             {q}
-          </a>
+          </Link>
         ))}
       </div>
     </div>
