@@ -1,0 +1,32 @@
+apps/app/app/settings/page.tsx
+  s_fd528823e8d35d::t_d04cd3d34dfce9 4-5,10-11,13-14,17-26
+apps/app/app/settings/SettingsClient.tsx
+  s_fd528823e8d35d::t_c18e4f9aae03c4 74-81,84,90-95,98,106,108
+  s_fd528823e8d35d::t_a85ace87e4e2c0 25-32
+apps/app/app/settings/__tests__/SettingsClient.test.tsx
+  s_fd528823e8d35d::t_3a9c6429c29bfa 79
+  s_fd528823e8d35d::t_45417022131c4d 87
+  s_fd528823e8d35d::t_9a929e0e82c07e 72
+  s_fd528823e8d35d::t_72b7b729ab85de 103
+  s_fd528823e8d35d::t_e26f26a637f9f3 95
+  s_fd528823e8d35d::t_d65f0248ce26e4 39,42-44,46-49,58
+  s_fd528823e8d35d::t_308e704425c421 111
+  s_fd528823e8d35d::t_f1be1fc48b49d4 66
+  s_fd528823e8d35d::t_ca8f7b20f52acf 40-41,45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "0dfa16e4a137a732b15cf119be1f2273c5009b16",
+  "prompts": {},
+  "sessions": {
+    "s_fd528823e8d35d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "",
+        "model": "unknown"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
