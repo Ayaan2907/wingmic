@@ -210,6 +210,9 @@ export default function SearchClient() {
             >
               ↪ {entities.length} match
               {entities.length === 1 ? '' : 'es'} in {search.data.durationMs}ms
+              {search.data.mode === 'text' ? (
+                <span style={{ color: accent }}> · text match — semantic search offline</span>
+              ) : null}
             </div>
 
             {entities.length === 0 ? (
