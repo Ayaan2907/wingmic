@@ -1,22 +1,29 @@
 import { z } from 'zod';
-import { inArray, desc, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, desc, sql } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc';
-import { embedText, EmbeddingError } from '@wingmic/extractor/embeddings';
-import { TRPCError } from '@trpc/server';
+import { embedText } from '@wingmic/extractor/embeddings';
 import * as schema from '@wingmic/db/schema';
 import { ENTITY_EMBEDDING_INDEX } from '@wingmic/db/schema';
 
+type RecallMode = 'semantic' | 'text';
+
+function tokenizeQuery(q: string): string[] {
+  return q
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 2)
+    .slice(0, 6);
+}
+
 export const recallRouter = router({
   /**
-   * Natural-language recall query. Embeds the query via OpenAI text-embedding-3-small,
-   * then runs libSQL's `vector_top_k` ANN index over this user's Entity embeddings
-   * and returns the top-N with canonical Company / Event / Topic edges joined.
+   * Natural-language recall query. Prefers semantic ANN (embed + vector_top_k),
+   * but degrades to a userId-scoped LIKE match over name/aliases when the
+   * embedding path or index is unavailable (missing OPENROUTER_API_KEY,
+   * migration 0002 not applied, etc.) — issue #60.
    *
-   * One code path — no in-memory cosine fallback (plan eng-review #7). Index is
-   * created by migration 0002_vector_top_k_entity_embedding (idx name
-   * `entity_embedding_vector_idx`). If the index returns fewer than `limit` rows
-   * (e.g. user has 3 entities, limit=10), the query degrades gracefully and
-   * returns what's there.
+   * Response always includes `mode: 'semantic' | 'text'` so the UI can label
+   * the degraded path without treating it as a hard failure.
    */
   query: protectedProcedure
     .input(
@@ -27,54 +34,67 @@ export const recallRouter = router({
     )
     .query(async ({ input, ctx }) => {
       const t0 = Date.now();
-      let queryEmbedding: number[];
+      let mode: RecallMode = 'semantic';
+      let ids: string[] = [];
+      let scoreById = new Map<string, number>();
+
       try {
-        queryEmbedding = await embedText(input.q);
-      } catch (err) {
-        if (err instanceof EmbeddingError) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: `embedding failed: ${err.message}`,
-            cause: err,
-          });
+        const queryEmbedding = await embedText(input.q);
+        const vectorLiteral = `[${queryEmbedding.join(',')}]`;
+        const k = input.limit * 4;
+        const topRows = await ctx.db.all<{ id: string }>(sql`
+          SELECT e.id as id
+          FROM vector_top_k(${ENTITY_EMBEDDING_INDEX}, vector32(${vectorLiteral}), ${k}) vt
+          JOIN entity e ON e.rowid = vt.id
+          WHERE e.owner_user_id = ${ctx.user.id}
+        `);
+
+        ids = topRows.slice(0, input.limit).map((r) => r.id);
+
+        if (ids.length > 0) {
+          const idPlaceholders = sql.join(
+            ids.map((id) => sql`${id}`),
+            sql`, `,
+          );
+          const distances = await ctx.db.all<{ id: string; sim: number }>(sql`
+            SELECT id, (1.0 - vector_distance_cos(embedding, vector32(${vectorLiteral}))) AS sim
+            FROM entity
+            WHERE id IN (${idPlaceholders})
+          `);
+          scoreById = new Map(distances.map((d) => [d.id, d.sim]));
         }
-        throw err;
+      } catch {
+        mode = 'text';
+        const terms = tokenizeQuery(input.q);
+        if (terms.length === 0) {
+          return { entities: [], durationMs: Date.now() - t0, mode };
+        }
+
+        const likeClauses = terms.flatMap((t) => {
+          const pat = `%${t}%`;
+          return [
+            sql`lower(${schema.entities.name}) like ${pat}`,
+            sql`lower(${schema.entities.aliases}) like ${pat}`,
+          ];
+        });
+
+        const rows = await ctx.db.query.entities.findMany({
+          where: and(
+            eq(schema.entities.ownerUserId, ctx.user.id),
+            isNull(schema.entities.deletedAt),
+            or(...likeClauses),
+          ),
+          columns: { id: true },
+          limit: input.limit,
+        });
+        ids = rows.map((r) => r.id);
+        // text mode: no meaningful score — keep 0 so UI thresholds stay honest
+        scoreById = new Map(ids.map((id) => [id, 0]));
       }
 
-      // libSQL ANN: vector_top_k('idx', vec, k) returns rows with a single `id`
-      // column (the indexed table's rowid). We join back to entity to recover the
-      // string PK + filter by owner. We over-fetch (limit * 4) so the per-user
-      // filter has headroom before slicing.
-      // Latency is observable via the durationMs field in the response. When
-      // packages/logger lands (issue #12), add structured logging here.
-      const vectorLiteral = `[${queryEmbedding.join(',')}]`;
-      const k = input.limit * 4;
-      const topRows = await ctx.db.all<{ id: string }>(sql`
-        SELECT e.id as id
-        FROM vector_top_k(${ENTITY_EMBEDDING_INDEX}, vector32(${vectorLiteral}), ${k}) vt
-        JOIN entity e ON e.rowid = vt.id
-        WHERE e.owner_user_id = ${ctx.user.id}
-      `);
-
-      const ranked = topRows.slice(0, input.limit);
-      const ids = ranked.map((r) => r.id);
       if (ids.length === 0) {
-        return { entities: [], durationMs: Date.now() - t0 };
+        return { entities: [], durationMs: Date.now() - t0, mode };
       }
-
-      // One extra SELECT to get real cosine similarity for the candidate IDs
-      // returned by vector_top_k (which only returns ids). Without this, score is
-      // rank-based and breaks the UI's > 0.7 / > 0.5 color thresholds.
-      const idPlaceholders = sql.join(
-        ids.map((id) => sql`${id}`),
-        sql`, `,
-      );
-      const distances = await ctx.db.all<{ id: string; sim: number }>(sql`
-        SELECT id, (1.0 - vector_distance_cos(embedding, vector32(${vectorLiteral}))) AS sim
-        FROM entity
-        WHERE id IN (${idPlaceholders})
-      `);
-      const scoreById = new Map(distances.map((d) => [d.id, d.sim]));
 
       const [entities, ec, ee, et, facts] = await Promise.all([
         ctx.db.query.entities.findMany({
@@ -122,11 +142,11 @@ export const recallRouter = router({
       const eventById = new Map(events.map((e) => [e.id, e]));
       const topicById = new Map(topics.map((t) => [t.id, t]));
 
-      // Sort by real cosine similarity DESC; vector_top_k order is an ANN
-      // approximation and the exact reorder is cheap once we have scoreById.
-      const orderedIds = [...ids].sort(
-        (a, b) => (scoreById.get(b) ?? 0) - (scoreById.get(a) ?? 0),
-      );
+      const orderedIds =
+        mode === 'semantic'
+          ? [...ids].sort((a, b) => (scoreById.get(b) ?? 0) - (scoreById.get(a) ?? 0))
+          : ids;
+
       const results = orderedIds
         .map((id) => {
           const entity = entityById.get(id);
@@ -180,6 +200,6 @@ export const recallRouter = router({
         })
         .filter((x): x is NonNullable<typeof x> => x !== null);
 
-      return { entities: results, durationMs: Date.now() - t0 };
+      return { entities: results, durationMs: Date.now() - t0, mode };
     }),
 });
