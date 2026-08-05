@@ -1,0 +1,19 @@
+apps/app/lib/auth.ts
+  s_fd528823e8d35d::t_73e5840f75e8c9 53-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "fae82e3b1fd27f2ba37cdf1d92dd1262c2bb4c01",
+  "prompts": {},
+  "sessions": {
+    "s_fd528823e8d35d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "",
+        "model": "unknown"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
