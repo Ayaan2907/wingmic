@@ -1,0 +1,46 @@
+apps/app/app/chat/_components/ChatThread.tsx
+  s_fd528823e8d35d::t_628953a40565b5 665-666
+  s_fd528823e8d35d::t_e0fdd21100d72b 40
+  s_fd528823e8d35d::t_03a3e688cad043 242-245
+  s_fd528823e8d35d::t_4ece8a2a577053 225
+  s_fd528823e8d35d::t_da0afa8d1a278c 89
+  s_fd528823e8d35d::t_36ccc6e3c7f53a 632-633
+  s_fd528823e8d35d::t_a1a6a23738f80d 13
+apps/app/app/chat/_components/AskPrimitives.tsx
+  s_fd528823e8d35d::t_a4ea381951a636 1-2,4-183
+  s_fd528823e8d35d::t_5c8b3056ea6c12 3
+apps/app/app/chat/_components/types.ts
+  s_fd528823e8d35d::t_319c1a83b5eff5 89-91
+  s_fd528823e8d35d::t_7ad0c71030764c 13-14,27,30-43
+  s_fd528823e8d35d::t_73a3ca64bc4f06 44
+apps/app/app/_components/CaptureProvider.tsx
+  s_fd528823e8d35d::t_0c18b9a1f48974 704-705,723-724
+  s_fd528823e8d35d::t_65cf95659daaf6 499-503
+  s_fd528823e8d35d::t_c6bb9075247252 309-316
+  s_fd528823e8d35d::t_4b72cb1fa9dd00 172,174-204
+  s_fd528823e8d35d::t_023f27bc259ac2 535-627
+  s_fd528823e8d35d::t_812866f879086d 140-141
+  s_fd528823e8d35d::t_2ee84295cf7d02 348
+  s_fd528823e8d35d::t_afff12dc6faa93 68-69
+  s_fd528823e8d35d::t_e58b5014affde6 42,44
+apps/app/app/chat/ChatClient.tsx
+  s_fd528823e8d35d::t_7d3a66103641e1 16,21,30-117,149
+apps/app/app/chat/_components/intent.ts
+  s_fd528823e8d35d::t_0bc2d7591299e0 1-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "a2e6a66fd0173f9d3e6ac056eaf9e4784473f06f",
+  "prompts": {},
+  "sessions": {
+    "s_fd528823e8d35d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "",
+        "model": "unknown"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
