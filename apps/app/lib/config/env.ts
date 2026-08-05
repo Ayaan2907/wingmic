@@ -48,7 +48,8 @@ const serverSchema = z.object({
 
   // ── Model selection (env-controlled; swap providers by changing string) ─
   EXTRACTION_MODEL: z.string().default('anthropic/claude-haiku-4.5'),
-  LINKER_MODEL: z.string().default('anthropic/claude-haiku-4.5'),
+  // Primary extractor model — sonnet is the real extractor now (not enricher).
+  LINKER_MODEL: z.string().default('anthropic/claude-sonnet-4.6'),
   EMBEDDING_MODEL: z.string().default('openai/text-embedding-3-small'),
 });
 

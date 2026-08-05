@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc';
 import { extractHybrid, commit, ExtractionError, EmbeddingError } from '@wingmic/extractor';
 import { TRPCError } from '@trpc/server';
 import { transcribeEntities } from '@/lib/capture/transcribe-entities';
+import * as schema from '@wingmic/db/schema';
 
 export const captureRouter = router({
   /**
@@ -29,9 +31,42 @@ export const captureRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const providerEntities = await transcribeEntities(input.transcript);
+
+        const recentEntities = await ctx.db.query.entities.findMany({
+          where: and(
+            eq(schema.entities.ownerUserId, ctx.user.id),
+            isNull(schema.entities.deletedAt),
+          ),
+          columns: { id: true, name: true },
+          orderBy: desc(schema.entities.updatedAt),
+          limit: 30,
+        });
+
+        const entityIds = recentEntities.map((e) => e.id);
+        let companyNames: string[] = [];
+        if (entityIds.length > 0) {
+          const links = await ctx.db.query.entityCompanies.findMany({
+            where: inArray(schema.entityCompanies.entityId, entityIds),
+            columns: { companyId: true },
+            limit: 60,
+          });
+          const companyIds = [...new Set(links.map((l) => l.companyId))].slice(0, 20);
+          if (companyIds.length > 0) {
+            const companies = await ctx.db.query.companies.findMany({
+              where: inArray(schema.companies.id, companyIds),
+              columns: { name: true },
+            });
+            companyNames = companies.map((c) => c.name);
+          }
+        }
+
         const extracted = await extractHybrid({
           transcript: input.transcript,
           providerEntities,
+          knownContacts: {
+            persons: recentEntities.map((e) => e.name),
+            companies: companyNames,
+          },
         });
         const result = await commit(extracted, {
           db: ctx.db,
