@@ -1,0 +1,26 @@
+apps/app/app/HomeClient.tsx
+  s_fd528823e8d35d::t_9be010d14f36f0 122,128
+  s_fd528823e8d35d::t_b19fca85180dd5 25
+apps/app/app/_components/BottomTabBar.tsx
+  s_fd528823e8d35d::t_e2297ed8b658c1 21-22
+  s_fd528823e8d35d::t_ce1e6b0046359e 54-55,77
+apps/app/app/chat/_components/ChatThread.tsx
+  s_fd528823e8d35d::t_3cd5014e9f5903 186,188,202
+  s_fd528823e8d35d::t_641607816cd100 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "063c3bc1ca18113df3a6557337966c759eaba162",
+  "prompts": {},
+  "sessions": {
+    "s_fd528823e8d35d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "",
+        "model": "unknown"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
