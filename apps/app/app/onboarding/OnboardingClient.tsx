@@ -29,13 +29,13 @@ const STEPS: { eyebrow: string; title: string; titleTwist: string; body: string 
     eyebrow: '◆ welcome',
     title: 'your social ram,',
     titleTwist: 'on disk.',
-    body: 'hold the mic. talk like a human. wingmic builds the graph behind every person you meet.',
+    body: 'tap the mic. talk like a human. wingmic builds the graph behind every person you meet.',
   },
   {
     eyebrow: '◆ the mic',
     title: 'one mic,',
     titleTwist: 'one surface.',
-    body: "wingmic asks for the mic only when you press record in chat — never in the background. nothing is captured until you hold to talk.",
+    body: "wingmic asks for the mic only when you press record in chat — never in the background. nothing is captured until you tap to talk.",
   },
   {
     eyebrow: '◆ privacy',

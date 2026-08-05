@@ -107,7 +107,7 @@ export function GraphClient({ data }: { data: GraphData }) {
           <p style={{ color: 'var(--text-55)', fontSize: 15, lineHeight: 1.55 }}>
             no connections yet.{' '}
             <span className="serif" style={{ fontStyle: 'italic', color: accent }}>
-              hold the mic to capture someone.
+              tap the mic to capture someone.
             </span>
           </p>
         </div>

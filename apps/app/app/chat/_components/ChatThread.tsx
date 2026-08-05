@@ -156,7 +156,7 @@ function WelcomeAgent() {
             <span className="serif" style={{ fontStyle: 'italic', color: accent }}>
               ask me anything
             </span>{' '}
-            — who you met, what was said, who to thread. or just hold the mic and tell me about
+            — who you met, what was said, who to thread. or just tap the mic and tell me about
             a new contact.
           </div>
         </div>
