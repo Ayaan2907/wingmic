@@ -39,7 +39,9 @@ import type {
   FailureCode,
   GraphResult,
   ThreadMessage,
+  AskResult,
 } from '@/app/chat/_components/types';
+import { classifyIntent } from '@/app/chat/_components/intent';
 import { UNDO_WINDOW_MS } from '@/app/chat/_components/tokens';
 
 export interface UndoEntry {
@@ -63,6 +65,8 @@ export interface CaptureContextValue {
   openPaste: (id: string) => void;
   closePaste: () => void;
   submitPaste: (id: string) => void | Promise<void>;
+  submitText: (text: string) => void | Promise<void>;
+  saveAskAsMemo: (id: string) => void | Promise<void>;
   /** Seed the thread from server-prefetched committed memos. Idempotent
    *  across route changes — calling repeatedly is a no-op after the first
    *  call. Merge-prepends so a live-recorded bubble created BEFORE the
@@ -133,6 +137,8 @@ const DEFAULT_VALUE: CaptureContextValue = {
   openPaste: () => {},
   closePaste: () => {},
   submitPaste: () => {},
+  submitText: () => {},
+  saveAskAsMemo: () => {},
   seedThreadOnce: () => {},
 };
 
@@ -163,8 +169,39 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const seededRef = useRef(false);
 
   const commitMutation = trpc.capture.commit.useMutation();
+  const utils = trpc.useUtils();
 
-  // Cleanup all in-flight controllers + pending undo timers on unmount.
+  const patch = useCallback((id: string, p: Partial<ThreadMessage>) => {
+    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...p } : m)));
+  }, []);
+
+  const runAskPipeline = useCallback(
+    async (id: string, q: string) => {
+      try {
+        const res = await utils.recall.query.fetch({ q, limit: 5 });
+        const ask: AskResult = {
+          matches: res.entities.map((e) => ({
+            id: e.id,
+            name: e.name,
+            role: e.companies[0]?.role ?? '',
+            company: e.companies[0]?.name ?? '',
+            topics: e.topics.map((t) => t.name),
+            score: e.score,
+          })),
+          durationMs: res.durationMs,
+          mode: res.mode,
+        };
+        patch(id, { status: 'answered', ask, error: null });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'search failed.';
+        patch(id, {
+          status: 'failed',
+          error: { code: 'ask_failed', message },
+        });
+      }
+    },
+    [patch, utils],
+  );
   useEffect(() => {
     const timers = undoTimersRef.current;
     const controllers = pipelineControllersRef.current;
@@ -174,10 +211,6 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       for (const c of controllers.values()) c.abort();
       controllers.clear();
     };
-  }, []);
-
-  const patch = useCallback((id: string, p: Partial<ThreadMessage>) => {
-    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...p } : m)));
   }, []);
 
   const beginCapture = useCallback(async () => {
@@ -273,7 +306,14 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      patch(id, { status: 'linking', transcript, transcribeMs });
+      if (classifyIntent(transcript) === 'ask') {
+        patch(id, { status: 'answering', transcript, transcribeMs, intent: 'ask' });
+        await runAskPipeline(id, transcript);
+        cleanupController();
+        return;
+      }
+
+      patch(id, { status: 'linking', transcript, transcribeMs, intent: 'memo' });
 
       const c0 = performance.now();
       try {
@@ -305,7 +345,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         cleanupController();
       }
     },
-    [patch, commitMutation],
+    [patch, commitMutation, runAskPipeline],
   );
 
   // Pathname is stale-closure-prone inside the status effect (recorder.status
@@ -456,6 +496,11 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     async (id: string) => {
       const msg = messages.find((m) => m.id === id);
       if (!msg) return;
+      if (msg.intent === 'ask' && msg.transcript) {
+        patch(id, { status: 'answering', error: null });
+        await runAskPipeline(id, msg.transcript);
+        return;
+      }
       if (msg.error?.code === 'NotAllowedError') {
         activeIdRef.current = id;
         patch(id, { status: 'queued', error: null });
@@ -487,7 +532,99 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [messages, patch, commitMutation, runCapturePipeline],
+    [messages, patch, commitMutation, runCapturePipeline, runAskPipeline],
+  );
+
+  const submitText = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const intent = classifyIntent(trimmed);
+      const id = uid();
+      if (intent === 'ask') {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id,
+            status: 'answering',
+            audioBlob: null,
+            transcript: trimmed,
+            duration: 0,
+            transcribeMs: 0,
+            commitMs: null,
+            graphResult: null,
+            error: null,
+            createdAt: new Date(),
+            transcribingStartedAt: null,
+            fromPaste: false,
+            intent: 'ask',
+            ask: null,
+          },
+        ]);
+        await runAskPipeline(id, trimmed);
+        return;
+      }
+      setMessages((prev) => [
+        ...prev,
+        {
+          id,
+          status: 'linking',
+          audioBlob: null,
+          transcript: trimmed,
+          duration: 0,
+          transcribeMs: 0,
+          commitMs: null,
+          graphResult: null,
+          error: null,
+          createdAt: new Date(),
+          transcribingStartedAt: null,
+          fromPaste: false,
+          intent: 'memo',
+        },
+      ]);
+      const c0 = performance.now();
+      try {
+        const result = await commitMutation.mutateAsync({ transcript: trimmed });
+        patch(id, {
+          status: 'committed',
+          commitMs: Math.round(performance.now() - c0),
+          graphResult: result as GraphResult,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'commit failed.';
+        patch(id, {
+          status: 'failed',
+          commitMs: Math.round(performance.now() - c0),
+          error: { code: 'commit_failed', message },
+        });
+      }
+    },
+    [commitMutation, patch, runAskPipeline],
+  );
+
+  const saveAskAsMemo = useCallback(
+    async (id: string) => {
+      const msg = messages.find((m) => m.id === id);
+      if (!msg?.transcript) return;
+      patch(id, { status: 'linking', intent: 'memo', error: null, ask: null });
+      const c0 = performance.now();
+      try {
+        const result = await commitMutation.mutateAsync({ transcript: msg.transcript });
+        patch(id, {
+          status: 'committed',
+          commitMs: Math.round(performance.now() - c0),
+          graphResult: result as GraphResult,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'commit failed.';
+        patch(id, {
+          status: 'failed',
+          commitMs: Math.round(performance.now() - c0),
+          error: { code: 'commit_failed', message },
+        });
+      }
+    },
+    [messages, patch, commitMutation],
   );
 
   const discardBubble = useCallback((id: string) => {
@@ -564,6 +701,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       openPaste,
       closePaste,
       submitPaste,
+      submitText,
+      saveAskAsMemo,
       seedThreadOnce,
     }),
     [
@@ -581,6 +720,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       openPaste,
       closePaste,
       submitPaste,
+      submitText,
+      saveAskAsMemo,
       seedThreadOnce,
     ],
   );

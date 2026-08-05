@@ -10,6 +10,7 @@
 
 import Link from 'next/link';
 import { useCapture } from '@/app/_components/CaptureProvider';
+import { AgentBubble, AskExchange, WingmicAvatar as AskAvatar } from './AskPrimitives';
 import type {
   ThreadMessage,
   GraphResult,
@@ -36,6 +37,7 @@ export function ChatThread() {
     closePaste,
     submitPaste,
     softDelete,
+    saveAskAsMemo,
   } = useCapture();
   const recording =
     recorder.status === 'recording' ||
@@ -84,6 +86,7 @@ export function ChatThread() {
             setPasteDraft={setPasteDraft}
             onPasteSubmit={() => submitPaste(m.id)}
             onPasteCancel={closePaste}
+            onSaveAsMemo={() => saveAskAsMemo(m.id)}
           />
         ))}
       </div>
@@ -219,6 +222,7 @@ interface MessageBubbleProps {
   setPasteDraft: (v: string) => void;
   onPasteSubmit: () => void;
   onPasteCancel: () => void;
+  onSaveAsMemo: () => void;
 }
 
 function isEmptyExtraction(e: GraphResult['extracted']): boolean {
@@ -234,6 +238,10 @@ function MessageBubble(props: MessageBubbleProps) {
   const { message: m } = props;
 
   if (m.status === 'failed') return <FailedBubble {...props} />;
+
+  if (m.status === 'answering' || m.status === 'answered') {
+    return <AskExchange message={m} onSaveAsMemo={props.onSaveAsMemo} />;
+  }
 
   const showSkeleton = m.status === 'uploading' || m.status === 'transcribing';
   const showLinkSweep = m.status === 'linking';
@@ -621,6 +629,8 @@ function failedKind(code: FailureCode): string {
       return 'upload';
     case 'commit_failed':
       return 'commit';
+    case 'ask_failed':
+      return 'search';
     default:
       return 'unknown';
   }
@@ -652,6 +662,8 @@ function failedActions(code: FailureCode): FailedAction[] {
       return ['retry-mic', 'type'];
     case 'commit_failed':
       return ['retry', 'paste', 'discard'];
+    case 'ask_failed':
+      return ['retry', 'discard'];
     default:
       return ['retry', 'discard'];
   }

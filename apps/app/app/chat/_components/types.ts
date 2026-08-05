@@ -10,6 +10,8 @@ export type BubbleStatus =
   | 'transcribing'
   | 'linking'
   | 'committed'
+  | 'answering'
+  | 'answered'
   | 'failed'
   | 'deleted';
 
@@ -22,7 +24,23 @@ export type FailureCode =
   | 'NotAllowedError'
   | 'network'
   | 'commit_failed'
+  | 'ask_failed'
   | 'unknown_error';
+
+export interface AskMatch {
+  id: string;
+  name: string;
+  role: string;
+  company: string;
+  topics: string[];
+  score: number;
+}
+
+export interface AskResult {
+  matches: AskMatch[];
+  durationMs: number;
+  mode?: 'semantic' | 'text';
+}
 
 export interface GraphResult {
   extracted: {
@@ -68,6 +86,9 @@ export interface ThreadMessage {
   transcribingStartedAt: number | null;
   /** local-only paste fallback flag */
   fromPaste: boolean;
+  /** memo vs ask routing (#59) */
+  intent?: 'memo' | 'ask';
+  ask?: AskResult | null;
 }
 
 export interface ChatInitialItem {
