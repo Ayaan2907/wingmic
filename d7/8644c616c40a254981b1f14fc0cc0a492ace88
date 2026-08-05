@@ -1,0 +1,30 @@
+apps/app/lib/config/env.ts
+  s_fd528823e8d35d::t_d469ee5af559c0 51-52
+packages/extractor/src/__tests__/sanitize.test.ts
+  s_fd528823e8d35d::t_7e31d8b38227f5 1-76
+apps/app/lib/trpc/routers/capture.ts
+  s_fd528823e8d35d::t_1d9026b464731c 2,7,34-62,66-69
+packages/extractor/src/hybrid.ts
+  s_fd528823e8d35d::t_8a42b42c329dc1 35
+  s_fd528823e8d35d::t_0ca6df9517895b 355,367-371
+  s_fd528823e8d35d::t_b1c92eb149cc63 391-461
+  s_fd528823e8d35d::t_e4983ebf1f4e95 310-312,315-336
+  s_fd528823e8d35d::t_ec3d80985962bd 71,85-87
+  s_fd528823e8d35d::t_e61e4c15eb1ff7 462
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "d78644c616c40a254981b1f14fc0cc0a492ace88",
+  "prompts": {},
+  "sessions": {
+    "s_fd528823e8d35d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "",
+        "model": "unknown"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
