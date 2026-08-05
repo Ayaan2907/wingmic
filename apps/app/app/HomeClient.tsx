@@ -234,7 +234,7 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
           }}
           data-testid="home-activity-empty"
         >
-          no commits yet. hold the mic to make your first one.
+          no commits yet. tap the mic to make your first one.
         </div>
       ) : (
         <ul
