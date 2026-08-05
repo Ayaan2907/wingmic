@@ -1,0 +1,32 @@
+apps/app/app/_components/BottomTabBar.tsx
+  s_fd528823e8d35d::t_0ad0d4628eb1c9 32
+  s_fd528823e8d35d::t_7893c40f061170 44-45,48,51
+apps/app/app/chat/__tests__/ChatClient.test.tsx
+  s_fd528823e8d35d::t_fbd501af573ba8 19-22
+  s_fd528823e8d35d::t_dae47181688541 23,34-45
+  s_fd528823e8d35d::t_4e6e8fecc07298 172
+  s_fd528823e8d35d::t_b5b06937d2cf50 145-150
+apps/app/app/HomeClient.tsx
+  s_fd528823e8d35d::t_fef287d5efde5a 439-440,447
+  s_fd528823e8d35d::t_9a7fa40536d7b7 140-159
+  s_fd528823e8d35d::t_f8507181e35815 450-451
+apps/app/app/_components/AppShell.tsx
+  s_fd528823e8d35d::t_7b0f437c5af59e 56
+  s_fd528823e8d35d::t_579f08789832ae 31-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "c189e9e330869a41b7f0c9aa03c7d67d02fe1855",
+  "prompts": {},
+  "sessions": {
+    "s_fd528823e8d35d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "",
+        "model": "unknown"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
