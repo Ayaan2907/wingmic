@@ -1,0 +1,23 @@
+apps/app/lib/trpc/routers/recall.ts
+  s_fd528823e8d35d::t_641a420324ee8c 2,4,8-17,20-23,25-26,37-40,42-64,66-92,96,145-149,203
+apps/app/app/search/SearchClient.tsx
+  s_fd528823e8d35d::t_daadd7a11b67e3 213-215
+apps/app/lib/trpc/routers/recall.test.ts
+  s_fd528823e8d35d::t_308e28d942ce54 24,104,136,149-172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "082f338a0974464686790b1d7fa1bfec435ead85",
+  "prompts": {},
+  "sessions": {
+    "s_fd528823e8d35d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "",
+        "model": "unknown"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
