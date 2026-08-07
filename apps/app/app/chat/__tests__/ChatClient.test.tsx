@@ -70,7 +70,11 @@ const fakeRecorder = {
   lock: vi.fn(),
   setCancelArmed: vi.fn(),
   setLockArmed: vi.fn(),
-  reset: vi.fn(),
+        reset: vi.fn(() => {
+          fakeRecorder.status = 'idle';
+          fakeRecorder.audioBlob = null;
+          setStatusHook?.('idle');
+        }),
   supported: true,
 };
 
@@ -86,6 +90,7 @@ vi.mock('@/app/capture/_components/useAudioRecorder', () => {
         fakeRecorder.status = s;
         setStatus(s);
         if (s === 'ready') setAudioBlob(fakeRecorder.audioBlob);
+        if (s === 'idle') setAudioBlob(null);
       };
       return {
         ...fakeRecorder,
@@ -557,6 +562,55 @@ describe('ChatClient', () => {
     expect(dimWrapperAfter).toBeTruthy();
     expect(dimWrapperAfter!.style.opacity).toBe('0.4');
     expect(dimWrapperAfter!.style.pointerEvents).toBe('none');
+  });
+
+  it('can start a second recording while the first bubble is still linking', async () => {
+    fakeRecorder.audioBlob = new Blob(['first'], { type: 'audio/webm' });
+
+    let resolveCommit!: (value: unknown) => void;
+    const commitPending = new Promise((res) => {
+      resolveCommit = res;
+    });
+    mutateAsyncMock.mockReturnValue(commitPending);
+
+    (globalThis as { fetch: typeof fetch }).fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ transcript: 'first memo', durationMs: 400 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as unknown as typeof fetch;
+
+    renderChat({ userName: 'ada' });
+    const btn = screen.getByRole('button', { name: /record voice memo/i });
+
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    await act(async () => {
+      setStatusHook?.('encoding');
+      await Promise.resolve();
+    });
+    await act(async () => {
+      setStatusHook?.('ready');
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/linking/i)).toBeTruthy();
+    });
+
+    fakeRecorder.audioBlob = new Blob(['second'], { type: 'audio/webm' });
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    expect(fakeRecorder.start).toHaveBeenCalledTimes(2);
+
+    resolveCommit({
+      extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+      newEntities: 0,
+      matchedEntities: 0,
+      interactionId: 'int-1',
+    });
   });
 
   // PR β₁-D rolled back the armRecord URL-param approach: recording now

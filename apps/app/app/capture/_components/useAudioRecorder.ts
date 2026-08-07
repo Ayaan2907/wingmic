@@ -199,7 +199,13 @@ export function useAudioRecorder(): UseAudioRecorder {
       setStatus('error');
       return;
     }
-    if (status !== 'idle' && status !== 'ready' && status !== 'error') return;
+    if (status !== 'idle' && status !== 'ready' && status !== 'error' && status !== 'encoding') {
+      return;
+    }
+    if (status === 'encoding') {
+      const rec = recorderRef.current;
+      if (rec && rec.state !== 'inactive') return;
+    }
 
     setError(null);
     setAudioBlob(null);

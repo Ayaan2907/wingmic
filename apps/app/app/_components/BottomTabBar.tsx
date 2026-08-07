@@ -102,7 +102,7 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
   // toggle reads the live status on each tap, so it can't get stuck.
   function onOrbClick() {
     const s = recorder.status;
-    if (s === 'idle' || s === 'ready' || s === 'error') {
+    if (s === 'idle' || s === 'ready' || s === 'error' || s === 'encoding') {
       vibrate(8);
       void beginCapture();
       return;

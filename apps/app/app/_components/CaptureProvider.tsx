@@ -164,6 +164,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const [undoQueue, setUndoQueue] = useState<UndoEntry[]>([]);
 
   const activeIdRef = useRef<string | null>(null);
+  /** Bubble id handed off when recorder enters encoding — frees the orb for the next take. */
+  const handoffBubbleIdRef = useRef<string | null>(null);
   const pipelineControllersRef = useRef<Map<string, AbortController>>(new Map());
   const undoTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const seededRef = useRef(false);
@@ -360,9 +362,17 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   // When recorder reaches `ready`, kick the pipeline and (if user is not
   // already on /chat) push to /chat so the bubble + extraction render in
   // the thread. The pipeline runs in parallel with the route change.
+  // On `encoding`, detach the bubble id so a second take can arm while the
+  // prior blob finalizes (U3 — non-blocking record loop).
   useEffect(() => {
-    if (recorder.status === 'ready' && recorder.audioBlob && activeIdRef.current) {
-      const id = activeIdRef.current;
+    if (recorder.status === 'encoding' && activeIdRef.current) {
+      handoffBubbleIdRef.current = activeIdRef.current;
+      activeIdRef.current = null;
+    }
+    if (recorder.status === 'ready' && recorder.audioBlob) {
+      const id = handoffBubbleIdRef.current ?? activeIdRef.current;
+      if (!id) return;
+      handoffBubbleIdRef.current = null;
       activeIdRef.current = null;
       const blob = recorder.audioBlob;
       const dur = recorder.duration;
@@ -412,7 +422,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         if (
           recorder.status === 'idle' ||
           recorder.status === 'ready' ||
-          recorder.status === 'error'
+          recorder.status === 'error' ||
+          recorder.status === 'encoding'
         ) {
           e.preventDefault();
           void (async () => {
