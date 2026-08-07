@@ -619,6 +619,10 @@ describe('ChatClient', () => {
       });
       await commitPending;
     });
+
+    await waitFor(() => {
+      expect(screen.getByText('first memo')).toBeTruthy();
+    });
   });
 
   // PR β₁-D rolled back the armRecord URL-param approach: recording now
