@@ -43,7 +43,7 @@ Source of truth for visuals: `design/v2/` (`Wingmic Prototype.html`, `proto-scre
 | Proto | Product | Gap |
 |---|---|---|
 | Mobile nav: home · chat · mic · graph · **acts** | home · chat · mic · graph · **search** | Deliberate product choice; design.md §12 still shows acts |
-| Desktop rail: Hold to capture + acts badge + pinned people | Tap language + search; pinned people partial/absent | Copy drift (OQ-6); pinned people unfinished |
+| Desktop rail: Hold to capture + acts badge + pinned people | Tap language + search; pinned people partial/absent | Copy drift (OQ-A); pinned people unfinished |
 | Mic: hold → lock slide-up / cancel slide-left | Tap start / tap stop | Code ahead of design; doc amend needs blessing |
 | Capture = always chat-in-place (§12) | `/capture` → permanentRedirect `/chat` | Aligned |
 
@@ -60,7 +60,7 @@ Source of truth for visuals: `design/v2/` (`Wingmic Prototype.html`, `proto-scre
 | **10 Event** | Generate recap, check-ins | Real detail; CTAs **disabled**; weak interaction→event linkage | Same |
 | **11 Acts** | Pending/Sent/All filters; edit/send/skip | Seeded mock; **no filter chips**; all send disabled; not in bottom nav | Pure chrome until #11 |
 | **12 Search** | Results → person; filters | Real recall; grouping chips; results **do not navigate** to entity pages | Dead-end results (high friction) |
-| **13 Settings** | Canvas: capture/agent/integrations/data | Shipped v14 list (account/audio/privacy/capture/advanced/about) | OQ-4; prefs never read by capture/transcribe/linker |
+| **13 Settings** | Canvas: capture/agent/integrations/data | Shipped v14 list (account/audio/privacy/capture/advanced/about) | OQ-C; prefs never read by capture/transcribe/linker |
 | **Sign-in** | — | Magic link real | Default callback `/chat` can skip home onboarding feel |
 | **Dashboard** `/dashboard` | — | Stub "coming soon" | Orphan; home is the dashboard |
 | **Empty/loading/error** (lib-states) | Full artboards | Partial (some empty copy fixed #71) | Discard confirm, commit sheet, toasts, undo commit — incomplete vs library |
@@ -121,12 +121,12 @@ From handoff §5 + this audit:
 | Home recent → chat/entity links | `HomeClient` | New |
 | Replace home/acts seeded mocks with real pending actions **or** honest empty state | Until #11, prefer empty/"coming in v0.3" over fake drafts | Product call |
 | Desktop rails from live graph | ChatEntityRail, PersonListRail | New |
-| Settings prefs → pipeline | ASR lang, linker override, mic device; retention needs OQ-1 object store | Partial until OQ-1 |
+| Settings prefs → pipeline | ASR lang, linker override, mic device; retention needs OQ-E object store | Partial until OQ-E |
 | Live extraction stream in locked chat | δ₁ leftover | New |
 | Graph topic open guard | Hide or route | Small fix |
 | Chat active-tab highlight | AppShell | Small fix |
 | Reply-to + parent-bias (v20) | Columns migrated | Deferred feature |
-| Audio retention object store (v19) | Blocked OQ-1 | — |
+| Audio retention object store (v19) | Blocked OQ-E | — |
 
 ### 5.3 Capture quality backlog (existing issues)
 
@@ -147,7 +147,7 @@ C3 hybrid unit tests · hybrid-path eval · A2 shared `extractActionVerbs` · C2
 |---|---|
 | **#1** modularize landing HomeClient | Before #37 |
 | **#37** landing responsive | After #1 |
-| **#9** Sentry + PostHog | Blocked on dependency ack (OQ-5) |
+| **#9** Sentry + PostHog | Blocked on dependency ack (OQ-F) |
 
 ### 5.6 Later wedges (do not start inside v0.1.x)
 
@@ -295,3 +295,65 @@ Do **not** start Acts (#11) or Imports (#10) next.
 6. Then #8 full round-trip test.
 
 Optional parallel: first-run teaching (orb label / one guided memo) — product call, not a full onboarding rewrite.
+
+---
+
+## 11 · Open issues ↔ in-flight PRs (linkage matrix)
+
+**Rule:** none of the open PRs below should use `closes #56` or `closes #11` — both epics stay open until their remaining acceptance criteria are met. Use `part of #N` in PR bodies and tick sub-items on the epic when each PR merges.
+
+### 11.1 Epic trackers
+
+| Issue | Title | Relationship to PR stack | Close when? |
+|---|---|---|---|
+| **#56** | v0.1.2 UI-mock closeout | #74 maps the path; #75–#84 address audit pain points (trust + record-first UX) | After CI green, prototype sweep, maintainer tag `v0.1.2-ui-complete` — **not** when trust pack merges alone |
+| **#11** | v0.3 Acts agent epic | #77–#79 land schema + wire-up + nav; precursor only | After Inngest, scheduling, draft edit, snooze/mute — **#79 must not `closes #11`** |
+
+### 11.2 PR → issue mapping
+
+| PR | Branch | Work | Issues |
+|---|---|---|---|
+| **#74** | `cursor/readiness-audit-plan-d0df` | Readiness audit plan (this doc) | part of **#56**; references **#8** **#2** **#3** **#5** **#10** **#11** |
+| **#75** | `cursor/v02-coding-plan-and-trust-d0df` | Coding plan + T1 `sourceInteractionId` | part of **#56**; unblocks **#8** regression coverage |
+| **#76** | `cursor/search-deeplinks-only-d0df` | T2 search deep links | part of **#56** |
+| **#77** | `cursor/nav-acts-fifth-slot-d0df` | Fifth nav slot → acts | part of **#56**, part of **#11** |
+| **#78** | `cursor/acts-table-schema-d0df` | A1 `act` table + migration | part of **#11** (sub: Act table + status) |
+| **#79** | `cursor/acts-wire-drafts-d0df` | A2–A4 wire drafts + permission-first send | part of **#11** (sub: inbox + send flow); part of **#56** (honest acts) |
+| **#80** | `cursor/hide-mock-rails-d0df` | T4 hide mock desktop rails | part of **#56** |
+| **#81** | `cursor/persist-soft-delete-d0df` | T5 persist soft-delete | part of **#56** |
+| **#82** | `cursor/post-login-chat-d0df` | U1 post-onboarding → `/chat` | part of **#56** (record-first UX) |
+| **#83** | `cursor/nonblocking-record-d0df` | U3 non-blocking record loop | part of **#56** (record-first UX) |
+| **#84** | `cursor/orb-hint-d0df` | U5 first-run orb hint | part of **#56** (onboarding polish) |
+
+### 11.3 Open issues with **no** in-flight PR (unchanged backlog)
+
+| Issue | Title | Notes |
+|---|---|---|
+| **#63** | verify `/graph` reaches production | Ops checklist only; unrelated to trust pack |
+| **#37** | landing page not responsive | Blocked behind **#1** modularize |
+| **#1** | modularize landing HomeClient | `apps/web` only |
+| **#10** | v0.2 contact imports epic | Planned in #75 coding plan; no PR yet |
+| **#9** | Sentry + PostHog | Blocked on OQ-F dependency ack |
+| **#8** | integration test capture→recall | Do after trust pack; #75 T1 fix should be in test scope |
+| **#2** | lazy-promotion | v0.2.1 in coding plan |
+| **#3** | confidence-prompt resolution | Capture backlog |
+| **#5** | text-input fallback | Capture backlog; partial overlap with chat composer |
+
+### 11.4 Suggested PR body footer (copy-paste)
+
+Replace empty `closes #` lines with:
+
+```
+## Issues
+part of #56
+```
+
+For **#77**, **#78**, **#79** also add `part of #11`.
+
+For **#79** specifically, **remove** `closes #11` — replace with `part of #11`.
+
+### 11.5 Suggested epic comment (paste on #56 and #11)
+
+**On #56:** link the table in §11.2; note trust-pack PRs address P1–P5 from §3 but epic stays open for sweep + tag.
+
+**On #11:** tick sub-items for Act table (#78), inbox (#79), permission-first send (#79); leave Inngest / AI draft gen / snooze open.
