@@ -161,7 +161,9 @@ describe('ChatClient', () => {
     resetFakeRecorder();
     mutateAsyncMock.mockReset();
     deleteMutateMock.mockReset();
+    deleteMutateMock.mockResolvedValue({ ok: true });
     restoreMutateMock.mockReset();
+    restoreMutateMock.mockResolvedValue({ ok: true });
     recallFetchMock.mockReset();
     recallFetchMock.mockResolvedValue({
       entities: [{ id: 'e1', name: 'Alice', score: 0.9, companies: [], events: [], topics: [], aliases: [], facts: [] }],
@@ -453,16 +455,53 @@ describe('ChatClient', () => {
     await act(async () => {
       fireEvent.click(deleteBtn);
     });
-    expect(deleteMutateMock).toHaveBeenCalledWith(
-      { id: 'k' },
-      expect.objectContaining({ onError: expect.any(Function) }),
-    );
+    expect(deleteMutateMock).toHaveBeenCalledWith({ id: 'k' });
     const clearedBefore = clearTimeoutSpy.mock.calls.length;
     // Unmount should clear the pending 30s undo timer
     unmount();
     expect(clearTimeoutSpy.mock.calls.length).toBeGreaterThan(clearedBefore);
 
     clearTimeoutSpy.mockRestore();
+  });
+
+  it('undo after soft-delete calls capture.restore', async () => {
+    fakeRecorder.audioBlob = new Blob(['x'], { type: 'audio/webm' });
+    (globalThis as { fetch: typeof fetch }).fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ transcript: 'hi', durationMs: 100 }), { status: 200 }),
+    ) as unknown as typeof fetch;
+    mutateAsyncMock.mockResolvedValue({
+      extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+      newEntities: 0,
+      matchedEntities: 0,
+      interactionId: 'int_undo',
+    });
+    restoreMutateMock.mockResolvedValue({ ok: true });
+
+    renderChat({ userName: 'ada' });
+    const btn = screen.getByRole('button', { name: /record voice memo/i });
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    await act(async () => {
+      setStatusHook?.('ready');
+      await Promise.resolve();
+    });
+
+    const deleteBtn = await waitFor(() => screen.getByLabelText(/delete memo/i));
+    await act(async () => {
+      fireEvent.click(deleteBtn);
+    });
+    expect(deleteMutateMock).toHaveBeenCalled();
+
+    const undoBtn = await waitFor(() => screen.getByRole('button', { name: /undo/i }));
+    await act(async () => {
+      fireEvent.click(undoBtn);
+    });
+
+    await waitFor(() => {
+      expect(restoreMutateMock).toHaveBeenCalledWith({ id: 'int_undo' });
+    });
+    expect(screen.getByText('hi')).toBeTruthy();
   });
 
   it('tap toggles recording: first tap starts, second tap stops (never double-starts)', async () => {
