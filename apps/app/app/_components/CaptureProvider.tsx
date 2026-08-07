@@ -166,6 +166,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const activeIdRef = useRef<string | null>(null);
   const pipelineControllersRef = useRef<Map<string, AbortController>>(new Map());
   const undoTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  /** Bumped on undo so a late delete response cannot win over restore. */
+  const deleteGenerationRef = useRef<Map<string, number>>(new Map());
   const seededRef = useRef(false);
 
   const commitMutation = trpc.capture.commit.useMutation();
@@ -662,21 +664,23 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       if (prev) clearTimeout(prev);
       undoTimersRef.current.set(id, t);
       if (interactionId) {
-        deleteMutation.mutate(
-          { id: interactionId },
-          {
-            onError: () => {
-              // Persist failed — put the bubble back and drop the undo chip.
-              const timer = undoTimersRef.current.get(id);
-              if (timer) {
-                clearTimeout(timer);
-                undoTimersRef.current.delete(id);
-              }
-              patch(id, { status: 'committed' });
-              setUndoQueue((q) => q.filter((u) => u.id !== id));
-            },
-          },
-        );
+        const genAtDelete = deleteGenerationRef.current.get(interactionId) ?? 0;
+        void deleteMutation
+          .mutateAsync({ id: interactionId })
+          .then(() => {
+            if ((deleteGenerationRef.current.get(interactionId) ?? 0) !== genAtDelete) {
+              void restoreMutation.mutateAsync({ id: interactionId });
+            }
+          })
+          .catch(() => {
+            const timer = undoTimersRef.current.get(id);
+            if (timer) {
+              clearTimeout(timer);
+              undoTimersRef.current.delete(id);
+            }
+            patch(id, { status: 'committed' });
+            setUndoQueue((q) => q.filter((u) => u.id !== id));
+          });
       }
     },
     [messages, interactionIdFor, patch, deleteMutation],
@@ -694,7 +698,14 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       patch(id, { status: 'committed' });
       setUndoQueue((q) => q.filter((u) => u.id !== id));
       if (interactionId) {
-        restoreMutation.mutate({ id: interactionId });
+        deleteGenerationRef.current.set(
+          interactionId,
+          (deleteGenerationRef.current.get(interactionId) ?? 0) + 1,
+        );
+        void restoreMutation.mutateAsync({ id: interactionId }).catch(() => {
+          patch(id, { status: 'deleted' });
+          setUndoQueue((q) => [...q, { id, until: Date.now() + UNDO_WINDOW_MS }]);
+        });
       }
     },
     [messages, interactionIdFor, patch, restoreMutation],

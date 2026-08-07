@@ -52,6 +52,12 @@ describe('capture.delete / restore', () => {
       ) VALUES ('int_other', ?, 'nope', ?, ?, 'committed', null)`,
       args: [otherUserId, now, now],
     });
+    await client.execute({
+      sql: `INSERT INTO interaction (
+        id, user_id, transcript, captured_at, created_at, status, deleted_at
+      ) VALUES ('int_draft', ?, 'draft', ?, ?, 'draft', null)`,
+      args: [userId, now, now],
+    });
   });
 
   function caller() {
@@ -83,6 +89,44 @@ describe('capture.delete / restore', () => {
     expect(res.ok).toBe(false);
     const row = await db.query.interactions.findFirst({
       where: eq(schema.interactions.id, 'int_other'),
+    });
+    expect(row?.deletedAt).toBeNull();
+  });
+
+  it('refuses to restore another users interaction', async () => {
+    await client.execute({
+      sql: `UPDATE interaction SET deleted_at = ? WHERE id = 'int_other'`,
+      args: [now],
+    });
+    const res = await caller().restore({ id: 'int_other' });
+    expect(res.ok).toBe(false);
+    const row = await db.query.interactions.findFirst({
+      where: eq(schema.interactions.id, 'int_other'),
+    });
+    expect(row?.deletedAt).toBeTruthy();
+  });
+
+  it('delete is idempotent and does not reset deletedAt', async () => {
+    const c = caller();
+    await c.delete({ id: 'int_1' });
+    const first = await db.query.interactions.findFirst({
+      where: eq(schema.interactions.id, 'int_1'),
+    });
+    const firstDeletedAt = first?.deletedAt;
+    expect(firstDeletedAt).toBeTruthy();
+
+    expect((await c.delete({ id: 'int_1' })).ok).toBe(true);
+    const second = await db.query.interactions.findFirst({
+      where: eq(schema.interactions.id, 'int_1'),
+    });
+    expect(second?.deletedAt?.getTime()).toBe(firstDeletedAt?.getTime());
+  });
+
+  it('ignores draft interactions', async () => {
+    const res = await caller().delete({ id: 'int_draft' });
+    expect(res.ok).toBe(false);
+    const row = await db.query.interactions.findFirst({
+      where: eq(schema.interactions.id, 'int_draft'),
     });
     expect(row?.deletedAt).toBeNull();
   });

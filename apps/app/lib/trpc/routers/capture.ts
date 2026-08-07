@@ -105,6 +105,7 @@ export const captureRouter = router({
         where: and(
           eq(schema.interactions.id, input.id),
           eq(schema.interactions.userId, ctx.user.id),
+          eq(schema.interactions.status, 'committed'),
         ),
         columns: { id: true, deletedAt: true },
       });
@@ -127,6 +128,7 @@ export const captureRouter = router({
         where: and(
           eq(schema.interactions.id, input.id),
           eq(schema.interactions.userId, ctx.user.id),
+          eq(schema.interactions.status, 'committed'),
         ),
         columns: { id: true, deletedAt: true },
       });
