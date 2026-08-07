@@ -145,6 +145,7 @@
         "zod": "^4.4.2",
       },
       "devDependencies": {
+        "@libsql/client": "0.17.3",
         "@types/node": "^22.9.0",
         "@wingmic/config-tsconfig": "workspace:*",
         "@wingmic/config-vitest": "workspace:*",
