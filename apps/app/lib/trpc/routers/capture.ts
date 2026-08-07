@@ -93,4 +93,49 @@ export const captureRouter = router({
         throw err;
       }
     }),
+
+  /**
+   * Soft-delete a committed interaction (sets `deletedAt`). Scoped to the
+   * calling user. Idempotent when already deleted.
+   */
+  delete: protectedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const row = await ctx.db.query.interactions.findFirst({
+        where: and(
+          eq(schema.interactions.id, input.id),
+          eq(schema.interactions.userId, ctx.user.id),
+        ),
+        columns: { id: true, deletedAt: true },
+      });
+      if (!row) return { ok: false as const };
+      if (row.deletedAt) return { ok: true as const };
+      await ctx.db
+        .update(schema.interactions)
+        .set({ deletedAt: new Date() })
+        .where(eq(schema.interactions.id, input.id));
+      return { ok: true as const };
+    }),
+
+  /**
+   * Undo a soft-delete within the client undo window (clears `deletedAt`).
+   */
+  restore: protectedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const row = await ctx.db.query.interactions.findFirst({
+        where: and(
+          eq(schema.interactions.id, input.id),
+          eq(schema.interactions.userId, ctx.user.id),
+        ),
+        columns: { id: true, deletedAt: true },
+      });
+      if (!row) return { ok: false as const };
+      if (!row.deletedAt) return { ok: true as const };
+      await ctx.db
+        .update(schema.interactions)
+        .set({ deletedAt: null })
+        .where(eq(schema.interactions.id, input.id));
+      return { ok: true as const };
+    }),
 });

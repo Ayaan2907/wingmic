@@ -16,10 +16,14 @@ vi.mock('next/navigation', () => ({
 }));
 
 // ── Mock tRPC client ────────────────────────────────────────────────────
-const { mutateAsyncMock, recallFetchMock } = vi.hoisted(() => ({
-  mutateAsyncMock: vi.fn(),
-  recallFetchMock: vi.fn(),
-}));
+const { mutateAsyncMock, deleteMutateMock, restoreMutateMock, recallFetchMock } = vi.hoisted(
+  () => ({
+    mutateAsyncMock: vi.fn(),
+    deleteMutateMock: vi.fn(),
+    restoreMutateMock: vi.fn(),
+    recallFetchMock: vi.fn(),
+  }),
+);
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
@@ -27,6 +31,20 @@ vi.mock('@/lib/trpc/client', () => ({
       commit: {
         useMutation: () => ({
           mutateAsync: mutateAsyncMock,
+          isPending: false,
+        }),
+      },
+      delete: {
+        useMutation: () => ({
+          mutate: deleteMutateMock,
+          mutateAsync: deleteMutateMock,
+          isPending: false,
+        }),
+      },
+      restore: {
+        useMutation: () => ({
+          mutate: restoreMutateMock,
+          mutateAsync: restoreMutateMock,
           isPending: false,
         }),
       },
@@ -142,6 +160,8 @@ describe('ChatClient', () => {
   beforeEach(() => {
     resetFakeRecorder();
     mutateAsyncMock.mockReset();
+    deleteMutateMock.mockReset();
+    restoreMutateMock.mockReset();
     recallFetchMock.mockReset();
     recallFetchMock.mockResolvedValue({
       entities: [{ id: 'e1', name: 'Alice', score: 0.9, companies: [], events: [], topics: [], aliases: [], facts: [] }],
@@ -433,6 +453,10 @@ describe('ChatClient', () => {
     await act(async () => {
       fireEvent.click(deleteBtn);
     });
+    expect(deleteMutateMock).toHaveBeenCalledWith(
+      { id: 'k' },
+      expect.objectContaining({ onError: expect.any(Function) }),
+    );
     const clearedBefore = clearTimeoutSpy.mock.calls.length;
     // Unmount should clear the pending 30s undo timer
     unmount();

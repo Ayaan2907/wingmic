@@ -169,10 +169,21 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const seededRef = useRef(false);
 
   const commitMutation = trpc.capture.commit.useMutation();
+  const deleteMutation = trpc.capture.delete.useMutation();
+  const restoreMutation = trpc.capture.restore.useMutation();
   const utils = trpc.useUtils();
 
   const patch = useCallback((id: string, p: Partial<ThreadMessage>) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...p } : m)));
+  }, []);
+
+  /** Map bubble id → interactions.id for persist. Live commits stash it on
+   *  graphResult; server-seeded rows use the interaction id as the bubble id. */
+  const interactionIdFor = useCallback((msg: ThreadMessage | undefined): string | null => {
+    if (!msg) return null;
+    if (msg.graphResult?.interactionId) return msg.graphResult.interactionId;
+    if (msg.status === 'committed' || msg.status === 'deleted') return msg.id;
+    return null;
   }, []);
 
   const runAskPipeline = useCallback(
@@ -638,6 +649,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
 
   const softDelete = useCallback(
     (id: string) => {
+      const msg = messages.find((m) => m.id === id);
+      const interactionId = interactionIdFor(msg);
       patch(id, { status: 'deleted' });
       const until = Date.now() + UNDO_WINDOW_MS;
       setUndoQueue((q) => [...q, { id, until }]);
@@ -648,12 +661,31 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       const prev = undoTimersRef.current.get(id);
       if (prev) clearTimeout(prev);
       undoTimersRef.current.set(id, t);
+      if (interactionId) {
+        deleteMutation.mutate(
+          { id: interactionId },
+          {
+            onError: () => {
+              // Persist failed — put the bubble back and drop the undo chip.
+              const timer = undoTimersRef.current.get(id);
+              if (timer) {
+                clearTimeout(timer);
+                undoTimersRef.current.delete(id);
+              }
+              patch(id, { status: 'committed' });
+              setUndoQueue((q) => q.filter((u) => u.id !== id));
+            },
+          },
+        );
+      }
     },
-    [patch],
+    [messages, interactionIdFor, patch, deleteMutation],
   );
 
   const undoDelete = useCallback(
     (id: string) => {
+      const msg = messages.find((m) => m.id === id);
+      const interactionId = interactionIdFor(msg);
       const t = undoTimersRef.current.get(id);
       if (t) {
         clearTimeout(t);
@@ -661,8 +693,11 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       }
       patch(id, { status: 'committed' });
       setUndoQueue((q) => q.filter((u) => u.id !== id));
+      if (interactionId) {
+        restoreMutation.mutate({ id: interactionId });
+      }
     },
-    [patch],
+    [messages, interactionIdFor, patch, restoreMutation],
   );
 
   // Idempotent seed. Merge-prepends server-prefetched committed memos so any
