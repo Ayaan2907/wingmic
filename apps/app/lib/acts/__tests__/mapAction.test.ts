@@ -57,8 +57,9 @@ describe('resolveTargetEntityId', () => {
     expect(resolveTargetEntityId('ada lovelace', persons, ids)).toBe('e_ada');
   });
 
-  it('soft-matches on containment', () => {
+  it('soft-matches on whole name tokens', () => {
     expect(resolveTargetEntityId('Ada', persons, ids)).toBe('e_ada');
+    expect(resolveTargetEntityId('Ann', [{ name: 'Joanne Smith' }], ['e_joanne'])).toBeNull();
   });
 
   it('returns null when no person matches', () => {

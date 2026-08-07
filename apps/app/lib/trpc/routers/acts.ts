@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import * as schema from '@wingmic/db/schema';
 import { router, protectedProcedure } from '../trpc';
 import { toPendingAct } from '@/lib/acts/mapAction';
@@ -42,7 +42,11 @@ export const actsRouter = router({
       const entities =
         entityIds.length > 0
           ? await ctx.db.query.entities.findMany({
-              where: inArray(schema.entities.id, entityIds),
+              where: and(
+                inArray(schema.entities.id, entityIds),
+                eq(schema.entities.ownerUserId, ctx.user.id),
+                isNull(schema.entities.deletedAt),
+              ),
               columns: { id: true, name: true },
             })
           : [];
@@ -80,10 +84,19 @@ export const actsRouter = router({
         where: and(eq(schema.acts.id, input.id), eq(schema.acts.userId, ctx.user.id)),
       });
       if (!existing) return { ok: false as const };
+      if (existing.status !== 'drafted' && existing.status !== 'snoozed') {
+        return { ok: false as const };
+      }
       await ctx.db
         .update(schema.acts)
         .set({ status: 'sent', updatedAt: new Date() })
-        .where(eq(schema.acts.id, input.id));
+        .where(
+          and(
+            eq(schema.acts.id, input.id),
+            eq(schema.acts.userId, ctx.user.id),
+            inArray(schema.acts.status, ['drafted', 'snoozed']),
+          ),
+        );
       return { ok: true as const };
     }),
 
@@ -94,10 +107,19 @@ export const actsRouter = router({
         where: and(eq(schema.acts.id, input.id), eq(schema.acts.userId, ctx.user.id)),
       });
       if (!existing) return { ok: false as const };
+      if (existing.status !== 'drafted' && existing.status !== 'snoozed') {
+        return { ok: false as const };
+      }
       await ctx.db
         .update(schema.acts)
         .set({ status: 'dismissed', updatedAt: new Date() })
-        .where(eq(schema.acts.id, input.id));
+        .where(
+          and(
+            eq(schema.acts.id, input.id),
+            eq(schema.acts.userId, ctx.user.id),
+            inArray(schema.acts.status, ['drafted', 'snoozed']),
+          ),
+        );
       return { ok: true as const };
     }),
 });

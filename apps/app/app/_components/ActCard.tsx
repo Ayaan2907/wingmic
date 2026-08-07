@@ -47,11 +47,13 @@ export function ActCard({
     switch (actionKind) {
       case 'email':
       case 'intro': {
-        window.location.href = mailtoHref({
+        const href = mailtoHref({
           subject: a.subject ?? `wingmic · ${a.kind}`,
           body,
         });
-        onSent?.(a.id);
+        if (href !== 'mailto:?body=') {
+          window.location.href = href;
+        }
         return;
       }
       case 'meeting':
@@ -67,8 +69,7 @@ export function ActCard({
         link.href = url;
         link.download = `wingmic-${a.kind}.ics`;
         link.click();
-        URL.revokeObjectURL(url);
-        onSent?.(a.id);
+        setTimeout(() => URL.revokeObjectURL(url), 0);
         return;
       }
       case 'todo': {

@@ -119,12 +119,12 @@ describe('HomeClient', () => {
     expect((sendButtons[0] as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it('marks an act sent when the send CTA is clicked', () => {
+  it('does not mark an email act sent when compose is opened', () => {
     render(<HomeClient userName="ayaan" initialData={sampleData} />);
     const acts = screen.getByTestId('home-acts');
     const send = within(acts).getByRole('button', { name: /send/i });
     fireEvent.click(send);
-    expect(markSentMutate).toHaveBeenCalledWith({ id: 'act_1' });
+    expect(markSentMutate).not.toHaveBeenCalled();
   });
 
   it('shows an empty-state row when there are no recent commits', () => {
