@@ -12,6 +12,7 @@ import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
+import { requireOnboarded } from '@/lib/onboarding-guard';
 import { db, schema } from '@wingmic/db';
 import ChatClient from './ChatClient';
 import type { ChatInitialItem } from './_components/types';
@@ -28,6 +29,8 @@ const INITIAL_LIMIT = 20;
 export default async function Page() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) redirect('/signin?next=/chat');
+
+  await requireOnboarded(session.user.id);
 
   const initialThread = await loadInitialThread(session.user.id);
   return <ChatClient userName={session.user.name ?? null} initialThread={initialThread} />;
