@@ -166,6 +166,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const activeIdRef = useRef<string | null>(null);
   /** Bubble id handed off when recorder enters encoding — frees the orb for the next take. */
   const handoffBubbleIdRef = useRef<string | null>(null);
+  /** Tap during encoding/ready queues the next take after the prior blob finalizes. */
+  const pendingBeginRef = useRef(false);
   const pipelineControllersRef = useRef<Map<string, AbortController>>(new Map());
   const undoTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const seededRef = useRef(false);
@@ -216,6 +218,11 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const beginCapture = useCallback(async () => {
+    const status = recorderRef.current.status;
+    if (status === 'encoding' || status === 'ready') {
+      pendingBeginRef.current = true;
+      return;
+    }
     const id = uid();
     activeIdRef.current = id;
     setMessages((prev) => [
@@ -370,14 +377,22 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       activeIdRef.current = null;
     }
     if (recorder.status === 'ready' && recorder.audioBlob) {
-      const id = handoffBubbleIdRef.current ?? activeIdRef.current;
+      const fromHandoff = handoffBubbleIdRef.current;
+      const id = fromHandoff ?? activeIdRef.current;
       if (!id) return;
-      handoffBubbleIdRef.current = null;
-      activeIdRef.current = null;
+      if (fromHandoff) {
+        handoffBubbleIdRef.current = null;
+      } else {
+        activeIdRef.current = null;
+      }
       const blob = recorder.audioBlob;
       const dur = recorder.duration;
       void runCapturePipeline(id, blob, dur);
       recorder.reset();
+      if (pendingBeginRef.current) {
+        pendingBeginRef.current = false;
+        void Promise.resolve().then(() => beginCapture());
+      }
       if (pathnameRef.current !== '/chat') {
         try {
           router.push('/chat');
@@ -386,9 +401,15 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         }
       }
     }
-    if (recorder.status === 'error' && activeIdRef.current) {
-      const id = activeIdRef.current;
-      activeIdRef.current = null;
+    if (recorder.status === 'error') {
+      const fromHandoff = handoffBubbleIdRef.current;
+      const id = fromHandoff ?? activeIdRef.current;
+      if (!id) return;
+      if (fromHandoff) {
+        handoffBubbleIdRef.current = null;
+      } else {
+        activeIdRef.current = null;
+      }
       const err = recorder.error ?? { code: 'mic_unavailable', message: 'mic unavailable.' };
       patch(id, {
         status: 'failed',
@@ -400,6 +421,10 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         },
       });
       recorder.reset();
+      if (pendingBeginRef.current) {
+        pendingBeginRef.current = false;
+        void Promise.resolve().then(() => beginCapture());
+      }
     }
     if (recorder.status === 'idle' && activeIdRef.current) {
       const id = activeIdRef.current;

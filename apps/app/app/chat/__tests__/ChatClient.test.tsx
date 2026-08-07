@@ -590,6 +590,13 @@ describe('ChatClient', () => {
       setStatusHook?.('encoding');
       await Promise.resolve();
     });
+
+    fakeRecorder.audioBlob = new Blob(['second'], { type: 'audio/webm' });
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    expect(fakeRecorder.start).toHaveBeenCalledTimes(1);
+
     await act(async () => {
       setStatusHook?.('ready');
       await Promise.resolve();
@@ -599,17 +606,18 @@ describe('ChatClient', () => {
       expect(screen.getByText(/linking/i)).toBeTruthy();
     });
 
-    fakeRecorder.audioBlob = new Blob(['second'], { type: 'audio/webm' });
-    await act(async () => {
-      fireEvent.click(btn);
+    await waitFor(() => {
+      expect(fakeRecorder.start).toHaveBeenCalledTimes(2);
     });
-    expect(fakeRecorder.start).toHaveBeenCalledTimes(2);
 
-    resolveCommit({
-      extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
-      newEntities: 0,
-      matchedEntities: 0,
-      interactionId: 'int-1',
+    await act(async () => {
+      resolveCommit({
+        extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+        newEntities: 0,
+        matchedEntities: 0,
+        interactionId: 'int-1',
+      });
+      await commitPending;
     });
   });
 

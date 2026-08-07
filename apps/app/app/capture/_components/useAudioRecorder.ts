@@ -102,6 +102,8 @@ export function useAudioRecorder(): UseAudioRecorder {
   const hardCapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Set true when discard()/reset() is called mid-arming; checked after getUserMedia resolves. */
   const armingAbortedRef = useRef<boolean>(false);
+  /** Monotonic id so stale MediaRecorder onstop cannot clobber a newer take. */
+  const sessionIdRef = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -207,7 +209,7 @@ export function useAudioRecorder(): UseAudioRecorder {
       if (rec && rec.state !== 'inactive') return;
     }
 
-    setError(null);
+    const sessionId = ++sessionIdRef.current;
     setAudioBlob(null);
     chunksRef.current = [];
     discardedRef.current = false;
@@ -263,6 +265,7 @@ export function useAudioRecorder(): UseAudioRecorder {
       cleanup();
     };
     recorder.onstop = () => {
+      if (sessionIdRef.current !== sessionId) return;
       if (discardedRef.current) {
         setAudioBlob(null);
         setStatus('idle');
