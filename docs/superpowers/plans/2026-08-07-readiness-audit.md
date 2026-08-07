@@ -10,7 +10,7 @@
 
 ## 0 · Verdict (one paragraph)
 
-The **core memory loop works**: magic-link auth → onboarding → tap-to-record / typed memo → ASR → hybrid extract → commit → chat thread → search/recall → graph → entity detail → settings persist. Directive WPs (#58–#62, chat dual-function #59) landed via #73. What remains is not "build the app from mocks" — that phase is done — but **honesty gaps** (UI that looks live but is mocked), **wire-up debt** (settings prefs unused, soft-delete client-only, desktop rails static), **prototype drift** (hold→tap, nav acts→search, settings sections), and the **roadmap wedges** still open (#2/#3/#5/#8, then v0.2 imports #10, v0.3 acts #11). Close #56 after a formal prototype sweep + tag; then plan `v0.1.3-backend-wireup` before touching epics.
+The **core memory loop works end-to-end with real keys** (2026-08-07 live run, §10): magic-link → onboarding → typed/voice memo → ASR → extract → chat ask → semantic recall (~200ms) → graph. Directive WPs landed via #73. Live testing promoted a new P0: **`source_interaction_id` never stamped**, so person pages show zero captures. Remaining work is still not "rebuild from mocks" — it is **trust** (fake acts, mock rails, dead search links, soft-delete lie), that capture-linkage bug, then #8/#2/#3, then wedges #10/#11. Close #56 after sweep + tag; start `v0.1.3` with the trust pack in §10.4.
 
 ---
 
@@ -170,25 +170,27 @@ A. Closeout hygiene
    2. Tag v0.1.2-ui-complete (maintainer)
    3. #63 prod graph verify
 
-B. Trust fixes (small, high leverage — candidates for v0.1.3 kickoff)
-   4. Search result → /person|/company|/event links
-   5. Soft-delete persistence (or remove undo UI until real)
-   6. Graph topic open guard + chat active-tab fix
-   7. Home/acts: honest empty state instead of fake drafts (until #11)
+B. Trust pack — v0.1.3 kickoff (ordered by live-test damage)
+   4. Stamp source_interaction_id on facts/topics (+ person captures render)
+   5. Search result → /person|/company|/event links
+   6. Home/acts: honest empty instead of fake drafts (until #11)
+   7. Strip or wire desktop mock rails (chat + person)
+   8. Soft-delete persistence (or remove undo UI until real)
+   9. Graph topic open guard + nav active-tab fixes
 
 C. Hardening
-   8. #8 integration test
-   9. #2 → #3 → #5
-   10. Write formal `v0.1.3-backend-wireup` plan (rails, settings→pipeline, δ₁ stream)
+   10. #8 integration test (must cover sourceInteractionId)
+   11. #2 → #3 → #5
+   12. Formal v0.1.3 plan remainder (settings→pipeline, δ₁ stream)
 
 D. Parallel / gated
-   11. #1 → #37 (landing)
-   12. #9 when deps acked
-   13. Eng-review extractor debt
+   13. #1 → #37 (landing)
+   14. #9 when deps acked
+   15. Eng-review extractor debt
 
 E. After v0.1.3
-   14. #10 imports → #11 acts
-   15. Chat ask phase 2
+   16. #10 imports → #11 acts
+   17. Chat ask phase 2
 ```
 
 One change per PR. PR target: `staging` → maintainer cuts to `main`.
@@ -229,3 +231,67 @@ Side-by-side: open `design/v2/Wingmic Prototype.html` at 393px and ≥1120px vs 
 - Editing eval fixtures
 - Production `db:apply` / Railway config changes without explicit ask
 - Rewriting landing before #1 modularize
+
+---
+
+## 10 · Live verification (2026-08-07) — keys in process env only
+
+Ran against local `apps/app` on `:3211` with one-time OpenRouter + AssemblyAI keys injected into the **dev process environment only** (never written to the repo / `.env*`). Keys must be **rotated** after this session — they appeared in chat.
+
+### 10.1 Pipeline results (pass/fail)
+
+| Check | Result | Evidence |
+|---|---|---|
+| Magic-link auth (no Resend) | **Pass** | Console link → session; landed `/onboarding` then home after acknowledge |
+| Workspace package boot | **Friction** | Fresh clone needs `@wingmic/db` + `@wingmic/extractor` `build` before auth routes compile |
+| `capture.commit` (Priya/Marcus memo) | **Pass** (~6.3s) | Persons Priya + Marcus, company Cloudflare, event Rust meetup, topics Durable Objects / edge SQLite / … |
+| Junk guard ("Met with him yesterday") | **Pass** | `persons: []`, `newEntities: 0` — no garbage entities |
+| Semantic recall "who works on edge sqlite at cloudflare?" | **Pass** (~189ms) | Priya #1 score **0.542**, Marcus #2; `mode: semantic` (H5 bar was >0.6 — ranking correct, score soft) |
+| Recall "who was the rust person?" | **Pass** (~206ms) | Marcus #1 (0.422), Priya #2 |
+| `graph.get` | **Pass** | 9 nodes / 8 links; real kinds + rels |
+| AssemblyAI transcribe (gTTS mp3 + 16k wav) | **Pass** (~3.6–5.1s) | Exact transcript returned; blank tone-only wav correctly → `transcript_empty` |
+| Chat dual-function UI ask | **Pass** | "who was the rust person?" → inline matches + save-as-memo |
+| Chat typed memo UI | **Pass** | Sara Chen / Acme extracted with follow-ups shown in thread |
+| Search UI | **Partial** | Results + scores render; cards **not navigable** |
+| Person detail | **Fail (trust)** | Topics OK, but **0 commits / no captures** — see §10.2 |
+| Acts / home drafts | **Chrome only** | Preview banner honest on `/acts`; home still shows fake Sarah/Marcus/Priya drafts |
+| Desktop person rail | **Fail (trust)** | Static mock list (Sarah Chen…) while real Priya detail is open — selection mismatch |
+| Chat entity rail | **Fail (trust)** | Static Sarah Chen / Acme / DevConnect while thread is about Priya/Marcus |
+
+Screenshots: `/opt/cursor/artifacts/screenshots/01-home-dashboard.png` … `10-onboarding.png`.
+
+### 10.2 New breaking bug found in live data
+
+**`source_interaction_id` is `NULL` on every `entity_fact` and `entity_topic` row** after a successful commit. Person/company/event detail load captures by those IDs → empty captures, `0 commits`, "no captures yet" even when the memo clearly exists. Related edges can also mis-attribute (Priya "co-attended Rust meetup" — Marcus's event bled onto Priya).
+
+This is higher priority than most polish: the graph remembers people, but the **person page forgets the memory that created them**.
+
+Likely home: `packages/extractor` commit/resolution writers (or app `capture.commit` path) not stamping `sourceInteractionId`. Fix + regression in #8-style integration test.
+
+### 10.3 Normal-user UX verdict (after walking every screen)
+
+**Practical already:** typed memo → extract → ask in chat → search ranking → graph nodes. Privacy copy and acts preview banner are honest when labeled. Brand look is distinctive.
+
+**Confusing for a normal user:**
+1. Home advertises **3 fake drafts** next to real commits — trust killer.
+2. Person page says **no captures** for someone just logged — trust killer (bug above).
+3. Desktop rails show **wrong people** (mock) beside real data.
+4. Search can't open a result.
+5. Jargon (`commits`, `acts`, `edges`) is on-brand for the target developer, but first paint doesn't teach the one verb: "tap mic / type a memo after you meet someone."
+6. Capture orb has no "tap to talk" teaching moment after onboarding.
+7. Nav active-state bugs (search page highlighting capture/chat).
+8. Follow-up CTAs look primary but are disabled everywhere.
+
+### 10.4 Revised next-step recommendation (post live test)
+
+Do **not** start Acts (#11) or Imports (#10) next.
+
+**Immediate trust pack (v0.1.3 kickoff):**
+1. Fix `source_interaction_id` stamping + person/company capture lists (regression test).
+2. Search result → entity deep links.
+3. Replace home/acts **fake drafts** with honest empty until #11 (or hide the section).
+4. Wire or strip desktop mock rails (`ChatEntityRail`, `PersonListRail`).
+5. Soft-delete persistence or remove undo UI.
+6. Then #8 full round-trip test.
+
+Optional parallel: first-run teaching (orb label / one guided memo) — product call, not a full onboarding rewrite.
