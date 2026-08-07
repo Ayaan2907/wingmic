@@ -12,6 +12,24 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+// HomeClient now calls acts.list — stub tRPC so shell composition tests
+// don't need a real provider.
+vi.mock('@/lib/trpc/client', () => ({
+  trpc: {
+    acts: {
+      list: {
+        useQuery: () => ({ data: { acts: [] }, isLoading: false }),
+      },
+      markSent: {
+        useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+      },
+    },
+    useUtils: () => ({
+      acts: { list: { invalidate: vi.fn() } },
+    }),
+  },
+}));
+
 function mockPath(path: string) {
   vi.doMock('next/navigation', () => ({
     usePathname: () => path,
