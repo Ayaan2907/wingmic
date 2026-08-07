@@ -29,24 +29,33 @@ const coral = '#FF6B6B';
 /** localStorage key — first-run teaching beat for the capture orb (U5). */
 export const ORB_HINT_STORAGE_KEY = 'wingmic.orb-hint-seen';
 
+/** Session fallback when localStorage is blocked (private browsing). */
+let orbHintSessionSeen = false;
+
+/** @internal Vitest-only — module session flag survives across cases. */
+export function resetOrbHintSessionState() {
+  orbHintSessionSeen = false;
+}
+
 function useOrbHint() {
   const [show, setShow] = React.useState(false);
 
   React.useEffect(() => {
+    if (orbHintSessionSeen) return;
     try {
       if (localStorage.getItem(ORB_HINT_STORAGE_KEY) !== '1') setShow(true);
     } catch {
-      // private browsing — show once per session only
-      setShow(true);
+      if (!orbHintSessionSeen) setShow(true);
     }
   }, []);
 
   const dismiss = React.useCallback(() => {
+    orbHintSessionSeen = true;
     setShow(false);
     try {
       localStorage.setItem(ORB_HINT_STORAGE_KEY, '1');
     } catch {
-      // ignore
+      // session flag covers private browsing
     }
   }, []);
 
