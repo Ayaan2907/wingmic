@@ -26,6 +26,33 @@ import { micOrbStateFor, type MicOrbState } from '@/app/capture/micOrbState';
 const accent = '#FFC452';
 const coral = '#FF6B6B';
 
+/** localStorage key — first-run teaching beat for the capture orb (U5). */
+export const ORB_HINT_STORAGE_KEY = 'wingmic.orb-hint-seen';
+
+function useOrbHint() {
+  const [show, setShow] = React.useState(false);
+
+  React.useEffect(() => {
+    try {
+      if (localStorage.getItem(ORB_HINT_STORAGE_KEY) !== '1') setShow(true);
+    } catch {
+      // private browsing — show once per session only
+      setShow(true);
+    }
+  }, []);
+
+  const dismiss = React.useCallback(() => {
+    setShow(false);
+    try {
+      localStorage.setItem(ORB_HINT_STORAGE_KEY, '1');
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  return { show, dismiss };
+}
+
 /** Bottom-nav height — kept in sync with chat/_components/tokens.ts. */
 export const TAB_BAR_HEIGHT_PX = 56;
 
@@ -89,6 +116,7 @@ interface CaptureOrbProps {
 
 export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureOrbProps) {
   const [isHovered, setIsHovered] = React.useState(false);
+  const { show: showHint, dismiss: dismissHint } = useOrbHint();
 
   const status = recorder.status;
   const orbState: MicOrbState = micOrbStateFor(status, isHovered);
@@ -101,6 +129,7 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
   // stale closure), leaving the recorder running with no way to stop. A plain
   // toggle reads the live status on each tap, so it can't get stuck.
   function onOrbClick() {
+    dismissHint();
     const s = recorder.status;
     if (s === 'idle' || s === 'ready' || s === 'error') {
       vibrate(8);
@@ -120,8 +149,37 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
         alignItems: 'flex-start',
         justifyContent: 'center',
         fontFamily: 'JetBrains Mono, monospace',
+        position: 'relative',
       }}
     >
+      {showHint && !isActiveRec && !isSending ? (
+        <div
+          role="status"
+          data-testid="orb-hint"
+          className="mono"
+          style={{
+            position: 'absolute',
+            top: -52,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '6px 10px',
+            borderRadius: 8,
+            background: accent,
+            color: '#000',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: 0.4,
+            textTransform: 'lowercase',
+            border: '1.5px solid #000',
+            boxShadow: '2px 2px 0 #000',
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+            zIndex: 2,
+          }}
+        >
+          tap to talk
+        </div>
+      ) : null}
       <button
         type="button"
         aria-label={
