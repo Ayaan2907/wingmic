@@ -9,7 +9,7 @@
  * "get started". Dot progress, next/back, and a skip link.
  *
  * Both "get started" (step 3) and skip `await acknowledge.mutateAsync()` then
- * `router.push('/')`. Skip still acknowledges on purpose: a skip that left the
+ * `router.push('/chat')`. Skip still acknowledges on purpose: a skip that left the
  * flag false would re-trigger the home gate forever. So skip == finish for the
  * privacy flag; it only differs in not walking the steps.
  *
@@ -60,7 +60,7 @@ export default function OnboardingClient() {
     setError(null);
     try {
       await acknowledge.mutateAsync();
-      router.push('/');
+      router.push('/chat');
     } catch {
       // network/server failure — don't strand the user on the entry gate.
       // re-enable the buttons so they can retry.

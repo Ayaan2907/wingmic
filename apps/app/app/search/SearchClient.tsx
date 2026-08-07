@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, type FormEvent } from 'react';
+import Link from 'next/link';
+import type { Route } from 'next';
 import { useSearchParams } from 'next/navigation';
 import { trpc } from '@/lib/trpc/client';
 import { accent, second, third, violet, blue } from '@/app/chat/_components/tokens';
@@ -303,8 +305,9 @@ function ClusterGroup({ label, entities }: { label: string; entities: Entity[] }
 
 function ResultCard({ entity }: { entity: Entity }) {
   const primaryCompany = entity.companies[0] ?? null;
+  const personHref = `/person/${entity.id}` as Route;
   return (
-    <div
+    <article
       style={{
         padding: 18,
         borderRadius: 14,
@@ -314,11 +317,26 @@ function ResultCard({ entity }: { entity: Entity }) {
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
         <div>
-          <div style={{ fontSize: 19, fontWeight: 700 }}>{entity.name}</div>
+          <Link
+            href={personHref}
+            style={{
+              fontSize: 19,
+              fontWeight: 700,
+              color: 'inherit',
+              textDecoration: 'none',
+            }}
+          >
+            {entity.name}
+          </Link>
           {primaryCompany && (
             <div style={{ fontSize: 14, color: 'var(--text-55)', marginTop: 4 }}>
               {primaryCompany.role && <span>{primaryCompany.role} · </span>}
-              <span style={{ color: blue }}>{primaryCompany.name}</span>
+              <Link
+                href={`/company/${primaryCompany.id}` as Route}
+                style={{ color: blue, textDecoration: 'none' }}
+              >
+                {primaryCompany.name}
+              </Link>
             </div>
           )}
         </div>
@@ -358,8 +376,9 @@ function ResultCard({ entity }: { entity: Entity }) {
       {entity.events.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
           {entity.events.map((ev) => (
-            <span
+            <Link
               key={ev.id}
+              href={`/event/${ev.id}` as Route}
               className="mono"
               style={{
                 padding: '3px 9px',
@@ -368,10 +387,11 @@ function ResultCard({ entity }: { entity: Entity }) {
                 color: third,
                 fontSize: 10.5,
                 fontWeight: 600,
+                textDecoration: 'none',
               }}
             >
               · met at {ev.name}
-            </span>
+            </Link>
           ))}
         </div>
       )}
@@ -414,6 +434,23 @@ function ResultCard({ entity }: { entity: Entity }) {
           ))}
         </ul>
       )}
-    </div>
+
+      <div style={{ marginTop: 14 }}>
+        <Link
+          href={personHref}
+          className="mono"
+          style={{
+            fontSize: 11,
+            letterSpacing: 1,
+            textTransform: 'uppercase',
+            color: accent,
+            textDecoration: 'none',
+            fontWeight: 600,
+          }}
+        >
+          open card →
+        </Link>
+      </div>
+    </article>
   );
 }
