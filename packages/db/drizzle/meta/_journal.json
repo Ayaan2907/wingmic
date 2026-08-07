@@ -29,6 +29,13 @@
       "when": 1779775875857,
       "tag": "0003_v012_coordinated_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1786122040075,
+      "tag": "0004_loose_lake",
+      "breakpoints": true
     }
   ]
 }
