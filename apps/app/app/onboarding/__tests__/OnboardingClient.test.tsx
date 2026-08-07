@@ -53,26 +53,26 @@ describe('OnboardingClient', () => {
     expect(screen.getByText(/step 1 of 3/i)).toBeTruthy();
   });
 
-  it('"get started" on step 3 acknowledges then pushes /', async () => {
+  it('"get started" on step 3 acknowledges then pushes /chat', async () => {
     render(<OnboardingClient />);
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
     fireEvent.click(screen.getByRole('button', { name: /get started/i }));
 
     await waitFor(() => expect(mutateAsyncSpy).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(pushSpy).toHaveBeenCalledWith('/'));
+    await waitFor(() => expect(pushSpy).toHaveBeenCalledWith('/chat'));
     // acknowledge resolves BEFORE the push
     expect(mutateAsyncSpy.mock.invocationCallOrder[0]).toBeLessThan(
       pushSpy.mock.invocationCallOrder[0],
     );
   });
 
-  it('skip acknowledges then pushes / (skip still acknowledges → no re-trigger)', async () => {
+  it('skip acknowledges then pushes /chat (skip still acknowledges → no re-trigger)', async () => {
     render(<OnboardingClient />);
     fireEvent.click(screen.getByRole('button', { name: /skip/i }));
 
     await waitFor(() => expect(mutateAsyncSpy).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(pushSpy).toHaveBeenCalledWith('/'));
+    await waitFor(() => expect(pushSpy).toHaveBeenCalledWith('/chat'));
     expect(mutateAsyncSpy.mock.invocationCallOrder[0]).toBeLessThan(
       pushSpy.mock.invocationCallOrder[0],
     );

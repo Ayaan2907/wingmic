@@ -77,14 +77,14 @@ function vibrate(pattern: number | number[]) {
   }
 }
 
-// Tab arrangement (2026-08-04): search on the fifth slot — recall had no mobile
-// entry (⌘K is desktop-only). Acts stays reachable from home pending section.
+// Tab arrangement (PDF + design/v2): acts on the fifth slot. Search stays
+// reachable via ⌘K / header affordances — not a bottom-nav verb.
 export const NAV_TABS: Array<{ key: BottomTabKey; glyph: string; label: string; href: string; big?: boolean }> = [
   { key: 'home', glyph: '⌂', label: 'home', href: '/' },
   { key: 'chat', glyph: '≡', label: 'chat', href: '/chat' },
   { key: 'capture', glyph: '◉', label: 'capture', href: '/chat', big: true },
   { key: 'graph', glyph: '◈', label: 'graph', href: '/graph' },
-  { key: 'search', glyph: '⌕', label: 'search', href: '/search' },
+  { key: 'acts', glyph: '☑', label: 'acts', href: '/acts' },
 ];
 
 export function NavLink({ tab, active }: { tab: (typeof NAV_TABS)[number]; active: boolean }) {
