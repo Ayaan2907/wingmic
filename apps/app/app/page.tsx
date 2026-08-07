@@ -57,8 +57,8 @@ async function loadHomeData(userId: string): Promise<HomeInitialData> {
     isNull(schema.interactions.deletedAt),
   );
 
-  // Two count queries + one list query. Run in parallel — they share no state.
-  const [todayRow, weekRow, recentRows] = await Promise.all([
+  // Counts + recent list + pending acts. Run in parallel — they share no state.
+  const [todayRow, weekRow, recentRows, pendingActsRow] = await Promise.all([
     db
       .select({ n: count() })
       .from(schema.interactions)
@@ -77,6 +77,15 @@ async function loadHomeData(userId: string): Promise<HomeInitialData> {
       .where(baseWhere)
       .orderBy(desc(schema.interactions.capturedAt))
       .limit(RECENT_LIMIT),
+    db
+      .select({ n: count() })
+      .from(schema.acts)
+      .where(
+        and(
+          eq(schema.acts.userId, userId),
+          inArray(schema.acts.status, ['drafted', 'snoozed']),
+        ),
+      ),
   ]);
 
   // Entity count per interaction — single grouped query keyed on
@@ -97,7 +106,7 @@ async function loadHomeData(userId: string): Promise<HomeInitialData> {
   return {
     todayCount: todayRow[0]?.n ?? 0,
     weekCount: weekRow[0]?.n ?? 0,
-    pendingActs: 0, // v0.3 — acts table doesn't exist yet.
+    pendingActs: pendingActsRow[0]?.n ?? 0,
     recent,
   };
 }
