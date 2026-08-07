@@ -33,13 +33,14 @@ interface ResolveContext {
  *   1. Upsert canonical Company rows (lazy promotion: observed_count++)
  *   2. Upsert canonical Event rows (slug + date-proximity match)
  *   3. Upsert canonical Topic rows
- *   4. Resolve Person candidates against this user's entities; create new
+ *   4. Persist Interaction (needed before facts/topics for sourceInteractionId)
+ *   5. Resolve Person candidates against this user's entities; create new
  *      ones if confidence < 0.85, link if >= 0.85
- *   5. Persist Interaction with full transcript embedding
  *   6. Wire EntityCompany / EntityEvent / EntityTopic edges
- *   7. Persist any extra topics/notes as EntityFact rows
+ *   7. Persist notes/email/linkedin as EntityFact rows (stamped with interaction)
  *
- * All writes happen in a single libSQL transaction.
+ * Prefer wrapping callers in a transaction when available; this function
+ * currently issues sequential writes.
  */
 export async function commit(
   extracted: ExtractionResult,
@@ -88,6 +89,20 @@ export async function commit(
     const id = await upsertTopic(db, t);
     topicIds.set(t, id);
   }
+
+  // ── Interaction first ────────────────────────────────────────────────
+  // Facts/topics reference source_interaction_id so person detail can list
+  // the captures that created them. Insert before edge/fact writes.
+  const insertedInteraction = await db
+    .insert(schema.interactions)
+    .values({
+      userId,
+      transcript,
+      capturedAt,
+      embedding: transcriptEmbedding,
+    })
+    .returning({ id: schema.interactions.id });
+  const interactionId = insertedInteraction[0].id;
 
   // ── Persons (private, ownerUserId-scoped) ────────────────────────────
   const userEntities = await db.query.entities.findMany({
@@ -169,10 +184,12 @@ export async function commit(
     for (const topicName of cand.topics) {
       const topicId = topicIds.get(topicName);
       if (!topicId) continue;
-      await db
-        .insert(schema.entityTopics)
-        .values({ entityId, topicId, weight: 70 })
-        .onConflictDoNothing();
+      await db.insert(schema.entityTopics).values({
+        entityId,
+        topicId,
+        weight: 70,
+        sourceInteractionId: interactionId,
+      });
     }
 
     // EntityFact for free-form notes
@@ -182,6 +199,7 @@ export async function commit(
         key: 'note',
         value: cand.notes,
         confidence: 80,
+        sourceInteractionId: interactionId,
       });
     }
     if (cand.email) {
@@ -190,6 +208,7 @@ export async function commit(
         key: 'email',
         value: cand.email,
         confidence: 95,
+        sourceInteractionId: interactionId,
       });
     }
     if (cand.linkedin) {
@@ -198,21 +217,10 @@ export async function commit(
         key: 'linkedin',
         value: cand.linkedin,
         confidence: 95,
+        sourceInteractionId: interactionId,
       });
     }
   }
-
-  // ── Interaction ──────────────────────────────────────────────────────
-  const inserted = await db
-    .insert(schema.interactions)
-    .values({
-      userId,
-      transcript,
-      capturedAt,
-      embedding: transcriptEmbedding,
-    })
-    .returning({ id: schema.interactions.id });
-  const interactionId = inserted[0].id;
 
   return {
     interactionId,
