@@ -5,6 +5,8 @@ import { migrate } from 'drizzle-orm/libsql/migrator';
 import { eq } from 'drizzle-orm';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
+import { unlinkSync } from 'node:fs';
 import * as schema from '@wingmic/db/schema';
 
 vi.mock('../embeddings', () => ({
@@ -21,6 +23,10 @@ const migrationsFolder = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../../db/drizzle',
 );
+const dbPath = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  `wingmic-resolution-test-${randomUUID()}.db`,
+);
 
 describe('commit() sourceInteractionId', () => {
   let db: ReturnType<typeof drizzle<typeof schema>>;
@@ -28,7 +34,7 @@ describe('commit() sourceInteractionId', () => {
   const userId = 'user_commit_1';
 
   beforeAll(async () => {
-    client = createClient({ url: 'file:wingmic-resolution-test.db' });
+    client = createClient({ url: `file:${dbPath}` });
     db = drizzle(client, { schema });
     await migrate(db, { migrationsFolder });
 
@@ -91,5 +97,10 @@ describe('commit() sourceInteractionId', () => {
 
   afterAll(async () => {
     await client.close();
+    try {
+      unlinkSync(dbPath);
+    } catch {
+      // ignore missing file
+    }
   });
 });
