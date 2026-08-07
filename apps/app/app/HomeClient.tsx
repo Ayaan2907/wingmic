@@ -86,8 +86,7 @@ export default function HomeClient({ userName, initialData }: HomeClientProps) {
         }}
       >
         <StatsRow today={todayCount} week={weekCount} />
-        <AgentStripe fallbackCount={pendingActs} />
-        <ActsPending />
+        <HomeActsPanel fallbackCount={pendingActs} />
         <ActivityList items={recent} />
       </section>
     </main>
@@ -330,156 +329,170 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
   );
 }
 
-// ─── Agent stripe ────────────────────────────────────────────────────────
+// ─── Acts (stripe + pending cards — single list query) ───────────────────
 
-function AgentStripe({ fallbackCount }: { fallbackCount: number }) {
-  const { data } = trpc.acts.list.useQuery({ limit: 50 });
-  const count = data?.acts.length ?? fallbackCount;
-  const draftLabel =
-    count === 0 ? 'no drafts pending' : `${count} draft${count === 1 ? '' : 's'} pending`;
-
-  return (
-    <div
-      data-testid="home-agent-stripe"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        padding: '12px 14px',
-        borderRadius: 12,
-        marginBottom: 20,
-        background: `linear-gradient(90deg, ${accent}1a, transparent)`,
-        border: `1px solid ${accent}4d`,
-      }}
-    >
-      <span
-        aria-hidden="true"
-        style={{
-          width: 7,
-          height: 7,
-          borderRadius: '50%',
-          background: accent,
-          animation: 'wm-pulse-d 1.6s infinite',
-          flexShrink: 0,
-        }}
-      />
-      <div className="mono" style={{ flex: 1, fontSize: 12, color: 'var(--text-85)' }}>
-        <span style={{ color: accent, fontWeight: 700 }}>wingmic</span> · read your graph ·{' '}
-        {draftLabel}
-      </div>
-    </div>
-  );
-}
-
-// ─── Acts pending ─────────────────────────────────────────────────────────
-
-function ActsPending() {
+function HomeActsPanel({ fallbackCount }: { fallbackCount: number }) {
   const utils = trpc.useUtils();
-  const { data, isLoading, isError, refetch } = trpc.acts.list.useQuery({ limit: 3 });
+  const { data, isLoading, isError, refetch } = trpc.acts.list.useQuery({ limit: 50 });
+  const [markErrors, setMarkErrors] = React.useState<Record<string, string>>({});
+
   const markSent = trpc.acts.markSent.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
+      setMarkErrors((prev) => {
+        if (!prev[vars.id]) return prev;
+        const next = { ...prev };
+        delete next[vars.id];
+        return next;
+      });
       void utils.acts.list.invalidate();
+    },
+    onError: (_err, vars) => {
+      setMarkErrors((prev) => ({
+        ...prev,
+        [vars.id]: 'could not mark done — tap send again',
+      }));
     },
   });
 
   const acts = data?.acts ?? [];
+  const previewActs = acts.slice(0, 3);
+  const atCap = acts.length >= 50;
+  const count =
+    isLoading || !data ? fallbackCount : atCap ? Math.max(fallbackCount, acts.length) : acts.length;
+  const draftLabel =
+    count === 0 ? 'no drafts pending' : `${count} draft${count === 1 ? '' : 's'} pending`;
+
+  function handleMarkSent(id: string) {
+    markSent.mutate({ id });
+  }
 
   return (
-    <div style={{ marginBottom: 24 }} data-testid="home-acts">
+    <>
       <div
+        data-testid="home-agent-stripe"
         style={{
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'baseline',
-          marginBottom: 10,
+          alignItems: 'center',
+          gap: 10,
+          padding: '12px 14px',
+          borderRadius: 12,
+          marginBottom: 20,
+          background: `linear-gradient(90deg, ${accent}1a, transparent)`,
+          border: `1px solid ${accent}4d`,
         }}
       >
         <span
-          className="mono"
+          aria-hidden="true"
           style={{
-            fontSize: 11,
-            color: 'var(--text-55)',
-            letterSpacing: 2,
-            textTransform: 'uppercase',
+            width: 7,
+            height: 7,
+            borderRadius: '50%',
+            background: accent,
+            animation: 'wm-pulse-d 1.6s infinite',
+            flexShrink: 0,
           }}
-        >
-          ◆ acts · pending
-        </span>
-        <Link
-          href="/acts"
-          className="mono"
-          style={{
-            fontSize: 10,
-            color: 'var(--text-40)',
-            letterSpacing: 1,
-            textTransform: 'uppercase',
-            textDecoration: 'none',
-          }}
-        >
-          inbox · open →
-        </Link>
+        />
+        <div className="mono" style={{ flex: 1, fontSize: 12, color: 'var(--text-85)' }}>
+          <span style={{ color: accent, fontWeight: 700 }}>wingmic</span> · read your graph ·{' '}
+          {draftLabel}
+        </div>
       </div>
-      {isLoading ? (
-        <p className="mono" style={{ fontSize: 12, color: 'var(--text-40)' }}>
-          loading drafts…
-        </p>
-      ) : isError ? (
+
+      <div style={{ marginBottom: 24 }} data-testid="home-acts">
         <div
           style={{
-            padding: 16,
-            borderRadius: 12,
-            border: '1px solid var(--border-soft)',
-            background: 'var(--surface-1)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'baseline',
+            marginBottom: 10,
           }}
         >
-          <p className="mono" style={{ fontSize: 12, color: 'var(--text-55)', margin: 0 }}>
-            could not load drafts.
-          </p>
-          <button
-            type="button"
+          <span
             className="mono"
-            onClick={() => void refetch()}
             style={{
-              marginTop: 8,
               fontSize: 11,
-              color: accent,
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 0,
+              color: 'var(--text-55)',
+              letterSpacing: 2,
+              textTransform: 'uppercase',
             }}
           >
-            retry →
-          </button>
+            ◆ acts · pending
+          </span>
+          <Link
+            href="/acts"
+            className="mono"
+            style={{
+              fontSize: 10,
+              color: 'var(--text-40)',
+              letterSpacing: 1,
+              textTransform: 'uppercase',
+              textDecoration: 'none',
+            }}
+          >
+            inbox · open →
+          </Link>
         </div>
-      ) : acts.length === 0 ? (
-        <div
-          style={{
-            padding: 16,
-            borderRadius: 14,
-            background: 'var(--surface-1, rgba(255,255,255,0.02))',
-            border: '1px dashed var(--border-soft, rgba(255,255,255,0.06))',
-            color: 'var(--text-55)',
-            fontSize: 13.5,
-            lineHeight: 1.55,
-          }}
-          data-testid="home-acts-empty"
-        >
-          no drafts yet — capture a memo that mentions a follow-up.
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {acts.map((a) => (
-            <ActCard
-              key={a.id}
-              act={a}
-              onSent={(id) => {
-                markSent.mutate({ id });
+        {isLoading ? (
+          <p className="mono" style={{ fontSize: 12, color: 'var(--text-40)' }}>
+            loading drafts…
+          </p>
+        ) : isError ? (
+          <div
+            style={{
+              padding: 16,
+              borderRadius: 12,
+              border: '1px solid var(--border-soft)',
+              background: 'var(--surface-1)',
+            }}
+          >
+            <p className="mono" style={{ fontSize: 12, color: 'var(--text-55)', margin: 0 }}>
+              could not load drafts.
+            </p>
+            <button
+              type="button"
+              className="mono"
+              onClick={() => void refetch()}
+              style={{
+                marginTop: 8,
+                fontSize: 11,
+                color: accent,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
               }}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+            >
+              retry →
+            </button>
+          </div>
+        ) : previewActs.length === 0 ? (
+          <div
+            style={{
+              padding: 16,
+              borderRadius: 14,
+              background: 'var(--surface-1, rgba(255,255,255,0.02))',
+              border: '1px dashed var(--border-soft, rgba(255,255,255,0.06))',
+              color: 'var(--text-55)',
+              fontSize: 13.5,
+              lineHeight: 1.55,
+            }}
+            data-testid="home-acts-empty"
+          >
+            no drafts yet — capture a memo that mentions a follow-up.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {previewActs.map((a) => (
+              <ActCard
+                key={a.id}
+                act={a}
+                sendError={markErrors[a.id ?? ''] ?? null}
+                onSent={handleMarkSent}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </>
   );
 }

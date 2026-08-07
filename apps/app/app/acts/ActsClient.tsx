@@ -15,14 +15,31 @@ const accent = '#FFC452';
 
 export function ActsClient() {
   const utils = trpc.useUtils();
+  const [markErrors, setMarkErrors] = React.useState<Record<string, string>>({});
   const { data, isLoading, isError, refetch } = trpc.acts.list.useQuery({ limit: 50 });
   const markSent = trpc.acts.markSent.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
+      setMarkErrors((prev) => {
+        if (!prev[vars.id]) return prev;
+        const next = { ...prev };
+        delete next[vars.id];
+        return next;
+      });
       void utils.acts.list.invalidate();
+    },
+    onError: (_err, vars) => {
+      setMarkErrors((prev) => ({
+        ...prev,
+        [vars.id]: 'could not mark done — tap send again',
+      }));
     },
   });
 
   const acts = data?.acts ?? [];
+
+  function handleMarkSent(id: string) {
+    markSent.mutate({ id });
+  }
 
   return (
     <main
@@ -166,9 +183,8 @@ export function ActsClient() {
               <ActCard
                 key={a.id}
                 act={a}
-                onSent={(id) => {
-                  markSent.mutate({ id });
-                }}
+                sendError={markErrors[a.id ?? ''] ?? null}
+                onSent={handleMarkSent}
               />
             ))}
           </div>
