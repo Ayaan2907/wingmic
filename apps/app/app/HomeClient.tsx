@@ -4,35 +4,28 @@
  * HomeClient — v2 home / dashboard screen (PR α v9).
  *
  * Source of truth: design/v2/library/lib-screens.jsx ScreenHome.
- * Plan: docs/superpowers/plans/*.md §18 v9.
  *
- * Renders, top to bottom (order matches design/v2 proto-screens-a.jsx ScreenHome):
+ * Renders, top to bottom:
  *   1. Stats row — today + this week capture counts as italic-serif numerals.
- *   2. Agent stripe — mocked "wingmic read your graph" preview signal (PR ε).
- *   3. Acts pending — 3 mocked draft cards with disabled "coming soon · v0.3"
- *      send buttons (the acts agent ships v0.3, epic #11).
+ *   2. Agent stripe — live pending draft count from acts.list.
+ *   3. Acts pending — real drafts from capture extraction (permission-first send).
  *   4. Recent activity — last 5 interactions with time + transcript preview
- *      + entity-count badge (PersonAvatar where a person dominates the memo).
+ *      + entity-count badge.
  *
- * Bottom-nav / desktop rail is owned by the shared AppShell (PR λ-shell),
- * mounted once in the root layout — this screen no longer renders it.
- * Real data: stats + activity come from the server page via `initialData`.
- * Mock data: the agent stripe + acts cards are seeded previews (PR ε) — they
- * swap for real `ctx.db` queries in the v0.1.3 backend-wireup phase.
+ * Bottom-nav / desktop rail is owned by the shared AppShell (PR λ-shell).
  */
 
 import * as React from 'react';
 import Link from 'next/link';
+import { trpc } from '@/lib/trpc/client';
 import { PersonAvatar } from './_components/entity/EntityAvatar';
-import { ActCard, type PendingAct } from './_components/ActCard';
+import { ActCard } from './_components/ActCard';
 
 // ── Tokens ──────────────────────────────────────────────────────────────
 // Mirror the accent palette used elsewhere in apps/app (capture, entity).
 const accent = '#FFC452';
 const second = '#86efac';
 const third = '#FF8FAB';
-const blue = '#7DD3FC';
-const violet = '#A78BFA';
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -46,7 +39,8 @@ export interface HomeRecentItem {
 export interface HomeInitialData {
   todayCount: number;
   weekCount: number;
-  pendingActs: number; // always 0 in v0.1.2 PR α (acts arrives v0.3).
+  /** Server-side drafted+snoozed count; client refreshes via acts.list. */
+  pendingActs: number;
   recent: HomeRecentItem[];
 }
 
@@ -68,7 +62,7 @@ function timeOf(iso: string): string {
 // ── Component ───────────────────────────────────────────────────────────
 
 export default function HomeClient({ userName, initialData }: HomeClientProps) {
-  const { todayCount, weekCount, recent } = initialData;
+  const { todayCount, weekCount, pendingActs, recent } = initialData;
   return (
     <main
       style={{
@@ -92,7 +86,7 @@ export default function HomeClient({ userName, initialData }: HomeClientProps) {
         }}
       >
         <StatsRow today={todayCount} week={weekCount} />
-        <AgentStripe />
+        <AgentStripe fallbackCount={pendingActs} />
         <ActsPending />
         <ActivityList items={recent} />
       </section>
@@ -338,11 +332,12 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
 
 // ─── Agent stripe ────────────────────────────────────────────────────────
 
-function AgentStripe() {
-  // Mocked agent-activity stripe (PR ε, per design/v2 proto-screens-a.jsx
-  // ScreenHome). Deliberately non-interactive: the acts surface (/acts) ships
-  // as its own mock PR, so this is a static preview signal, not a link —
-  // avoids dead navigation while the destination doesn't exist yet.
+function AgentStripe({ fallbackCount }: { fallbackCount: number }) {
+  const { data } = trpc.acts.list.useQuery({ limit: 50 });
+  const count = data?.acts.length ?? fallbackCount;
+  const draftLabel =
+    count === 0 ? 'no drafts pending' : `${count} draft${count === 1 ? '' : 's'} pending`;
+
   return (
     <div
       data-testid="home-agent-stripe"
@@ -369,52 +364,26 @@ function AgentStripe() {
         }}
       />
       <div className="mono" style={{ flex: 1, fontSize: 12, color: 'var(--text-85)' }}>
-        <span style={{ color: accent, fontWeight: 700 }}>wingmic</span> · read your graph 06:12 ·
-        3 drafts pending
+        <span style={{ color: accent, fontWeight: 700 }}>wingmic</span> · read your graph ·{' '}
+        {draftLabel}
       </div>
     </div>
   );
 }
 
-// ─── Acts pending (mock) ───────────────────────────────────────────────────
-
-// `PendingAct` + the card markup live in the shared ActCard (PR ζ-acts), so
-// Home's 3-card preview and the /acts inbox stay byte-identical.
-
-// Seeded preview data (PR ε). Fictional demo contacts, consistent with the
-// design prototype. Real acts wire in v0.3 (epic #11); every CTA here is
-// disabled "coming soon · v0.3" chrome — matching the entity-detail pattern.
-const PENDING_ACTS: PendingAct[] = [
-  {
-    kind: 'check-in',
-    glyph: '↗',
-    name: 'Sarah Chen',
-    why: '7d since devconnect · you owe her a repo',
-    conf: 92,
-    accent: 'amber',
-    color: accent,
-  },
-  {
-    kind: 'reminder',
-    glyph: '◷',
-    name: 'Marcus Rivera',
-    why: 'coffee mon · no invite sent',
-    conf: 88,
-    accent: 'blue',
-    color: blue,
-  },
-  {
-    kind: 'intro',
-    glyph: '⇌',
-    name: 'Priya → Deepak',
-    why: 'both work on voice + mcp',
-    conf: 74,
-    accent: 'violet',
-    color: violet,
-  },
-];
+// ─── Acts pending ─────────────────────────────────────────────────────────
 
 function ActsPending() {
+  const utils = trpc.useUtils();
+  const { data, isLoading } = trpc.acts.list.useQuery({ limit: 3 });
+  const markSent = trpc.acts.markSent.useMutation({
+    onSuccess: () => {
+      void utils.acts.list.invalidate();
+    },
+  });
+
+  const acts = data?.acts ?? [];
+
   return (
     <div style={{ marginBottom: 24 }} data-testid="home-acts">
       <div
@@ -447,14 +416,41 @@ function ActsPending() {
             textDecoration: 'none',
           }}
         >
-          preview · v0.3 · open →
+          inbox · open →
         </Link>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {PENDING_ACTS.map((a) => (
-          <ActCard key={a.name} act={a} />
-        ))}
-      </div>
+      {isLoading ? (
+        <p className="mono" style={{ fontSize: 12, color: 'var(--text-40)' }}>
+          loading drafts…
+        </p>
+      ) : acts.length === 0 ? (
+        <div
+          style={{
+            padding: 16,
+            borderRadius: 14,
+            background: 'var(--surface-1, rgba(255,255,255,0.02))',
+            border: '1px dashed var(--border-soft, rgba(255,255,255,0.06))',
+            color: 'var(--text-55)',
+            fontSize: 13.5,
+            lineHeight: 1.55,
+          }}
+          data-testid="home-acts-empty"
+        >
+          no drafts yet — capture a memo that mentions a follow-up.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {acts.map((a) => (
+            <ActCard
+              key={a.id}
+              act={a}
+              onSent={(id) => {
+                markSent.mutate({ id });
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
