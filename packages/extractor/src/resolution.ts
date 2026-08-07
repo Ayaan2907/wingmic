@@ -39,8 +39,7 @@ interface ResolveContext {
  *   6. Wire EntityCompany / EntityEvent / EntityTopic edges
  *   7. Persist notes/email/linkedin as EntityFact rows (stamped with interaction)
  *
- * Prefer wrapping callers in a transaction when available; this function
- * currently issues sequential writes.
+ * All graph writes after embedding run inside a single libSQL transaction.
  */
 export async function commit(
   extracted: ExtractionResult,
@@ -66,18 +65,21 @@ export async function commit(
     ? await embedTexts(personEmbedTexts)
     : [];
 
+  return db.transaction(async (tx) => {
+    const writeDb = tx as unknown as DB;
+
   // ── Canonical: Companies ─────────────────────────────────────────────
   const companyIds: Map<string, string> = new Map(); // candidateName → companyId
 
   for (const c of extracted.companies) {
-    const id = await upsertCompany(db, c);
+    const id = await upsertCompany(writeDb, c);
     companyIds.set(c.name, id);
   }
 
   // ── Canonical: Events ────────────────────────────────────────────────
   const eventIds: Map<string, string> = new Map();
   for (const e of extracted.events) {
-    const id = await upsertEvent(db, e, capturedAt);
+    const id = await upsertEvent(writeDb, e, capturedAt);
     eventIds.set(e.name, id);
   }
 
@@ -86,14 +88,14 @@ export async function commit(
   for (const p of extracted.persons) for (const t of p.topics) allTopics.add(t);
   const topicIds: Map<string, string> = new Map();
   for (const t of allTopics) {
-    const id = await upsertTopic(db, t);
+    const id = await upsertTopic(writeDb, t);
     topicIds.set(t, id);
   }
 
   // ── Interaction first ────────────────────────────────────────────────
   // Facts/topics reference source_interaction_id so person detail can list
   // the captures that created them. Insert before edge/fact writes.
-  const insertedInteraction = await db
+  const insertedInteraction = await writeDb
     .insert(schema.interactions)
     .values({
       userId,
@@ -105,7 +107,7 @@ export async function commit(
   const interactionId = insertedInteraction[0].id;
 
   // ── Persons (private, ownerUserId-scoped) ────────────────────────────
-  const userEntities = await db.query.entities.findMany({
+  const userEntities = await writeDb.query.entities.findMany({
     where: eq(schema.entities.ownerUserId, userId),
   });
 
@@ -124,12 +126,12 @@ export async function commit(
       entityId = match.entityId;
       matchedEntities++;
       // Refresh the cached entity's embedding when we have a stronger signal
-      await db
+      await writeDb
         .update(schema.entities)
         .set({ updatedAt: new Date(), embedding: candEmbedding })
         .where(eq(schema.entities.id, entityId));
     } else {
-      const inserted = await db
+      const inserted = await writeDb
         .insert(schema.entities)
         .values({
           ownerUserId: userId,
@@ -148,20 +150,20 @@ export async function commit(
     // Wire edges
     if (cand.companyHint && companyIds.has(cand.companyHint)) {
       const companyId = companyIds.get(cand.companyHint)!;
-      const existing = await db.query.entityCompanies.findFirst({
+      const existing = await writeDb.query.entityCompanies.findFirst({
         where: and(
           eq(schema.entityCompanies.entityId, entityId),
           eq(schema.entityCompanies.companyId, companyId),
         ),
       });
       if (!existing) {
-        await db.insert(schema.entityCompanies).values({
+        await writeDb.insert(schema.entityCompanies).values({
           entityId,
           companyId,
           role: cand.role ?? null,
         });
       } else if (cand.role && !existing.role) {
-        await db
+        await writeDb
           .update(schema.entityCompanies)
           .set({ role: cand.role })
           .where(eq(schema.entityCompanies.id, existing.id));
@@ -170,21 +172,21 @@ export async function commit(
 
     for (const eventName of eventIds.keys()) {
       const eventId = eventIds.get(eventName)!;
-      const existing = await db.query.entityEvents.findFirst({
+      const existing = await writeDb.query.entityEvents.findFirst({
         where: and(
           eq(schema.entityEvents.entityId, entityId),
           eq(schema.entityEvents.eventId, eventId),
         ),
       });
       if (!existing) {
-        await db.insert(schema.entityEvents).values({ entityId, eventId, role: null });
+        await writeDb.insert(schema.entityEvents).values({ entityId, eventId, role: null });
       }
     }
 
     for (const topicName of cand.topics) {
       const topicId = topicIds.get(topicName);
       if (!topicId) continue;
-      await db.insert(schema.entityTopics).values({
+      await writeDb.insert(schema.entityTopics).values({
         entityId,
         topicId,
         weight: 70,
@@ -194,7 +196,7 @@ export async function commit(
 
     // EntityFact for free-form notes
     if (cand.notes) {
-      await db.insert(schema.entityFacts).values({
+      await writeDb.insert(schema.entityFacts).values({
         entityId,
         key: 'note',
         value: cand.notes,
@@ -203,7 +205,7 @@ export async function commit(
       });
     }
     if (cand.email) {
-      await db.insert(schema.entityFacts).values({
+      await writeDb.insert(schema.entityFacts).values({
         entityId,
         key: 'email',
         value: cand.email,
@@ -212,7 +214,7 @@ export async function commit(
       });
     }
     if (cand.linkedin) {
-      await db.insert(schema.entityFacts).values({
+      await writeDb.insert(schema.entityFacts).values({
         entityId,
         key: 'linkedin',
         value: cand.linkedin,
@@ -231,6 +233,7 @@ export async function commit(
     newEntities,
     matchedEntities,
   };
+  });
 }
 
 // ── Canonical upserts ──────────────────────────────────────────────────
