@@ -375,7 +375,7 @@ function AgentStripe({ fallbackCount }: { fallbackCount: number }) {
 
 function ActsPending() {
   const utils = trpc.useUtils();
-  const { data, isLoading } = trpc.acts.list.useQuery({ limit: 3 });
+  const { data, isLoading, isError, refetch } = trpc.acts.list.useQuery({ limit: 3 });
   const markSent = trpc.acts.markSent.useMutation({
     onSuccess: () => {
       void utils.acts.list.invalidate();
@@ -423,6 +423,35 @@ function ActsPending() {
         <p className="mono" style={{ fontSize: 12, color: 'var(--text-40)' }}>
           loading drafts…
         </p>
+      ) : isError ? (
+        <div
+          style={{
+            padding: 16,
+            borderRadius: 12,
+            border: '1px solid var(--border-soft)',
+            background: 'var(--surface-1)',
+          }}
+        >
+          <p className="mono" style={{ fontSize: 12, color: 'var(--text-55)', margin: 0 }}>
+            could not load drafts.
+          </p>
+          <button
+            type="button"
+            className="mono"
+            onClick={() => void refetch()}
+            style={{
+              marginTop: 8,
+              fontSize: 11,
+              color: accent,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+            }}
+          >
+            retry →
+          </button>
+        </div>
       ) : acts.length === 0 ? (
         <div
           style={{

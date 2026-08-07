@@ -4,7 +4,7 @@ import { router, protectedProcedure } from '../trpc';
 import { extractHybrid, commit, ExtractionError, EmbeddingError } from '@wingmic/extractor';
 import { TRPCError } from '@trpc/server';
 import { transcribeEntities } from '@/lib/capture/transcribe-entities';
-import { resolveTargetEntityId } from '@/lib/acts/mapAction';
+import { resolveIntroEntityIds } from '@/lib/acts/mapAction';
 import * as schema from '@wingmic/db/schema';
 
 export const captureRouter = router({
@@ -69,6 +69,7 @@ export const captureRouter = router({
             companies: companyNames,
           },
         });
+
         const result = await commit(extracted, {
           db: ctx.db,
           userId: ctx.user.id,
@@ -76,25 +77,50 @@ export const captureRouter = router({
           capturedAt: input.capturedAt ?? new Date(),
         });
 
-        // Persist follow-up drafts from extraction actions → home /acts queue.
         if (extracted.actions.length > 0) {
-          const actRows = extracted.actions.map((action) => ({
-            userId: ctx.user.id,
-            kind: action.kind,
-            status: 'drafted' as const,
-            body: action.body,
-            subject: null as string | null,
-            whenHint: action.whenHint,
-            targetEntityId: resolveTargetEntityId(
-              action.targetPersonName,
-              extracted.persons,
-              result.entityIds,
-            ),
-            secondaryEntityId: null as string | null,
-            sourceInteractionId: result.interactionId,
-            confidence: 80,
-          }));
-          await ctx.db.insert(schema.acts).values(actRows);
+          const existingActs = await ctx.db.query.acts.findMany({
+            where: eq(schema.acts.sourceInteractionId, result.interactionId),
+            columns: { id: true },
+            limit: 1,
+          });
+          if (existingActs.length === 0) {
+            const ownedEntityIds = new Set(
+              (
+                await ctx.db.query.entities.findMany({
+                  where: and(
+                    eq(schema.entities.ownerUserId, ctx.user.id),
+                    isNull(schema.entities.deletedAt),
+                  ),
+                  columns: { id: true },
+                })
+              ).map((e) => e.id),
+            );
+
+            const actRows = extracted.actions.map((action) => {
+              const { targetEntityId, secondaryEntityId } = resolveIntroEntityIds(
+                action,
+                extracted.persons,
+                result.entityIds,
+              );
+              return {
+                userId: ctx.user.id,
+                kind: action.kind,
+                status: 'drafted' as const,
+                body: action.body,
+                subject: null as string | null,
+                whenHint: action.whenHint,
+                targetEntityId:
+                  targetEntityId && ownedEntityIds.has(targetEntityId) ? targetEntityId : null,
+                secondaryEntityId:
+                  secondaryEntityId && ownedEntityIds.has(secondaryEntityId)
+                    ? secondaryEntityId
+                    : null,
+                sourceInteractionId: result.interactionId,
+                confidence: 80,
+              };
+            });
+            await ctx.db.insert(schema.acts).values(actRows);
+          }
         }
 
         return { extracted, ...result };

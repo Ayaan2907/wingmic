@@ -111,6 +111,18 @@ describe('acts router', () => {
     expect(after.acts.map((a) => a.id)).not.toContain('act_send_1');
   });
 
+  it('refuses markSent for another users act', async () => {
+    await insertAct('act_send_other', { userId: otherUserId });
+    const res = await caller().markSent({ id: 'act_send_other' });
+    expect(res.ok).toBe(false);
+  });
+
+  it('refuses markSent when act is already sent', async () => {
+    await insertAct('act_send_done', { status: 'sent' });
+    const res = await caller().markSent({ id: 'act_send_done' });
+    expect(res.ok).toBe(false);
+  });
+
   it('dismiss ignores other users acts', async () => {
     await insertAct('act_dismiss_other', { userId: otherUserId });
     const res = await caller().dismiss({ id: 'act_dismiss_other' });

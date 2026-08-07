@@ -75,14 +75,13 @@ describe('ActsClient', () => {
     expect(screen.getByTestId('acts-empty').textContent).toMatch(/no drafts yet/);
   });
 
-  it('calls markSent when send is clicked', () => {
-    // reminder path downloads .ics — stub URL.createObjectURL for jsdom
+  it('does not mark sent when opening a reminder calendar file', () => {
     const createObjectURL = vi.fn(() => 'blob:act');
     const revokeObjectURL = vi.fn();
     vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
     render(<ActsClient />);
     fireEvent.click(screen.getByRole('button', { name: /send/i }));
-    expect(markSentMutate).toHaveBeenCalledWith({ id: 'act_1' });
+    expect(markSentMutate).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 });

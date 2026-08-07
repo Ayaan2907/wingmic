@@ -52,6 +52,22 @@ export function toPendingAct(row: {
   };
 }
 
+/** Tokenize a display name for whole-token matching (avoids "Ann" → "Joanne"). */
+function nameTokens(name: string): string[] {
+  return name
+    .toLowerCase()
+    .split(/\s+/)
+    .map((t) => t.replace(/[^a-z0-9'-]/g, ''))
+    .filter(Boolean);
+}
+
+function tokensMatch(needle: string, haystack: string): boolean {
+  const n = nameTokens(needle);
+  if (n.length === 0) return false;
+  const h = new Set(nameTokens(haystack));
+  return n.every((t) => h.has(t));
+}
+
 /** Resolve targetPersonName against commit person order → entity ids. */
 export function resolveTargetEntityId(
   targetPersonName: string | null | undefined,
@@ -59,18 +75,36 @@ export function resolveTargetEntityId(
   entityIds: string[],
 ): string | null {
   if (!targetPersonName?.trim() || persons.length === 0) return null;
-  const needle = targetPersonName.trim().toLowerCase();
+  const needle = targetPersonName.trim();
   for (let i = 0; i < persons.length; i++) {
-    if (persons[i]?.name.trim().toLowerCase() === needle && entityIds[i]) {
+    if (persons[i]?.name.trim().toLowerCase() === needle.toLowerCase() && entityIds[i]) {
       return entityIds[i];
     }
   }
-  // Soft match: first/last token containment
   for (let i = 0; i < persons.length; i++) {
-    const n = persons[i]?.name.trim().toLowerCase() ?? '';
-    if ((n.includes(needle) || needle.includes(n)) && entityIds[i]) return entityIds[i];
+    const personName = persons[i]?.name ?? '';
+    if (tokensMatch(needle, personName) && entityIds[i]) return entityIds[i];
   }
   return null;
+}
+
+/** For intro actions, pick a second person from the commit when available. */
+export function resolveIntroEntityIds(
+  action: Pick<ActionCandidate, 'kind' | 'targetPersonName'>,
+  persons: Array<{ name: string }>,
+  entityIds: string[],
+): { targetEntityId: string | null; secondaryEntityId: string | null } {
+  const targetEntityId = resolveTargetEntityId(action.targetPersonName, persons, entityIds);
+  if (action.kind !== 'intro') {
+    return { targetEntityId, secondaryEntityId: null };
+  }
+  for (let i = 0; i < persons.length; i++) {
+    const id = entityIds[i];
+    if (id && id !== targetEntityId) {
+      return { targetEntityId, secondaryEntityId: id };
+    }
+  }
+  return { targetEntityId, secondaryEntityId: null };
 }
 
 /** Build a minimal .ics calendar invite for meeting/reminder CTAs. */
@@ -95,13 +129,18 @@ export function buildIcs(opts: {
       .toISOString()
       .replace(/[-:]/g, '')
       .replace(/\.\d{3}Z$/, 'Z');
-  const escape = (s: string) => s.replace(/\n/g, '\\n').replace(/,/g, '\\,');
+  const escape = (s: string) =>
+    s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+  const uidSuffix =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//wingmic//acts//EN',
     'BEGIN:VEVENT',
-    `UID:wingmic-${stamp}@wingmic.xyz`,
+    `UID:wingmic-${stamp}-${uidSuffix}@wingmic.xyz`,
     `DTSTAMP:${stamp}`,
     `DTSTART:${fmt(start)}`,
     `DTEND:${fmt(end)}`,
@@ -114,10 +153,9 @@ export function buildIcs(opts: {
 }
 
 export function mailtoHref(opts: { subject?: string | null; body: string; to?: string | null }): string {
-  const params = new URLSearchParams();
-  if (opts.subject) params.set('subject', opts.subject);
-  params.set('body', opts.body);
-  const qs = params.toString();
   const to = opts.to?.trim() ?? '';
-  return `mailto:${encodeURIComponent(to)}?${qs}`;
+  const q: string[] = [];
+  if (opts.subject) q.push(`subject=${encodeURIComponent(opts.subject)}`);
+  q.push(`body=${encodeURIComponent(opts.body)}`);
+  return `mailto:${encodeURIComponent(to)}?${q.join('&')}`;
 }
