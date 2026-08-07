@@ -1,13 +1,38 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, screen, cleanup, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, cleanup, within, fireEvent } from '@testing-library/react';
+
+type ActsListState = {
+  data: { acts: Array<Record<string, unknown>> } | undefined;
+  isLoading: boolean;
+};
+
+let listState: ActsListState = { data: undefined, isLoading: false };
+const markSentMutate = vi.fn();
+const invalidateMock = vi.fn();
+
+vi.mock('@/lib/trpc/client', () => ({
+  trpc: {
+    acts: {
+      list: {
+        useQuery: () => listState,
+      },
+      markSent: {
+        useMutation: () => ({ mutate: markSentMutate, isPending: false }),
+      },
+    },
+    useUtils: () => ({
+      acts: { list: { invalidate: invalidateMock } },
+    }),
+  },
+}));
 
 import HomeClient, { type HomeInitialData } from '../HomeClient';
 
 const sampleData: HomeInitialData = {
   todayCount: 3,
   weekCount: 12,
-  pendingActs: 0,
+  pendingActs: 2,
   recent: [
     {
       id: 'int_1',
@@ -31,7 +56,29 @@ const emptyData: HomeInitialData = {
   recent: [],
 };
 
+const sampleAct = {
+  id: 'act_1',
+  kind: 'email',
+  glyph: '↗',
+  name: 'Ada Lovelace',
+  why: 'send the deck · tomorrow',
+  conf: 88,
+  accent: 'amber' as const,
+  color: '#FFC452',
+  actionKind: 'email' as const,
+  subject: null,
+  whenHint: 'tomorrow',
+  body: 'send the deck',
+  status: 'drafted',
+  createdAt: new Date(),
+};
+
 describe('HomeClient', () => {
+  beforeEach(() => {
+    listState = { data: { acts: [sampleAct] }, isLoading: false };
+    markSentMutate.mockClear();
+    invalidateMock.mockClear();
+  });
   afterEach(() => {
     cleanup();
   });
@@ -55,36 +102,35 @@ describe('HomeClient', () => {
     expect(list.textContent).toContain('2');
   });
 
-  it('renders the mocked agent stripe (PR ε preview)', () => {
+  it('renders the agent stripe with live draft count', () => {
     render(<HomeClient userName="ayaan" initialData={sampleData} />);
     const stripe = screen.getByTestId('home-agent-stripe');
     expect(stripe.textContent).toContain('wingmic');
-    expect(stripe.textContent).toContain('3 drafts pending');
+    expect(stripe.textContent).toContain('1 draft pending');
   });
 
-  it('renders 3 pending-acts mock cards with disabled coming-soon CTAs', () => {
+  it('renders live act cards with enabled send CTAs', () => {
     render(<HomeClient userName="ayaan" initialData={sampleData} />);
     const acts = screen.getByTestId('home-acts');
-    // honest preview marker — the acts agent is not wired until v0.3.
-    expect(acts.textContent?.toLowerCase()).toContain('v0.3');
-    expect(acts.textContent).toContain('Sarah Chen');
-    expect(acts.textContent).toContain('Marcus Rivera');
-    expect(acts.textContent).toContain('Priya → Deepak');
-    // every send button is disabled chrome (no dead action on stub data).
-    const sendButtons = within(acts).getAllByRole('button', { name: /coming soon/i });
-    expect(sendButtons).toHaveLength(3);
-    for (const b of sendButtons) {
-      expect((b as HTMLButtonElement).disabled).toBe(true);
-    }
+    expect(acts.textContent).toContain('Ada Lovelace');
+    expect(acts.textContent?.toLowerCase()).not.toContain('v0.3');
+    const sendButtons = within(acts).getAllByRole('button', { name: /send/i });
+    expect(sendButtons).toHaveLength(1);
+    expect((sendButtons[0] as HTMLButtonElement).disabled).toBe(false);
   });
 
-  // PR λ-shell: the primary nav + active-from-pathname now belong to AppShell,
-  // asserted in app/_components/__tests__/AppShell.test.tsx. HomeClient no
-  // longer renders its own nav, so the former "renders bottom nav with home
-  // active" assertion moved there.
+  it('marks an act sent when the send CTA is clicked', () => {
+    render(<HomeClient userName="ayaan" initialData={sampleData} />);
+    const acts = screen.getByTestId('home-acts');
+    const send = within(acts).getByRole('button', { name: /send/i });
+    fireEvent.click(send);
+    expect(markSentMutate).toHaveBeenCalledWith({ id: 'act_1' });
+  });
 
   it('shows an empty-state row when there are no recent commits', () => {
+    listState = { data: { acts: [] }, isLoading: false };
     render(<HomeClient userName={null} initialData={emptyData} />);
     expect(screen.getByTestId('home-activity-empty').textContent).toMatch(/tap the mic/);
+    expect(screen.getByTestId('home-acts-empty').textContent).toMatch(/no drafts yet/);
   });
 });

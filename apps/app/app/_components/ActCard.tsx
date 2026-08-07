@@ -1,24 +1,21 @@
 'use client';
 
 /**
- * ActCard — shared agent-draft card (PR ζ-acts).
+ * ActCard — shared agent-draft card (home + /acts).
  *
- * Extracted verbatim from HomeClient's `ActsPending` map body so Home and the
- * new /acts inbox render the exact same card with zero visual drift. The acts
- * agent ships v0.3 (epic #11); until then every send CTA is disabled
- * "coming soon · v0.3" chrome — matching the entity-detail disabled pattern.
- *
- * `PendingAct` is the single source of truth for the card's shape; HomeClient
- * and ActsClient both import it from here.
+ * Permission-first send: mailto for email/intro, .ics download for
+ * meeting/reminder, mark-done for todo. Requires `act.id` from acts.list.
  */
 
 import * as React from 'react';
+import { buildIcs, mailtoHref } from '@/lib/acts/mapAction';
 import { PersonAvatar } from './entity/EntityAvatar';
 
-// Mirror the accent palette used elsewhere in apps/app (capture, entity, home).
 const accent = '#FFC452';
 
 export type PendingAct = {
+  /** DB id when loaded from acts.list — enables send mutations. */
+  id?: string;
   kind: string;
   glyph: string;
   name: string;
@@ -26,9 +23,65 @@ export type PendingAct = {
   conf: number;
   accent: 'amber' | 'blue' | 'violet';
   color: string;
+  /** Underlying extractor/db kind for CTA routing. */
+  actionKind?: 'reminder' | 'email' | 'meeting' | 'todo' | 'intro';
+  subject?: string | null;
+  whenHint?: string | null;
+  body?: string;
 };
 
-export function ActCard({ act: a }: { act: PendingAct }) {
+export function ActCard({
+  act: a,
+  onSent,
+}: {
+  act: PendingAct;
+  /** Called after a successful permission-first send (mailto / ics / done). */
+  onSent?: (id: string) => void;
+}) {
+  const canSend = Boolean(a.id);
+
+  function handleSend() {
+    if (!a.id) return;
+    const actionKind = a.actionKind ?? 'todo';
+    const body = a.body ?? a.why;
+    switch (actionKind) {
+      case 'email':
+      case 'intro': {
+        window.location.href = mailtoHref({
+          subject: a.subject ?? `wingmic · ${a.kind}`,
+          body,
+        });
+        onSent?.(a.id);
+        return;
+      }
+      case 'meeting':
+      case 'reminder': {
+        const ics = buildIcs({
+          title: a.subject ?? a.name,
+          description: body,
+          whenHint: a.whenHint,
+        });
+        const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `wingmic-${a.kind}.ics`;
+        link.click();
+        URL.revokeObjectURL(url);
+        onSent?.(a.id);
+        return;
+      }
+      case 'todo': {
+        onSent?.(a.id);
+        return;
+      }
+      default: {
+        const _exhaustive: never = actionKind;
+        return _exhaustive;
+      }
+    }
+  }
+
   return (
     <div
       style={{
@@ -89,9 +142,12 @@ export function ActCard({ act: a }: { act: PendingAct }) {
       </div>
       <button
         type="button"
-        disabled
-        title="coming soon · v0.3"
-        aria-label={`send ${a.kind} for ${a.name} — coming soon, v0.3`}
+        disabled={!canSend}
+        title={canSend ? `send ${a.kind}` : 'no draft id'}
+        aria-label={
+          canSend ? `send ${a.kind} for ${a.name}` : `send ${a.kind} for ${a.name} — unavailable`
+        }
+        onClick={handleSend}
         style={{
           padding: '7px 11px',
           borderRadius: 8,
@@ -100,8 +156,8 @@ export function ActCard({ act: a }: { act: PendingAct }) {
           border: '1.5px solid #000',
           boxShadow: '2px 2px 0 #000',
           font: '700 11px Inter, system-ui, sans-serif',
-          cursor: 'not-allowed',
-          opacity: 0.85,
+          cursor: canSend ? 'pointer' : 'not-allowed',
+          opacity: canSend ? 1 : 0.85,
           flexShrink: 0,
         }}
       >
