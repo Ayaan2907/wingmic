@@ -42,6 +42,12 @@ describe('acts router', () => {
         confidence INTEGER NOT NULL DEFAULT 80,
         created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
       );
+      CREATE TABLE entity_fact (
+        id TEXT PRIMARY KEY, entity_id TEXT NOT NULL, key TEXT NOT NULL,
+        value TEXT NOT NULL, source_interaction_id TEXT,
+        confidence INTEGER NOT NULL DEFAULT 85,
+        embedding F32_BLOB(1536), created_at INTEGER NOT NULL
+      );
     `);
 
     now = Date.now();
@@ -101,6 +107,17 @@ describe('acts router', () => {
     const row = result.acts.find((a) => a.id === 'act_list_1');
     expect(row?.name).toBe('Ada Lovelace');
     expect(row?.actionKind).toBe('email');
+  });
+
+  it('includes targetEmail from entity facts when present', async () => {
+    await client.execute({
+      sql: `INSERT INTO entity_fact VALUES ('fact_email', 'e_ada', 'email', 'ada@example.com', null, 95, null, ?)`,
+      args: [now],
+    });
+    await insertAct('act_email_1');
+    const result = await caller().list({ limit: 20 });
+    const row = result.acts.find((a) => a.id === 'act_email_1');
+    expect(row?.targetEmail).toBe('ada@example.com');
   });
 
   it('markSent updates status to sent and drops from default list', async () => {

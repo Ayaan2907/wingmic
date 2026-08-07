@@ -71,6 +71,7 @@ const sampleAct = {
   body: 'send the deck',
   status: 'drafted',
   createdAt: new Date(),
+  targetEmail: 'ada@example.com',
 };
 
 describe('HomeClient', () => {

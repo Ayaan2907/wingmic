@@ -52,6 +52,24 @@ export const actsRouter = router({
           : [];
       const nameById = new Map(entities.map((e) => [e.id, e.name]));
 
+      const emailFacts =
+        entityIds.length > 0
+          ? await ctx.db.query.entityFacts.findMany({
+              where: and(
+                inArray(schema.entityFacts.entityId, entityIds),
+                eq(schema.entityFacts.key, 'email'),
+              ),
+              columns: { entityId: true, value: true },
+              orderBy: [desc(schema.entityFacts.confidence)],
+            })
+          : [];
+      const emailByEntityId = new Map<string, string>();
+      for (const fact of emailFacts) {
+        if (!emailByEntityId.has(fact.entityId)) {
+          emailByEntityId.set(fact.entityId, fact.value);
+        }
+      }
+
       return {
         acts: rows.map((r) => {
           const pending = toPendingAct({
@@ -64,6 +82,9 @@ export const actsRouter = router({
               ? nameById.get(r.secondaryEntityId) ?? null
               : null,
           });
+          const targetEmail = r.targetEntityId
+            ? emailByEntityId.get(r.targetEntityId) ?? null
+            : null;
           return {
             ...pending,
             id: r.id,
@@ -72,6 +93,7 @@ export const actsRouter = router({
             body: r.body,
             status: r.status,
             createdAt: r.createdAt,
+            targetEmail,
           };
         }),
       };
