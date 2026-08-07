@@ -22,6 +22,14 @@ import { accent } from '@/app/chat/_components/tokens';
 
 type RetentionMode = '24h' | '7d' | 'forever' | 'never';
 
+export type SettingsInitialData = {
+  audioRetentionMode: RetentionMode;
+  linkerModelOverride: string | null;
+  preferredMicDeviceId: string | null;
+  asrLanguage: string;
+  acknowledgedPrivacy: boolean;
+};
+
 const RETENTION_OPTIONS: { value: RetentionMode; label: string; hint: string }[] = [
   { value: '24h', label: '24 hours', hint: 'audio wiped a day after capture' },
   { value: '7d', label: '7 days', hint: 'a week, then gone' },
@@ -63,20 +71,31 @@ const textInput: React.CSSProperties = {
   fontFamily: 'inherit',
 };
 
-export default function SettingsClient({ email }: { email: string }) {
-  const { data } = trpc.settings.get.useQuery();
+export default function SettingsClient({
+  email,
+  initialSettings,
+}: {
+  email: string;
+  initialSettings: SettingsInitialData;
+}) {
+  const { data } = trpc.settings.get.useQuery(undefined, { initialData: initialSettings });
   const update = trpc.settings.update.useMutation();
 
-  // Optimistic local mirror — seeded once data arrives, then driven by edits.
+  // Optimistic local mirror — seeded from server prefetch + query cache.
   const [local, setLocal] = React.useState<{
     audioRetentionMode: RetentionMode;
     linkerModelOverride: string;
     preferredMicDeviceId: string;
     asrLanguage: string;
-  } | null>(null);
+  }>(() => ({
+    audioRetentionMode: initialSettings.audioRetentionMode,
+    linkerModelOverride: initialSettings.linkerModelOverride ?? '',
+    preferredMicDeviceId: initialSettings.preferredMicDeviceId ?? '',
+    asrLanguage: initialSettings.asrLanguage,
+  }));
 
   React.useEffect(() => {
-    if (data && local === null) {
+    if (data) {
       setLocal({
         audioRetentionMode: data.audioRetentionMode,
         linkerModelOverride: data.linkerModelOverride ?? '',
@@ -84,9 +103,9 @@ export default function SettingsClient({ email }: { email: string }) {
         asrLanguage: data.asrLanguage,
       });
     }
-  }, [data, local]);
+  }, [data]);
 
-  if (!data || !local) {
+  if (!data) {
     return (
       <main
         style={{ minHeight: '100dvh', background: 'var(--bg-page)', color: 'var(--ink)', padding: 20 }}

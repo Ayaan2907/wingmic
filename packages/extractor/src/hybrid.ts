@@ -32,6 +32,7 @@ import { env } from '../../../apps/app/lib/config/env';
 export interface HybridInput {
   transcript: string;
   providerEntities?: AssemblyAIEntity[];
+  knownContacts?: { persons: string[]; companies: string[] };
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -67,6 +68,7 @@ export interface HybridInput {
 export async function extractHybrid({
   transcript,
   providerEntities,
+  knownContacts,
 }: HybridInput): Promise<ExtractionResult> {
   const entities = providerEntities ?? [];
   const skeleton = mapProviderEntities(entities);
@@ -80,8 +82,9 @@ export async function extractHybrid({
     .filter((e) => e.entity_type.toLowerCase() === 'date')
     .map((e) => e.text);
   const filled = applyHeuristics(skeleton, transcript, dateSpans);
-  const llm = await runLinkerLLM(transcript, filled);
-  return mergeResults(filled, llm);
+  const llm = await runLinkerLLM(transcript, filled, knownContacts);
+  const merged = mergeResults(filled, llm);
+  return sanitizeExtraction(merged);
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -304,25 +307,33 @@ export function applyHeuristics(
 // Layer 3 — LLM relation linker (Haiku, default per locked decision #10)
 // ──────────────────────────────────────────────────────────────────────
 
-const LINKER_SYSTEM = `You are a relation extractor for short post-meeting voice memos.
-Given a transcript AND a list of already-detected entities, your job is to
-fill in the RELATIONS that span-level NER cannot detect: per-person role and
-company association, per-action target (which person an action refers to),
-topics that link to specific people, and concise notes about each person.
+const LINKER_SYSTEM = `You are the entity extractor for wingmic — short voice memos spoken right
+after meeting someone. Turn the transcript into the structured graph
+payload: persons, companies, events, topics, and follow-up actions.
 
 Hard rules:
-1. Do NOT add new persons, companies, events, or actions that weren't in the
-   pre-detected list — only enrich what's there. The only exception is
-   adding actions you find via verb phrases the pre-list missed.
-2. Preserve original casing as the speaker said it. Lowercase stays lowercase.
-3. If you can't determine a role or company for a person from the transcript,
-   leave it null. Do NOT invent.
-4. Action targets: only set targetPersonName if the transcript clearly names
-   a person as the target ("send Sarah the link" → target=Sarah).
-5. whenHint: ISO 8601 for absolute dates, speaker phrase verbatim otherwise.
+1. A person requires an ACTUAL NAME. Pronouns ("him", "her", "they"), bare
+   role references ("the CTO", "that guy"), and verbs or filler words
+   mistaken for names ("Met", "Talked") are NEVER persons. If someone is
+   unnamed, fold what you learned into the nearest named person's notes —
+   or omit it. An empty persons list is better than a garbage one.
+2. Transcripts are speech-to-text: sentence-initial capitalization is NOT
+   evidence of a proper noun. "Met with him yesterday" contains zero persons.
+3. Never invent. Unknown role/company/date → null. No fabricated emails,
+   companies, or facts.
+4. Preserve the speaker's casing for names. Lowercase stays lowercase.
+5. Actions are things the speaker committed to (kind: email, reminder,
+   intro, todo, meeting). Set targetPersonName only when the transcript
+   names the target explicitly ("send Sarah the link" → target=Sarah).
+6. whenHint: ISO 8601 for absolute dates, speaker phrase verbatim otherwise.
+7. Pre-detected entities (when provided) are hints to enrich — not a cage.
+   Add real entities they missed; ignore any hint that violates rule 1.
+8. Known contacts (when provided) are people/companies already in the
+   speaker's graph. If the transcript plausibly refers to one of them, reuse
+   that exact stored name and put the spoken variant in aliases — do not
+   mint a near-duplicate.
 
-Output the same JSON schema as ExtractionResult, with the pre-detected
-entities preserved and the relations filled in.`;
+Output the ExtractionResult JSON schema.`;
 
 /**
  * Call the linker LLM (Haiku via OpenRouter) with a scoped prompt.
@@ -341,6 +352,7 @@ entities preserved and the relations filled in.`;
 export async function runLinkerLLM(
   transcript: string,
   layer12Result: ExtractionResult,
+  knownContacts?: { persons: string[]; companies: string[] },
 ): Promise<ExtractionResult> {
   const empty: ExtractionResult = {
     persons: [],
@@ -352,7 +364,11 @@ export async function runLinkerLLM(
   if (!env.OPENROUTER_API_KEY) return empty;
   if (!transcript.trim()) return empty;
 
-  const userPrompt = `Pre-detected entities:\n${JSON.stringify(layer12Result, null, 2)}\n\nTranscript:\n"""\n${transcript}\n"""`;
+  let userPrompt = '';
+  if (knownContacts && (knownContacts.persons.length > 0 || knownContacts.companies.length > 0)) {
+    userPrompt += `Known contacts already in the speaker's graph: ${JSON.stringify(knownContacts)}\n\n`;
+  }
+  userPrompt += `Pre-detected entities:\n${JSON.stringify(layer12Result, null, 2)}\n\nTranscript:\n"""\n${transcript}\n"""`;
 
   try {
     const { object } = await generateObject({
@@ -370,6 +386,78 @@ export async function runLinkerLLM(
     console.warn('[extractor] runLinkerLLM failed, falling back to Layer-1+2:', err);
     return empty;
   }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// sanitizeExtraction — deterministic junk-name guard (#58)
+// ──────────────────────────────────────────────────────────────────────
+
+const JUNK_NAMES = new Set([
+  'met',
+  'meet',
+  'meeting',
+  'talked',
+  'spoke',
+  'said',
+  'told',
+  'saw',
+  'him',
+  'her',
+  'them',
+  'he',
+  'she',
+  'they',
+  'me',
+  'we',
+  'us',
+  'it',
+  'you',
+  'i',
+  'someone',
+  'somebody',
+  'anyone',
+  'everybody',
+  'guy',
+  'girl',
+  'dude',
+  'man',
+  'woman',
+  'person',
+  'people',
+  'friend',
+  'there',
+  'here',
+  'who',
+  'that',
+  'this',
+  'today',
+  'yesterday',
+  'tomorrow',
+]);
+
+function cleanNameTokens(name: string): string[] {
+  return name
+    .trim()
+    .toLowerCase()
+    .split(/[\s.,;:!?"'()\[\]{}<>/\\-]+/)
+    .filter(Boolean);
+}
+
+function isJunkName(name: string): boolean {
+  const tokens = cleanNameTokens(name);
+  if (tokens.length === 0 || name.trim().length < 2) return true;
+  return tokens.every((t) => JUNK_NAMES.has(t) || STOPWORDS.has(t));
+}
+
+/** Drop pronoun/verb/stopword junk from entity names — last step of extractHybrid. */
+export function sanitizeExtraction(r: ExtractionResult): ExtractionResult {
+  return {
+    persons: r.persons.filter((p) => !isJunkName(p.name)),
+    companies: r.companies.filter((c) => !isJunkName(c.name)),
+    events: r.events.filter((e) => !isJunkName(e.name)),
+    topics: r.topics,
+    actions: r.actions,
+  };
 }
 
 // ──────────────────────────────────────────────────────────────────────

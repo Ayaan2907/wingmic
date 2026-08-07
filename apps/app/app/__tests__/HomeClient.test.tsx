@@ -85,6 +85,6 @@ describe('HomeClient', () => {
 
   it('shows an empty-state row when there are no recent commits', () => {
     render(<HomeClient userName={null} initialData={emptyData} />);
-    expect(screen.getByTestId('home-activity-empty').textContent).toMatch(/hold the mic/);
+    expect(screen.getByTestId('home-activity-empty').textContent).toMatch(/tap the mic/);
   });
 });

@@ -13,17 +13,106 @@
 // the bottom nav is global). On `recorder.ready`, the provider pushes
 // /chat so the user sees the bubble + extraction in the thread.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useCapture } from '@/app/_components/CaptureProvider';
 import { ChatHeader } from './_components/ChatHeader';
 import { ChatThread, UndoChip } from './_components/ChatThread';
 import { ChatEntityRail } from './_components/ChatEntityRail';
+import { TAB_BAR_HEIGHT_PX, accent } from './_components/tokens';
 import type { ChatInitialItem } from './_components/types';
 
 interface ChatClientProps {
   userName: string | null;
   /** Server-prefetched, oldest-first list of past committed memos. Defaults to []. */
   initialThread?: ChatInitialItem[];
+}
+
+function ChatComposer() {
+  const { recorder, submitText } = useCapture();
+  const [text, setText] = useState('');
+  const hot =
+    recorder.status === 'arming' ||
+    recorder.status === 'recording' ||
+    recorder.status === 'lock_armed' ||
+    recorder.status === 'cancel_armed' ||
+    recorder.status === 'locked';
+
+  if (hot) return null;
+
+  const micUnavailable = !recorder.supported;
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    void submitText(trimmed);
+    setText('');
+  }
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      data-testid="chat-composer"
+      style={{
+        position: 'fixed',
+        bottom: TAB_BAR_HEIGHT_PX + 14,
+        left: 0,
+        right: 0,
+        maxWidth: 640,
+        margin: '0 auto',
+        padding: '0 16px',
+        zIndex: 40,
+        boxSizing: 'border-box',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '10px 12px',
+          borderRadius: 999,
+          background: 'var(--surface-1)',
+          border: '1px solid var(--border-mid)',
+        }}
+      >
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={
+            micUnavailable
+              ? 'log a memo or ask — mic unavailable'
+              : 'log a memo or ask — "who was the rust person?"'
+          }
+          aria-label="chat composer"
+          style={{
+            flex: 1,
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--ink)',
+            fontSize: 14,
+            outline: 'none',
+          }}
+        />
+        <button
+          type="submit"
+          className="mono"
+          style={{
+            padding: '6px 12px',
+            borderRadius: 999,
+            background: accent,
+            border: '1.5px solid #000',
+            boxShadow: '2px 2px 0 #000',
+            fontSize: 11,
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          commit →
+        </button>
+      </div>
+    </form>
+  );
 }
 
 export default function ChatClient({ userName, initialThread = [] }: ChatClientProps) {
@@ -57,6 +146,7 @@ export default function ChatClient({ userName, initialThread = [] }: ChatClientP
         <ChatHeader userName={userName} />
         <ChatThread />
         <UndoChip />
+        <ChatComposer />
       </main>
       <ChatEntityRail />
     </div>

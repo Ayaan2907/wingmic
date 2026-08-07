@@ -21,6 +21,7 @@ vi.mock('@wingmic/extractor/embeddings', async (orig) => {
   };
 });
 
+import { embedText } from '@wingmic/extractor/embeddings';
 import { recallRouter } from './recall';
 
 // Helper: f32 buffer from number[]
@@ -100,6 +101,7 @@ describe('recall.query (libSQL vector_top_k)', () => {
     expect(res.entities[0]?.id).toBe('e1');
     expect(res.entities[0]?.name).toBe('Alice Rustacean');
     expect(res.durationMs).toBeGreaterThanOrEqual(0);
+    expect(res.mode).toBe('semantic');
   });
 
   it('isolates results to the calling user (cross-user safety)', async () => {
@@ -131,6 +133,7 @@ describe('recall.query (libSQL vector_top_k)', () => {
     expect(ids).not.toContain('x1');
     expect(ids).not.toContain('x2');
     expect(ids.every((id) => ['e1', 'e2', 'e3'].includes(id))).toBe(true);
+    expect(res.mode).toBe('semantic');
   });
 
   it('gracefully returns fewer rows when limit > index size', async () => {
@@ -143,5 +146,29 @@ describe('recall.query (libSQL vector_top_k)', () => {
     const caller = recallRouter.createCaller(ctx);
     const res = await caller.query({ q: 'anything', limit: 50 });
     expect(res.entities.length).toBeLessThanOrEqual(3);
+    expect(res.mode).toBe('semantic');
+  });
+
+  it('falls back to text match when embed fails, then recovers to semantic', async () => {
+    const embedMock = vi.mocked(embedText);
+    embedMock.mockImplementationOnce(async () => {
+      throw new Error('no key');
+    });
+
+    const ctx = {
+      db,
+      user: { id: userId },
+      session: { user: { id: userId } },
+    } as unknown as Parameters<typeof recallRouter.createCaller>[0];
+    const caller = recallRouter.createCaller(ctx);
+
+    const textRes = await caller.query({ q: 'alice', limit: 5 });
+    expect(textRes.mode).toBe('text');
+    expect(textRes.entities.map((e) => e.id)).toContain('e1');
+    expect(textRes.entities.every((e) => e.score === 0)).toBe(true);
+
+    const semanticRes = await caller.query({ q: 'who works on rust?', limit: 3 });
+    expect(semanticRes.mode).toBe('semantic');
+    expect(semanticRes.entities[0]?.id).toBe('e1');
   });
 });

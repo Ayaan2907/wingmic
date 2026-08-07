@@ -8,7 +8,9 @@
 // dimming applies cleanly to the message list without needing an inner
 // "stays full opacity" carve-out.
 
+import Link from 'next/link';
 import { useCapture } from '@/app/_components/CaptureProvider';
+import { AgentBubble, AskExchange, WingmicAvatar as AskAvatar } from './AskPrimitives';
 import type {
   ThreadMessage,
   GraphResult,
@@ -35,6 +37,7 @@ export function ChatThread() {
     closePaste,
     submitPaste,
     softDelete,
+    saveAskAsMemo,
   } = useCapture();
   const recording =
     recorder.status === 'recording' ||
@@ -83,6 +86,7 @@ export function ChatThread() {
             setPasteDraft={setPasteDraft}
             onPasteSubmit={() => submitPaste(m.id)}
             onPasteCancel={closePaste}
+            onSaveAsMemo={() => saveAskAsMemo(m.id)}
           />
         ))}
       </div>
@@ -155,7 +159,7 @@ function WelcomeAgent() {
             <span className="serif" style={{ fontStyle: 'italic', color: accent }}>
               ask me anything
             </span>{' '}
-            — who you met, what was said, who to thread. or just hold the mic and tell me about
+            — who you met, what was said, who to thread. or just tap the mic and tell me about
             a new contact.
           </div>
         </div>
@@ -182,9 +186,9 @@ function WelcomeAgent() {
           ↪ try
         </div>
         {SUGGESTED_QUERIES.map((q) => (
-          <a
+          <Link
             key={q}
-            href={`/search?q=${encodeURIComponent(q)}`}
+            href={{ pathname: '/search', query: { q } }}
             data-testid="chat-suggestion"
             style={{
               alignSelf: 'flex-start',
@@ -198,7 +202,7 @@ function WelcomeAgent() {
             }}
           >
             {q}
-          </a>
+          </Link>
         ))}
       </div>
     </div>
@@ -218,6 +222,7 @@ interface MessageBubbleProps {
   setPasteDraft: (v: string) => void;
   onPasteSubmit: () => void;
   onPasteCancel: () => void;
+  onSaveAsMemo: () => void;
 }
 
 function isEmptyExtraction(e: GraphResult['extracted']): boolean {
@@ -233,6 +238,10 @@ function MessageBubble(props: MessageBubbleProps) {
   const { message: m } = props;
 
   if (m.status === 'failed') return <FailedBubble {...props} />;
+
+  if (m.status === 'answering' || m.status === 'answered') {
+    return <AskExchange message={m} onSaveAsMemo={props.onSaveAsMemo} />;
+  }
 
   const showSkeleton = m.status === 'uploading' || m.status === 'transcribing';
   const showLinkSweep = m.status === 'linking';
@@ -620,6 +629,8 @@ function failedKind(code: FailureCode): string {
       return 'upload';
     case 'commit_failed':
       return 'commit';
+    case 'ask_failed':
+      return 'search';
     default:
       return 'unknown';
   }
@@ -651,6 +662,8 @@ function failedActions(code: FailureCode): FailedAction[] {
       return ['retry-mic', 'type'];
     case 'commit_failed':
       return ['retry', 'paste', 'discard'];
+    case 'ask_failed':
+      return ['retry', 'discard'];
     default:
       return ['retry', 'discard'];
   }

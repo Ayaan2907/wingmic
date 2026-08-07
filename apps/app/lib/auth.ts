@@ -50,6 +50,11 @@ export const auth = betterAuth({
     }),
   ],
   session: {
+    // 30-day sliding sessions (issue #62): sign in once, stay signed in while
+    // active. expiresIn = absolute lifetime; updateAge = refresh window.
+    // Explicitly user-directed — session-handling is dangerous-ops class.
+    expiresIn: 60 * 60 * 24 * 30,
+    updateAge: 60 * 60 * 24,
     cookieCache: {
       enabled: true,
       maxAge: 60 * 5,

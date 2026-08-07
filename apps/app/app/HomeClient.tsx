@@ -22,6 +22,7 @@
  */
 
 import * as React from 'react';
+import Link from 'next/link';
 import { PersonAvatar } from './_components/entity/EntityAvatar';
 import { ActCard, type PendingAct } from './_components/ActCard';
 
@@ -118,13 +119,13 @@ function Header({ userName }: { userName: string | null }) {
         gap: 12,
       }}
     >
-      <a
+      <Link
         href="/"
         className="mono"
         style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.5, color: 'var(--ink)' }}
       >
         wingmic<span style={{ color: 'var(--text-30)' }}>.xyz</span>
-      </a>
+      </Link>
       <span
         className="mono"
         style={{
@@ -136,6 +137,26 @@ function Header({ userName }: { userName: string | null }) {
       >
         home · {userName ?? 'you'}
       </span>
+      <Link
+        href="/settings"
+        aria-label="settings"
+        style={{
+          width: 30,
+          height: 30,
+          borderRadius: 8,
+          background: 'var(--surface-1)',
+          border: '1px solid var(--border-soft)',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--text-55)',
+          textDecoration: 'none',
+          fontSize: 14,
+          flexShrink: 0,
+        }}
+      >
+        ⚙
+      </Link>
     </header>
   );
 }
@@ -234,7 +255,7 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
           }}
           data-testid="home-activity-empty"
         >
-          no commits yet. hold the mic to make your first one.
+          no commits yet. tap the mic to make your first one.
         </div>
       ) : (
         <ul
@@ -415,17 +436,19 @@ function ActsPending() {
         >
           ◆ acts · pending
         </span>
-        <span
+        <Link
+          href="/acts"
           className="mono"
           style={{
             fontSize: 10,
             color: 'var(--text-40)',
             letterSpacing: 1,
             textTransform: 'uppercase',
+            textDecoration: 'none',
           }}
         >
-          preview · v0.3
-        </span>
+          preview · v0.3 · open →
+        </Link>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {PENDING_ACTS.map((a) => (

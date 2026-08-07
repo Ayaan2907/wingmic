@@ -16,7 +16,11 @@ vi.mock('next/navigation', () => ({
 }));
 
 // ── Mock tRPC client ────────────────────────────────────────────────────
-const mutateAsyncMock = vi.fn();
+const { mutateAsyncMock, recallFetchMock } = vi.hoisted(() => ({
+  mutateAsyncMock: vi.fn(),
+  recallFetchMock: vi.fn(),
+}));
+
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     capture: {
@@ -27,6 +31,18 @@ vi.mock('@/lib/trpc/client', () => ({
         }),
       },
     },
+    recall: {
+      query: {
+        fetch: recallFetchMock,
+      },
+    },
+    useUtils: () => ({
+      recall: {
+        query: {
+          fetch: recallFetchMock,
+        },
+      },
+    }),
   },
 }));
 
@@ -126,6 +142,12 @@ describe('ChatClient', () => {
   beforeEach(() => {
     resetFakeRecorder();
     mutateAsyncMock.mockReset();
+    recallFetchMock.mockReset();
+    recallFetchMock.mockResolvedValue({
+      entities: [{ id: 'e1', name: 'Alice', score: 0.9, companies: [], events: [], topics: [], aliases: [], facts: [] }],
+      durationMs: 12,
+      mode: 'semantic',
+    });
     // fetch is replaced per test
     (globalThis as { fetch?: unknown }).fetch = vi.fn();
   });
@@ -147,7 +169,7 @@ describe('ChatClient', () => {
     expect(nav.textContent).toContain('chat');
     expect(nav.textContent).toContain('capture');
     expect(nav.textContent).toContain('graph');
-    expect(nav.textContent).toContain('acts');
+    expect(nav.textContent).toContain('search');
     // Regression guard: v1 label `recall` must not coexist with the v2 `chat` label.
     expect(nav.textContent).not.toContain('recall');
     // Removed in v8 — these slots no longer exist in the 5-slot bar.

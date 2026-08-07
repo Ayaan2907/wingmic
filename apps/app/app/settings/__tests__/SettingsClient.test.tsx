@@ -36,6 +36,17 @@ function fixture(over: Partial<Settings> = {}): Settings {
   };
 }
 
+function renderSettings(over: Partial<Settings> = {}) {
+  const data = fixture(over);
+  getData = data;
+  return render(
+    <SettingsClient
+      email="a@example.com"
+      initialSettings={data}
+    />,
+  );
+}
+
 describe('SettingsClient', () => {
   beforeEach(() => {
     getData = fixture();
@@ -44,8 +55,7 @@ describe('SettingsClient', () => {
   afterEach(() => cleanup());
 
   it('renders the audio-retention radios with the current value checked', () => {
-    getData = fixture({ audioRetentionMode: '7d' });
-    render(<SettingsClient email="a@example.com" />);
+    renderSettings({ audioRetentionMode: '7d' });
     const seven = screen.getByRole('radio', { name: /7d|7 days/i }) as HTMLInputElement;
     expect(seven.checked).toBe(true);
     const day = screen.getByRole('radio', { name: /24h|24 hours/i }) as HTMLInputElement;
@@ -53,21 +63,20 @@ describe('SettingsClient', () => {
   });
 
   it('selecting a different retention option fires update with that enum value', () => {
-    getData = fixture({ audioRetentionMode: '24h' });
-    render(<SettingsClient email="a@example.com" />);
+    renderSettings({ audioRetentionMode: '24h' });
     fireEvent.click(screen.getByRole('radio', { name: /forever/i }));
     expect(mutateSpy).toHaveBeenCalledWith({ audioRetentionMode: 'forever' });
   });
 
   it('renders the account email (read-only) and the about section', () => {
-    render(<SettingsClient email="a@example.com" />);
+    renderSettings();
     expect(screen.getByText(/account/i)).toBeTruthy();
     expect(screen.getByText('a@example.com')).toBeTruthy();
     expect(screen.getByText(/about/i)).toBeTruthy();
   });
 
   it('blurring the linker model override persists the trimmed-as-typed value', () => {
-    render(<SettingsClient email="a@example.com" />);
+    renderSettings();
     const input = screen.getByPlaceholderText('default model') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'claude-haiku' } });
     fireEvent.blur(input);
@@ -75,8 +84,7 @@ describe('SettingsClient', () => {
   });
 
   it('blurring an emptied linker model override persists null (clears the row)', () => {
-    getData = fixture({ linkerModelOverride: 'claude-haiku' });
-    render(<SettingsClient email="a@example.com" />);
+    renderSettings({ linkerModelOverride: 'claude-haiku' });
     const input = screen.getByPlaceholderText('default model') as HTMLInputElement;
     fireEvent.change(input, { target: { value: '' } });
     fireEvent.blur(input);
@@ -84,7 +92,7 @@ describe('SettingsClient', () => {
   });
 
   it('blurring the preferred mic device id persists the value', () => {
-    render(<SettingsClient email="a@example.com" />);
+    renderSettings();
     const input = screen.getByPlaceholderText('default') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'mic-abc123' } });
     fireEvent.blur(input);
@@ -92,7 +100,7 @@ describe('SettingsClient', () => {
   });
 
   it('blurring a valid asr language (>= 2 chars) persists the trimmed value', () => {
-    render(<SettingsClient email="a@example.com" />);
+    renderSettings();
     const input = screen.getByPlaceholderText('en-US') as HTMLInputElement;
     fireEvent.change(input, { target: { value: '  fr-FR  ' } });
     fireEvent.blur(input);
@@ -100,7 +108,7 @@ describe('SettingsClient', () => {
   });
 
   it('blurring an asr language under the 2-char minimum does NOT persist', () => {
-    render(<SettingsClient email="a@example.com" />);
+    renderSettings();
     const input = screen.getByPlaceholderText('en-US') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'x' } });
     fireEvent.blur(input);
