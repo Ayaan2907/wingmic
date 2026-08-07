@@ -28,8 +28,8 @@ function activeFor(pathname: string): BottomTabKey | null {
   if (pathname === '/') return 'home';
   if (pathname.startsWith('/chat')) return 'capture';
   if (pathname.startsWith('/graph')) return 'graph';
-  if (pathname.startsWith('/search')) return 'search';
-  return null; // entity / acts / settings — no tab highlighted
+  if (pathname.startsWith('/acts')) return 'acts';
+  return null; // entity / search / settings — no tab highlighted
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -53,7 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <NavLink tab={NAV_TABS[1]} active={active === 'chat'} />
           <CaptureOrb isActive={active === 'capture'} label="capture" recorder={recorder} beginCapture={beginCapture} />
           <NavLink tab={NAV_TABS[3]} active={active === 'graph'} />
-          <NavLink tab={NAV_TABS[4]} active={active === 'search'} />
+          <NavLink tab={NAV_TABS[4]} active={active === 'acts'} />
         </nav>
       )}
       <CommandPalette />

@@ -22,6 +22,22 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: (_: string) => searchQ }),
 }));
 
+vi.mock('next/link', () => ({
+  default: ({
+    href,
+    children,
+    ...rest
+  }: {
+    href: string;
+    children: React.ReactNode;
+    [k: string]: unknown;
+  }) => (
+    <a href={typeof href === 'string' ? href : '#'} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     recall: {
@@ -114,6 +130,19 @@ describe('SearchClient', () => {
     queryResult = { data: { entities: [], durationMs: 5 }, isFetching: false, error: null };
     render(<SearchClient />);
     expect(screen.getByText(/no matches/i)).toBeTruthy();
+  });
+
+  it('deep-links person / company / event from a result card', () => {
+    searchQ = 'rust';
+    queryResult = { data: { entities: [entity()], durationMs: 12 }, isFetching: false, error: null };
+    render(<SearchClient />);
+    const person = screen.getByRole('link', { name: /^ada$/i });
+    expect(person.getAttribute('href')).toBe('/person/e1');
+    const company = screen.getByRole('link', { name: /^acme$/i });
+    expect(company.getAttribute('href')).toBe('/company/c1');
+    const event = screen.getByRole('link', { name: /met at devconnect/i });
+    expect(event.getAttribute('href')).toBe('/event/v1');
+    expect(screen.getByRole('link', { name: /open card/i }).getAttribute('href')).toBe('/person/e1');
   });
 
   it('debounces live typing — the query stays disabled until ~350ms idle', () => {

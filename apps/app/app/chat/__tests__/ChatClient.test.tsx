@@ -191,7 +191,7 @@ describe('ChatClient', () => {
     expect(nav.textContent).toContain('chat');
     expect(nav.textContent).toContain('capture');
     expect(nav.textContent).toContain('graph');
-    expect(nav.textContent).toContain('search');
+    expect(nav.textContent).toContain('acts');
     // Regression guard: v1 label `recall` must not coexist with the v2 `chat` label.
     expect(nav.textContent).not.toContain('recall');
     // Removed in v8 — these slots no longer exist in the 5-slot bar.
