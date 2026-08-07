@@ -1,8 +1,8 @@
 CREATE TABLE `act` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
-	`kind` text NOT NULL,
-	`status` text DEFAULT 'drafted' NOT NULL,
+	`kind` text NOT NULL CHECK (`kind` IN ('reminder', 'email', 'meeting', 'todo', 'intro')),
+	`status` text DEFAULT 'drafted' NOT NULL CHECK (`status` IN ('drafted', 'snoozed', 'sent', 'dismissed')),
 	`body` text NOT NULL,
 	`subject` text,
 	`when_hint` text,
@@ -20,4 +20,7 @@ CREATE TABLE `act` (
 );
 --> statement-breakpoint
 CREATE INDEX `act_user_status_idx` ON `act` (`user_id`,`status`);--> statement-breakpoint
-CREATE INDEX `act_user_created_idx` ON `act` (`user_id`,`created_at`);
+CREATE INDEX `act_user_created_idx` ON `act` (`user_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `act_target_entity_idx` ON `act` (`target_entity_id`);--> statement-breakpoint
+CREATE INDEX `act_secondary_entity_idx` ON `act` (`secondary_entity_id`);--> statement-breakpoint
+CREATE INDEX `act_source_interaction_idx` ON `act` (`source_interaction_id`);

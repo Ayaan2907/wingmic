@@ -407,6 +407,7 @@ export const acts = sqliteTable(
     secondaryEntityId: text('secondary_entity_id').references(() => entities.id, {
       onDelete: 'set null',
     }),
+    /** Owning interaction — writers must verify interaction.userId === act.userId. */
     sourceInteractionId: text('source_interaction_id').references(() => interactions.id, {
       onDelete: 'set null',
     }),
@@ -418,6 +419,9 @@ export const acts = sqliteTable(
   (t) => [
     index('act_user_status_idx').on(t.userId, t.status),
     index('act_user_created_idx').on(t.userId, t.createdAt),
+    index('act_target_entity_idx').on(t.targetEntityId),
+    index('act_secondary_entity_idx').on(t.secondaryEntityId),
+    index('act_source_interaction_idx').on(t.sourceInteractionId),
   ],
 );
 
