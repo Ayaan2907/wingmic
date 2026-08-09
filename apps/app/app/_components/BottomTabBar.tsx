@@ -160,7 +160,7 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
         position: 'relative',
       }}
     >
-      {showHint && !isActiveRec && !isSending ? (
+      {showHint && !isActiveRec ? (
         <div
           role="status"
           data-testid="orb-hint"
