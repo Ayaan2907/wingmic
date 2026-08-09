@@ -30,8 +30,8 @@ describe('micOrbStateFor (PR α v15 — 9→7 mapping)', () => {
     expect(micOrbStateFor('locked', false)).toBe('locked');
   });
 
-  it('encoding → sending (blob finalizing for upload)', () => {
-    expect(micOrbStateFor('encoding', false)).toBe('sending');
+  it('encoding → idle (blob finalizes off-orb; next take can arm)', () => {
+    expect(micOrbStateFor('encoding', false)).toBe('idle');
   });
 
   it('ready without hover → idle (transient pre-reset frame)', () => {
@@ -50,6 +50,6 @@ describe('micOrbStateFor (PR α v15 — 9→7 mapping)', () => {
   it('hover does NOT override an active recorder state', () => {
     expect(micOrbStateFor('recording', true)).toBe('recording');
     expect(micOrbStateFor('locked', true)).toBe('locked');
-    expect(micOrbStateFor('encoding', true)).toBe('sending');
+    expect(micOrbStateFor('encoding', true)).toBe('hover');
   });
 });

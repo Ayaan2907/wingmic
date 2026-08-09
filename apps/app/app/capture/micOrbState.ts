@@ -27,8 +27,8 @@
  *   - 'recording' | 'cancel_armed' | 'lock_armed' → recording. The dock chrome
  *     conveys the arming-direction (slide hints); the orb glyph stays steady.
  *   - 'locked' → locked.
- *   - 'encoding' → sending. The blob is finalizing for upload — the closest
- *     visual to lib-voice `sending` (upload-in-progress, arrow-up halo).
+ *   - 'encoding' → idle. Blob finalizes off-orb; pipeline state lives on the
+ *     thread bubble. Orb must not block the next take (U3 record loop).
  *
  * Reserved (not currently produced):
  *   - thinking: lib-voice's "agent thinking" 3-dot state. The recorder hook
@@ -68,7 +68,9 @@ export function micOrbStateFor(
     case 'locked':
       return 'locked';
     case 'encoding':
-      return 'sending';
+      // Blob finalizes in the background — orb stays invite-idle so the user
+      // can start the next take while the prior bubble links (U3).
+      return isHovered ? 'hover' : 'idle';
     case 'ready':
     case 'idle':
     case 'error':

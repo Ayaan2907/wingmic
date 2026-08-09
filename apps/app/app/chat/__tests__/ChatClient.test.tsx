@@ -16,10 +16,14 @@ vi.mock('next/navigation', () => ({
 }));
 
 // ── Mock tRPC client ────────────────────────────────────────────────────
-const { mutateAsyncMock, recallFetchMock } = vi.hoisted(() => ({
-  mutateAsyncMock: vi.fn(),
-  recallFetchMock: vi.fn(),
-}));
+const { mutateAsyncMock, deleteMutateMock, restoreMutateMock, recallFetchMock } = vi.hoisted(
+  () => ({
+    mutateAsyncMock: vi.fn(),
+    deleteMutateMock: vi.fn(),
+    restoreMutateMock: vi.fn(),
+    recallFetchMock: vi.fn(),
+  }),
+);
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
@@ -27,6 +31,20 @@ vi.mock('@/lib/trpc/client', () => ({
       commit: {
         useMutation: () => ({
           mutateAsync: mutateAsyncMock,
+          isPending: false,
+        }),
+      },
+      delete: {
+        useMutation: () => ({
+          mutate: deleteMutateMock,
+          mutateAsync: deleteMutateMock,
+          isPending: false,
+        }),
+      },
+      restore: {
+        useMutation: () => ({
+          mutate: restoreMutateMock,
+          mutateAsync: restoreMutateMock,
           isPending: false,
         }),
       },
@@ -70,7 +88,11 @@ const fakeRecorder = {
   lock: vi.fn(),
   setCancelArmed: vi.fn(),
   setLockArmed: vi.fn(),
-  reset: vi.fn(),
+        reset: vi.fn(() => {
+          fakeRecorder.status = 'idle';
+          fakeRecorder.audioBlob = null;
+          setStatusHook?.('idle');
+        }),
   supported: true,
 };
 
@@ -86,6 +108,7 @@ vi.mock('@/app/capture/_components/useAudioRecorder', () => {
         fakeRecorder.status = s;
         setStatus(s);
         if (s === 'ready') setAudioBlob(fakeRecorder.audioBlob);
+        if (s === 'idle') setAudioBlob(null);
       };
       return {
         ...fakeRecorder,
@@ -142,6 +165,10 @@ describe('ChatClient', () => {
   beforeEach(() => {
     resetFakeRecorder();
     mutateAsyncMock.mockReset();
+    deleteMutateMock.mockReset();
+    deleteMutateMock.mockResolvedValue({ ok: true });
+    restoreMutateMock.mockReset();
+    restoreMutateMock.mockResolvedValue({ ok: true });
     recallFetchMock.mockReset();
     recallFetchMock.mockResolvedValue({
       entities: [{ id: 'e1', name: 'Alice', score: 0.9, companies: [], events: [], topics: [], aliases: [], facts: [] }],
@@ -433,12 +460,53 @@ describe('ChatClient', () => {
     await act(async () => {
       fireEvent.click(deleteBtn);
     });
+    expect(deleteMutateMock).toHaveBeenCalledWith({ id: 'k' });
     const clearedBefore = clearTimeoutSpy.mock.calls.length;
     // Unmount should clear the pending 30s undo timer
     unmount();
     expect(clearTimeoutSpy.mock.calls.length).toBeGreaterThan(clearedBefore);
 
     clearTimeoutSpy.mockRestore();
+  });
+
+  it('undo after soft-delete calls capture.restore', async () => {
+    fakeRecorder.audioBlob = new Blob(['x'], { type: 'audio/webm' });
+    (globalThis as { fetch: typeof fetch }).fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ transcript: 'hi', durationMs: 100 }), { status: 200 }),
+    ) as unknown as typeof fetch;
+    mutateAsyncMock.mockResolvedValue({
+      extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+      newEntities: 0,
+      matchedEntities: 0,
+      interactionId: 'int_undo',
+    });
+    restoreMutateMock.mockResolvedValue({ ok: true });
+
+    renderChat({ userName: 'ada' });
+    const btn = screen.getByRole('button', { name: /record voice memo/i });
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    await act(async () => {
+      setStatusHook?.('ready');
+      await Promise.resolve();
+    });
+
+    const deleteBtn = await waitFor(() => screen.getByLabelText(/delete memo/i));
+    await act(async () => {
+      fireEvent.click(deleteBtn);
+    });
+    expect(deleteMutateMock).toHaveBeenCalled();
+
+    const undoBtn = await waitFor(() => screen.getByRole('button', { name: /undo/i }));
+    await act(async () => {
+      fireEvent.click(undoBtn);
+    });
+
+    await waitFor(() => {
+      expect(restoreMutateMock).toHaveBeenCalledWith({ id: 'int_undo' });
+    });
+    expect(screen.getByText('hi')).toBeTruthy();
   });
 
   it('tap toggles recording: first tap starts, second tap stops (never double-starts)', async () => {
@@ -557,6 +625,67 @@ describe('ChatClient', () => {
     expect(dimWrapperAfter).toBeTruthy();
     expect(dimWrapperAfter!.style.opacity).toBe('0.4');
     expect(dimWrapperAfter!.style.pointerEvents).toBe('none');
+  });
+
+  it('can start a second recording while the first bubble is still linking', async () => {
+    fakeRecorder.audioBlob = new Blob(['first'], { type: 'audio/webm' });
+
+    let resolveCommit!: (value: unknown) => void;
+    const commitPending = new Promise((res) => {
+      resolveCommit = res;
+    });
+    mutateAsyncMock.mockReturnValue(commitPending);
+
+    (globalThis as { fetch: typeof fetch }).fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ transcript: 'first memo', durationMs: 400 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as unknown as typeof fetch;
+
+    renderChat({ userName: 'ada' });
+    const btn = screen.getByRole('button', { name: /record voice memo/i });
+
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    await act(async () => {
+      setStatusHook?.('encoding');
+      await Promise.resolve();
+    });
+
+    fakeRecorder.audioBlob = new Blob(['second'], { type: 'audio/webm' });
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    expect(fakeRecorder.start).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      setStatusHook?.('ready');
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/linking/i)).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(fakeRecorder.start).toHaveBeenCalledTimes(2);
+    });
+
+    await act(async () => {
+      resolveCommit({
+        extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+        newEntities: 0,
+        matchedEntities: 0,
+        interactionId: 'int-1',
+      });
+      await commitPending;
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('first memo')).toBeTruthy();
+    });
   });
 
   // PR β₁-D rolled back the armRecord URL-param approach: recording now
