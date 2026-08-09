@@ -11,6 +11,21 @@ vi.mock('next/link', () => ({
     </a>
   ),
 }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => '/company/co_acme',
+}));
+
+vi.mock('@/lib/trpc/client', () => ({
+  trpc: {
+    acts: {
+      createDraft: {
+        useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+      },
+    },
+  },
+}));
+
 // PR λ-shell: EntityDetailScaffold no longer renders BottomTabBar (nav + orb
 // live in AppShell, asserted in AppShell.test.tsx). No mock needed.
 

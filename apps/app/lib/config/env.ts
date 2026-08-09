@@ -51,6 +51,8 @@ const serverSchema = z.object({
   // Primary extractor model — sonnet is the real extractor now (not enricher).
   LINKER_MODEL: z.string().default('anthropic/claude-sonnet-4.6'),
   EMBEDDING_MODEL: z.string().default('openai/text-embedding-3-small'),
+  /** Mastra acts-draft agent model (OpenRouter id; openrouter/ prefix optional). */
+  ACTS_DRAFT_MODEL: z.string().default('anthropic/claude-haiku-4.5'),
 });
 
 // ── Client schema ───────────────────────────────────────────────────────

@@ -1,6 +1,21 @@
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => '/graph',
+}));
+
+vi.mock('@/lib/trpc/client', () => ({
+  trpc: {
+    acts: {
+      createDraft: {
+        useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+      },
+    },
+  },
+}));
+
 // Mock the dynamic force-graph: render a button per node that fires onNodeClick,
 // so jsdom never touches a real canvas / window.
 vi.mock('next/dynamic', () => ({

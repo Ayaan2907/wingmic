@@ -145,4 +145,52 @@ describe('acts router', () => {
     const res = await caller().dismiss({ id: 'act_dismiss_other' });
     expect(res.ok).toBe(false);
   });
+
+  it('createDraft inserts a polished check-in for an owned person', async () => {
+    const res = await caller().createDraft({
+      kind: 'email',
+      intent: 'check-in',
+      targetEntityId: 'e_ada',
+    });
+    expect(res.ok).toBe(true);
+    expect(res.id).toBeTruthy();
+    const listed = await caller().list({ limit: 50 });
+    const row = listed.acts.find((a) => a.id === res.id);
+    expect(row?.actionKind).toBe('email');
+    expect(row?.subject).toBeTruthy();
+    expect(row?.body.toLowerCase()).toContain('ada');
+  });
+
+  it('createDraft refuses unknown target entities', async () => {
+    const res = await caller().createDraft({
+      kind: 'email',
+      intent: 'check-in',
+      targetEntityId: 'missing',
+    });
+    expect(res.ok).toBe(false);
+  });
+
+  it('snooze sets status and runAt', async () => {
+    await insertAct('act_snooze_1');
+    const res = await caller().snooze({ id: 'act_snooze_1', hours: 24 });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.runAt.getTime()).toBeGreaterThan(Date.now());
+    const listed = await caller().list({ status: 'snoozed', limit: 50 });
+    expect(listed.acts.map((a) => a.id)).toContain('act_snooze_1');
+  });
+
+  it('update edits body and subject', async () => {
+    await insertAct('act_edit_1');
+    const res = await caller().update({
+      id: 'act_edit_1',
+      body: 'revised follow-up',
+      subject: 'hello again',
+    });
+    expect(res.ok).toBe(true);
+    const listed = await caller().list({ limit: 50 });
+    const row = listed.acts.find((a) => a.id === 'act_edit_1');
+    expect(row?.body).toBe('revised follow-up');
+    expect(row?.subject).toBe('hello again');
+  });
 });

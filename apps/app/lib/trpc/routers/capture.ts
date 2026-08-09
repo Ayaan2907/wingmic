@@ -5,6 +5,7 @@ import { extractHybrid, commit, ExtractionError, EmbeddingError } from '@wingmic
 import { TRPCError } from '@trpc/server';
 import { transcribeEntities } from '@/lib/capture/transcribe-entities';
 import { resolveIntroEntityIds } from '@/lib/acts/mapAction';
+import { polishDraft } from '@/lib/acts/draftAgent';
 import * as schema from '@wingmic/db/schema';
 
 export const captureRouter = router({
@@ -96,29 +97,49 @@ export const captureRouter = router({
               ).map((e) => e.id),
             );
 
-            const actRows = extracted.actions.map((action) => {
-              const { targetEntityId, secondaryEntityId } = resolveIntroEntityIds(
-                action,
-                extracted.persons,
-                result.entityIds,
-              );
-              return {
-                userId: ctx.user.id,
-                kind: action.kind,
-                status: 'drafted' as const,
-                body: action.body,
-                subject: null as string | null,
-                whenHint: action.whenHint,
-                targetEntityId:
-                  targetEntityId && ownedEntityIds.has(targetEntityId) ? targetEntityId : null,
-                secondaryEntityId:
+            const actRows = await Promise.all(
+              extracted.actions.map(async (action) => {
+                const { targetEntityId, secondaryEntityId } = resolveIntroEntityIds(
+                  action,
+                  extracted.persons,
+                  result.entityIds,
+                );
+                const ownedTarget =
+                  targetEntityId && ownedEntityIds.has(targetEntityId) ? targetEntityId : null;
+                const ownedSecondary =
                   secondaryEntityId && ownedEntityIds.has(secondaryEntityId)
                     ? secondaryEntityId
-                    : null,
-                sourceInteractionId: result.interactionId,
-                confidence: 80,
-              };
-            });
+                    : null;
+                const targetName =
+                  ownedTarget != null
+                    ? extracted.persons.find((_, i) => result.entityIds[i] === ownedTarget)?.name
+                    : action.targetPersonName;
+                const intent =
+                  action.kind === 'intro'
+                    ? ('intro' as const)
+                    : action.kind === 'reminder' || action.kind === 'meeting'
+                      ? ('reminder' as const)
+                      : ('follow-up' as const);
+                const polished = await polishDraft({
+                  kind: action.kind,
+                  intent,
+                  targetName: targetName ?? null,
+                  seedBody: action.body,
+                });
+                return {
+                  userId: ctx.user.id,
+                  kind: action.kind,
+                  status: 'drafted' as const,
+                  body: polished.body,
+                  subject: polished.subject,
+                  whenHint: action.whenHint,
+                  targetEntityId: ownedTarget,
+                  secondaryEntityId: ownedSecondary,
+                  sourceInteractionId: result.interactionId,
+                  confidence: 80,
+                };
+              }),
+            );
             await ctx.db.insert(schema.acts).values(actRows);
           }
         }

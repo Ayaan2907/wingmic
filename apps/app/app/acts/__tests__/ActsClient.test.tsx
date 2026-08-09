@@ -9,6 +9,9 @@ type ActsListState = {
 
 let listState: ActsListState = { data: undefined, isLoading: false };
 const markSentMutate = vi.fn();
+const snoozeMutate = vi.fn();
+const dismissMutate = vi.fn();
+const updateMutate = vi.fn();
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
@@ -18,6 +21,15 @@ vi.mock('@/lib/trpc/client', () => ({
       },
       markSent: {
         useMutation: () => ({ mutate: markSentMutate, isPending: false }),
+      },
+      snooze: {
+        useMutation: () => ({ mutate: snoozeMutate, isPending: false }),
+      },
+      dismiss: {
+        useMutation: () => ({ mutate: dismissMutate, isPending: false }),
+      },
+      update: {
+        useMutation: () => ({ mutate: updateMutate, isPending: false }),
       },
     },
     useUtils: () => ({
@@ -73,6 +85,18 @@ describe('ActsClient', () => {
     listState = { data: { acts: [] }, isLoading: false };
     render(<ActsClient />);
     expect(screen.getByTestId('acts-empty').textContent).toMatch(/no drafts yet/);
+  });
+
+  it('snoozes a draft for 24h', () => {
+    render(<ActsClient />);
+    fireEvent.click(screen.getByTestId('act-snooze'));
+    expect(snoozeMutate).toHaveBeenCalledWith({ id: 'act_1', hours: 24 });
+  });
+
+  it('dismisses a draft', () => {
+    render(<ActsClient />);
+    fireEvent.click(screen.getByTestId('act-dismiss'));
+    expect(dismissMutate).toHaveBeenCalledWith({ id: 'act_1' });
   });
 
   it('does not mark sent when opening a reminder calendar file', () => {

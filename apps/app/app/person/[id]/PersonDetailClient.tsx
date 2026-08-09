@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import {
   EntityDetailScaffold,
   type EntityCapture,
@@ -10,6 +11,7 @@ import {
 } from '@/app/_components/entity/EntityDetailScaffold';
 import { PersonAvatar } from '@/app/_components/entity/EntityAvatar';
 import { PersonListRail } from './_components/PersonListRail';
+import { trpc } from '@/lib/trpc/client';
 
 export interface PersonDetail {
   kind: 'person';
@@ -29,6 +31,13 @@ export interface PersonDetail {
 }
 
 export default function PersonDetailClient({ detail }: { detail: PersonDetail }) {
+  const router = useRouter();
+  const createDraft = trpc.acts.createDraft.useMutation({
+    onSuccess: (res) => {
+      if (res.ok) router.push('/acts');
+    },
+  });
+
   const subText =
     [detail.sub.role, detail.sub.companyName].filter(Boolean).join(' · ') || 'no role yet';
 
@@ -44,8 +53,22 @@ export default function PersonDetailClient({ detail }: { detail: PersonDetail })
           eyebrow="◉ person"
           name={detail.name}
           sub={subText}
-          primaryCta={{ label: 'draft check-in →' }}
-          ghostCta={{ label: 'edit' }}
+          primaryCta={{
+            label: 'draft check-in →',
+            pending: createDraft.isPending,
+            onClick: () =>
+              createDraft.mutate({
+                kind: 'email',
+                intent: 'check-in',
+                targetEntityId: detail.id,
+                contextName: detail.sub.companyName ?? undefined,
+              }),
+          }}
+          ghostCta={{
+            label: 'edit',
+            title: 'edit person — coming later',
+            disabled: true,
+          }}
           stats={detail.stats}
           captures={detail.captures}
           followups={detail.followups}

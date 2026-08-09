@@ -3,8 +3,9 @@
 /**
  * ActsClient — /acts inbox.
  *
- * Lists drafted follow-ups from capture extraction. Send is permission-first
- * (mailto / .ics / mark done) via ActCard; status updates through acts.markSent.
+ * Lists drafted follow-ups from capture extraction + entity CTAs.
+ * Send is permission-first (mailto / .ics / mark done); edit / snooze / dismiss
+ * update status through acts.* mutations.
  */
 
 import * as React from 'react';
@@ -17,6 +18,11 @@ export function ActsClient() {
   const utils = trpc.useUtils();
   const [markErrors, setMarkErrors] = React.useState<Record<string, string>>({});
   const { data, isLoading, isError, refetch } = trpc.acts.list.useQuery({ limit: 50 });
+
+  const invalidate = () => {
+    void utils.acts.list.invalidate();
+  };
+
   const markSent = trpc.acts.markSent.useMutation({
     onSuccess: (_data, vars) => {
       setMarkErrors((prev) => {
@@ -25,7 +31,7 @@ export function ActsClient() {
         delete next[vars.id];
         return next;
       });
-      void utils.acts.list.invalidate();
+      invalidate();
     },
     onError: (_err, vars) => {
       setMarkErrors((prev) => ({
@@ -34,12 +40,11 @@ export function ActsClient() {
       }));
     },
   });
+  const snooze = trpc.acts.snooze.useMutation({ onSuccess: invalidate });
+  const dismiss = trpc.acts.dismiss.useMutation({ onSuccess: invalidate });
+  const update = trpc.acts.update.useMutation({ onSuccess: invalidate });
 
   const acts = data?.acts ?? [];
-
-  function handleMarkSent(id: string) {
-    markSent.mutate({ id });
-  }
 
   return (
     <main
@@ -124,7 +129,8 @@ export function ActsClient() {
           />
           <span>
             <span style={{ color: accent, fontWeight: 700 }}>acts</span> drafts from your
-            captures — review, then send yourself (mailto / calendar). nothing auto-sends.
+            captures — review, edit, snooze, then send yourself (mailto / calendar). nothing
+            auto-sends.
           </span>
         </div>
 
@@ -184,7 +190,10 @@ export function ActsClient() {
                 key={a.id}
                 act={a}
                 sendError={markErrors[a.id ?? ''] ?? null}
-                onSent={handleMarkSent}
+                onSent={(id) => markSent.mutate({ id })}
+                onSnooze={(id) => snooze.mutate({ id, hours: 24 })}
+                onDismiss={(id) => dismiss.mutate({ id })}
+                onSaveEdit={(id, patch) => update.mutate({ id, ...patch })}
               />
             ))}
           </div>
