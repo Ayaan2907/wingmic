@@ -17,6 +17,7 @@
  */
 
 import * as React from 'react';
+import Link from 'next/link';
 import { trpc } from '@/lib/trpc/client';
 import { accent } from '@/app/chat/_components/tokens';
 
@@ -257,6 +258,39 @@ export default function SettingsClient({
               onBlur={(e) => update.mutate({ linkerModelOverride: e.target.value || null })}
             />
           </label>
+        </Section>
+
+        {/* imports ───────────────────────────────────────────── */}
+        <Section title="imports">
+          <Link
+            href="/imports"
+            data-testid="settings-imports-link"
+            style={{
+              display: 'block',
+              padding: '12px 14px',
+              borderRadius: 10,
+              border: '1px solid var(--border-soft)',
+              background: 'var(--surface-1)',
+              color: 'var(--ink)',
+              textDecoration: 'none',
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            import contacts →
+            <span
+              className="mono"
+              style={{
+                display: 'block',
+                marginTop: 4,
+                fontSize: 11,
+                fontWeight: 400,
+                color: 'var(--text-40)',
+              }}
+            >
+              LinkedIn CSV or vCard — private to you
+            </span>
+          </Link>
         </Section>
 
         {/* about ─────────────────────────────────────────────── */}
