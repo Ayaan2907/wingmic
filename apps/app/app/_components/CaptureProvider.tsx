@@ -164,6 +164,10 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const [undoQueue, setUndoQueue] = useState<UndoEntry[]>([]);
 
   const activeIdRef = useRef<string | null>(null);
+  /** Bubble id handed off when recorder enters encoding — frees the orb for the next take. */
+  const handoffBubbleIdRef = useRef<string | null>(null);
+  /** Tap during encoding/ready queues the next take after the prior blob finalizes. */
+  const pendingBeginRef = useRef(false);
   const pipelineControllersRef = useRef<Map<string, AbortController>>(new Map());
   const undoTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   /** Bumped on undo so a late delete response cannot win over restore. */
@@ -227,6 +231,11 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const beginCapture = useCallback(async () => {
+    const status = recorderRef.current.status;
+    if (status === 'encoding' || status === 'ready') {
+      pendingBeginRef.current = true;
+      return;
+    }
     const id = uid();
     activeIdRef.current = id;
     setMessages((prev) => [
@@ -373,14 +382,30 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   // When recorder reaches `ready`, kick the pipeline and (if user is not
   // already on /chat) push to /chat so the bubble + extraction render in
   // the thread. The pipeline runs in parallel with the route change.
+  // On `encoding`, detach the bubble id so a second take can arm while the
+  // prior blob finalizes (U3 — non-blocking record loop).
   useEffect(() => {
-    if (recorder.status === 'ready' && recorder.audioBlob && activeIdRef.current) {
-      const id = activeIdRef.current;
+    if (recorder.status === 'encoding' && activeIdRef.current) {
+      handoffBubbleIdRef.current = activeIdRef.current;
       activeIdRef.current = null;
+    }
+    if (recorder.status === 'ready' && recorder.audioBlob) {
+      const fromHandoff = handoffBubbleIdRef.current;
+      const id = fromHandoff ?? activeIdRef.current;
+      if (!id) return;
+      if (fromHandoff) {
+        handoffBubbleIdRef.current = null;
+      } else {
+        activeIdRef.current = null;
+      }
       const blob = recorder.audioBlob;
       const dur = recorder.duration;
       void runCapturePipeline(id, blob, dur);
       recorder.reset();
+      if (pendingBeginRef.current) {
+        pendingBeginRef.current = false;
+        void Promise.resolve().then(() => beginCapture());
+      }
       if (pathnameRef.current !== '/chat') {
         try {
           router.push('/chat');
@@ -389,9 +414,15 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         }
       }
     }
-    if (recorder.status === 'error' && activeIdRef.current) {
-      const id = activeIdRef.current;
-      activeIdRef.current = null;
+    if (recorder.status === 'error') {
+      const fromHandoff = handoffBubbleIdRef.current;
+      const id = fromHandoff ?? activeIdRef.current;
+      if (!id) return;
+      if (fromHandoff) {
+        handoffBubbleIdRef.current = null;
+      } else {
+        activeIdRef.current = null;
+      }
       const err = recorder.error ?? { code: 'mic_unavailable', message: 'mic unavailable.' };
       patch(id, {
         status: 'failed',
@@ -403,6 +434,10 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         },
       });
       recorder.reset();
+      if (pendingBeginRef.current) {
+        pendingBeginRef.current = false;
+        void Promise.resolve().then(() => beginCapture());
+      }
     }
     if (recorder.status === 'idle' && activeIdRef.current) {
       const id = activeIdRef.current;
@@ -425,7 +460,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         if (
           recorder.status === 'idle' ||
           recorder.status === 'ready' ||
-          recorder.status === 'error'
+          recorder.status === 'error' ||
+          recorder.status === 'encoding'
         ) {
           e.preventDefault();
           void (async () => {

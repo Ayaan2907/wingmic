@@ -93,7 +93,6 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
   const status = recorder.status;
   const orbState: MicOrbState = micOrbStateFor(status, isHovered);
   const isActiveRec = orbState === 'recording';
-  const isSending = orbState === 'sending';
 
   // Tap-to-dictate: one tap starts recording, the next tap stops + sends.
   // Replaces the old press-and-hold gesture — its release relied on a
@@ -102,7 +101,7 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
   // toggle reads the live status on each tap, so it can't get stuck.
   function onOrbClick() {
     const s = recorder.status;
-    if (s === 'idle' || s === 'ready' || s === 'error') {
+    if (s === 'idle' || s === 'ready' || s === 'error' || s === 'encoding') {
       vibrate(8);
       void beginCapture();
       return;
@@ -125,11 +124,7 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
       <button
         type="button"
         aria-label={
-          isActiveRec
-            ? 'recording — tap to stop and send'
-            : isSending
-              ? 'sending recording'
-              : 'tap to record voice memo'
+          isActiveRec ? 'recording — tap to stop and send' : 'tap to record voice memo'
         }
         aria-keyshortcuts="Space"
         aria-pressed={isActiveRec}
@@ -146,7 +141,7 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
           width: 52,
           height: 52,
           borderRadius: '50%',
-          background: isSending ? 'rgba(255,255,255,0.06)' : accent,
+          background: accent,
           color: isActiveRec ? '#fff' : '#000',
           fontSize: 22,
           fontWeight: 800,
@@ -178,22 +173,6 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
               fill="#fff"
             />
             <path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
-          </svg>
-        ) : isSending ? (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"
-              stroke="var(--text-70)"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M5 11a7 7 0 0 0 14 0M12 18v3"
-              stroke="var(--text-70)"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            />
           </svg>
         ) : (
           <>
