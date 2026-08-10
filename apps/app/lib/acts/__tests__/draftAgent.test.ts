@@ -1,5 +1,18 @@
-import { describe, it, expect } from 'vitest';
-import { templateDraft } from '../draftAgent';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+
+vi.mock('@/lib/config/env', () => ({
+  env: {
+    OPENROUTER_API_KEY: 'test-key',
+    ACTS_DRAFT_MODEL: undefined,
+    LINKER_MODEL: undefined,
+  },
+}));
+
+import { templateDraft, polishDraft, POLISH_TIMEOUT_MS } from '../draftAgent';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('templateDraft', () => {
   it('builds a check-in template with the target first name in subject', () => {
@@ -45,5 +58,33 @@ describe('templateDraft', () => {
     });
     expect(draft.subject.length).toBeLessThanOrEqual(120);
     expect(draft.body.length).toBeLessThanOrEqual(2000);
+  });
+});
+
+describe('polishDraft timeout', () => {
+  it('returns the template when generate hangs past the timeout', async () => {
+    const hanging = {
+      generate: vi.fn((_prompt: string, opts?: { abortSignal?: AbortSignal }) => {
+        return new Promise((_resolve, reject) => {
+          opts?.abortSignal?.addEventListener('abort', () => {
+            reject(new Error('aborted'));
+          });
+        });
+      }),
+    };
+    const started = Date.now();
+    const draft = await polishDraft(
+      {
+        kind: 'email',
+        intent: 'check-in',
+        targetName: 'Ada Lovelace',
+      },
+      { agent: hanging as never, timeoutMs: 40 },
+    );
+    expect(Date.now() - started).toBeLessThan(POLISH_TIMEOUT_MS);
+    expect(draft.body.toLowerCase()).toContain('ada lovelace');
+    expect(hanging.generate).toHaveBeenCalled();
+    const opts = hanging.generate.mock.calls[0]?.[1] as { abortSignal?: AbortSignal };
+    expect(opts.abortSignal?.aborted).toBe(true);
   });
 });
