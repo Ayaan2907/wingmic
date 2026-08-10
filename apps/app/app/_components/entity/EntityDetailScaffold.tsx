@@ -44,6 +44,14 @@ export interface EntityStat {
   value: string;
 }
 
+export interface EntityCta {
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  pending?: boolean;
+  title?: string;
+}
+
 export interface EntityDetailScaffoldProps {
   kind: EntityKind;
   hero: React.ReactNode;
@@ -51,8 +59,8 @@ export interface EntityDetailScaffoldProps {
   name: string;
   sub: React.ReactNode;
   tags?: string[];
-  primaryCta: { label: string };
-  ghostCta: { label: string };
+  primaryCta: EntityCta;
+  ghostCta: EntityCta;
   stats: EntityStat[];
   captures: EntityCapture[];
   followups: EntityFollowup[];
@@ -332,17 +340,22 @@ function CtaRow({
   primary,
   ghost,
 }: {
-  primary: { label: string };
-  ghost: { label: string };
+  primary: EntityCta;
+  ghost: EntityCta;
 }) {
-  // β₂: CTAs are surfaced but rendered as `disabled` — visible chrome that
-  // signals "coming soon" without firing any action. The acts agent ships
-  // v0.3 (epic #11); PR γ will wire these to real handlers.
+  // Enabled when an onClick handler is provided (A6 / acts agent).
+  // Without a handler, keep the prior disabled chrome.
+  const primaryInactive = !primary.onClick || Boolean(primary.disabled) || Boolean(primary.pending);
+  const ghostInactive = !ghost.onClick || Boolean(ghost.disabled) || Boolean(ghost.pending);
+
   return (
     <div style={{ display: 'flex', gap: 8, marginBottom: 24 }} data-testid="entity-ctas">
       <button
         type="button"
-        disabled
+        disabled={primaryInactive}
+        title={primary.title}
+        aria-busy={primary.pending || undefined}
+        onClick={primary.onClick}
         style={{
           flex: 1,
           padding: 12,
@@ -352,15 +365,17 @@ function CtaRow({
           font: '700 13px Inter, system-ui, sans-serif',
           border: '1.5px solid #000',
           boxShadow: '4px 4px 0 #000',
-          cursor: 'not-allowed',
-          opacity: 0.85,
+          cursor: primaryInactive ? 'not-allowed' : 'pointer',
+          opacity: primaryInactive ? 0.85 : 1,
         }}
       >
-        {primary.label}
+        {primary.pending ? 'drafting…' : primary.label}
       </button>
       <button
         type="button"
-        disabled
+        disabled={ghostInactive}
+        title={ghost.title}
+        onClick={ghost.onClick}
         style={{
           padding: '12px 18px',
           borderRadius: 10,
@@ -368,8 +383,8 @@ function CtaRow({
           color: 'var(--ink)',
           font: '500 13px Inter, system-ui, sans-serif',
           border: '1.5px solid var(--border-mid, rgba(255,255,255,0.22))',
-          cursor: 'not-allowed',
-          opacity: 0.7,
+          cursor: ghostInactive ? 'not-allowed' : 'pointer',
+          opacity: ghostInactive ? 0.7 : 1,
         }}
       >
         {ghost.label}

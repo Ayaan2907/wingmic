@@ -343,12 +343,13 @@ We trace these explicitly so the team knows where to look when something breaks.
 - **tRPC** for capture / recall / future MCP server / future RN app — typed contract that scales to multi-client.
 - Best-of-both keeps the simple stuff simple and the typed-contract surface ready for v0.2+.
 
-### Why Vercel AI SDK + Inngest plan (not Mastra / LangChain)?
+### Why Vercel AI SDK + Mastra for Acts (not LangChain)?
 
-- **AI SDK** is the engine — minimal abstraction, single function call (`generateObject`), Zod-schema'd.
-- **Mastra is built on AI SDK.** Layering Mastra later for Acts-agent primitives is additive, not migration.
-- **Inngest at v0.2** for durable Acts workflows ("draft email tomorrow at 9am") because Mastra's workflow primitives are not durable.
-- LangChain is overweight for our extraction-only v0.1.1 needs.
+- **AI SDK** is the engine for extraction (`generateObject`) — minimal abstraction, Zod-schema'd.
+- **Mastra** powers the Acts draft agent (`apps/app/lib/acts/draftAgent.ts`) for check-in / email / intro polish via OpenRouter. Additive on top of AI SDK; templates still fall back when keys are missing.
+- Durable `whenHint` scheduling (wake snoozed acts across deploys) remains a later WP — Mastra agent primitives first; cron/Inngest only if durability is required.
+- LangChain is overweight for extraction-only needs.
+
 
 ### Why Railway (not Cloudflare Workers, not Vercel)?
 

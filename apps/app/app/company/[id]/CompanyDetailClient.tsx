@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import {
   EntityDetailScaffold,
   type EntityCapture,
@@ -9,6 +10,7 @@ import {
   type EntityStat,
 } from '@/app/_components/entity/EntityDetailScaffold';
 import { CompanyTile } from '@/app/_components/entity/EntityAvatar';
+import { trpc } from '@/lib/trpc/client';
 
 export interface CompanyDetail {
   kind: 'company';
@@ -23,6 +25,17 @@ export interface CompanyDetail {
 }
 
 export default function CompanyDetailClient({ detail }: { detail: CompanyDetail }) {
+  const router = useRouter();
+  const createDraft = trpc.acts.createDraft.useMutation({
+    onSuccess: (res) => {
+      if (res.ok) router.push('/acts');
+    },
+  });
+
+  const relatedPeople = detail.related.filter((r) => r.kind === 'person');
+  const primaryPerson = relatedPeople[0];
+  const secondaryPerson = relatedPeople[1];
+
   const subText =
     [detail.sub.industry, detail.sub.domain].filter(Boolean).join(' · ') || 'unknown industry';
 
@@ -33,8 +46,32 @@ export default function CompanyDetailClient({ detail }: { detail: CompanyDetail 
       eyebrow="▤ company"
       name={detail.name}
       sub={subText}
-      primaryCta={{ label: 'find warm path →' }}
-      ghostCta={{ label: 'draft intro' }}
+      primaryCta={{
+        label: 'find warm path →',
+        pending: createDraft.isPending,
+        onClick: () =>
+          createDraft.mutate({
+            kind: 'todo',
+            intent: 'warm-path',
+            targetEntityId: primaryPerson?.id,
+            contextName: detail.name,
+          }),
+      }}
+      ghostCta={{
+        label: 'draft intro',
+        disabled: !primaryPerson || createDraft.isPending,
+        title: primaryPerson ? 'draft an intro' : 'add a related person first',
+        onClick: primaryPerson
+          ? () =>
+              createDraft.mutate({
+                kind: 'intro',
+                intent: 'intro',
+                targetEntityId: primaryPerson.id,
+                secondaryEntityId: secondaryPerson?.id,
+                contextName: detail.name,
+              })
+          : undefined,
+      }}
       stats={detail.stats}
       captures={detail.captures}
       followups={detail.followups}

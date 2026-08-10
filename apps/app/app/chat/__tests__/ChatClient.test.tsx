@@ -16,14 +16,14 @@ vi.mock('next/navigation', () => ({
 }));
 
 // ── Mock tRPC client ────────────────────────────────────────────────────
-const { mutateAsyncMock, deleteMutateMock, restoreMutateMock, recallFetchMock } = vi.hoisted(
-  () => ({
+const { mutateAsyncMock, deleteMutateMock, restoreMutateMock, recallFetchMock, createDraftMutate } =
+  vi.hoisted(() => ({
     mutateAsyncMock: vi.fn(),
     deleteMutateMock: vi.fn(),
     restoreMutateMock: vi.fn(),
     recallFetchMock: vi.fn(),
-  }),
-);
+    createDraftMutate: vi.fn(),
+  }));
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
@@ -45,6 +45,14 @@ vi.mock('@/lib/trpc/client', () => ({
         useMutation: () => ({
           mutate: restoreMutateMock,
           mutateAsync: restoreMutateMock,
+          isPending: false,
+        }),
+      },
+    },
+    acts: {
+      createDraft: {
+        useMutation: () => ({
+          mutate: createDraftMutate,
           isPending: false,
         }),
       },
@@ -229,6 +237,7 @@ describe('ChatClient', () => {
       newEntities: 1,
       matchedEntities: 0,
       interactionId: 'int-1',
+      entityIds: ['en_sarah'],
     });
 
     renderChat({ userName: "ada" });
@@ -265,15 +274,20 @@ describe('ChatClient', () => {
     await waitFor(() => {
       expect(screen.getByText('sarah')).toBeTruthy();
     });
-    // PR ε: a templated agent reply lands under the committed memo, with a
-    // count summary built from the extraction (1 person + 1 company) and a
-    // disabled "coming soon · v0.3" action row.
+    // PR ε / A6: agent reply with live draft follow-up when a person was extracted.
     const reply = await waitFor(() => screen.getByTestId('agent-reply'));
     expect(reply.textContent).toMatch(/acknowledged/i);
     expect(reply.textContent).toMatch(/1 person/);
     expect(reply.textContent).toMatch(/1 company/);
     const draftBtn = screen.getByRole('button', { name: /draft follow-up/i });
-    expect((draftBtn as HTMLButtonElement).disabled).toBe(true);
+    expect((draftBtn as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(draftBtn);
+    expect(createDraftMutate).toHaveBeenCalledWith({
+      kind: 'email',
+      intent: 'follow-up',
+      targetEntityId: 'en_sarah',
+      sourceInteractionId: 'int-1',
+    });
   });
 
   it('renders an empty graph card footer when extracted entities are all empty', async () => {
