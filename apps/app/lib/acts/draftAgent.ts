@@ -131,13 +131,21 @@ function buildPrompt(input: PolishDraftInput): string {
   ].join('\n');
 }
 
-async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+async function withTimeout<T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  ms: number,
+  fallback: T,
+): Promise<T> {
+  const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      promise,
+      run(controller.signal),
       new Promise<T>((resolve) => {
-        timer = setTimeout(() => resolve(fallback), ms);
+        timer = setTimeout(() => {
+          controller.abort();
+          resolve(fallback);
+        }, ms);
       }),
     ]);
   } finally {
@@ -148,6 +156,7 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Pro
 /**
  * Polish a draft via Mastra when OPENROUTER_API_KEY is set; otherwise template.
  * Never throws — always returns a usable DraftOutput within POLISH_TIMEOUT_MS.
+ * On timeout the AbortSignal cancels the in-flight generate when the SDK honors it.
  */
 export async function polishDraft(
   input: PolishDraftInput,
@@ -159,9 +168,10 @@ export async function polishDraft(
   const timeoutMs = opts?.timeoutMs ?? POLISH_TIMEOUT_MS;
   try {
     const agent = opts?.agent ?? createActsDraftAgent();
-    const polished = await withTimeout(
-      (async () => {
+    return await withTimeout(
+      async (signal) => {
         const response = await agent.generate(buildPrompt(input), {
+          abortSignal: signal,
           structuredOutput: {
             schema: draftOutputSchema,
             errorStrategy: 'fallback',
@@ -171,11 +181,10 @@ export async function polishDraft(
         const object = response.object ?? fallback;
         const parsed = draftOutputSchema.safeParse(object);
         return parsed.success ? clampDraft(parsed.data) : fallback;
-      })(),
+      },
       timeoutMs,
       fallback,
     );
-    return polished;
   } catch {
     return fallback;
   }

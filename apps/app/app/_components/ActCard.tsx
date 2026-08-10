@@ -60,6 +60,7 @@ export function ActCard({
   const hasEmail = Boolean(a.targetEmail?.trim());
   const emailBlocked = needsEmail && !hasEmail;
   const [editing, setEditing] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
   const [editBody, setEditBody] = React.useState(a.body ?? a.why);
   const [editSubject, setEditSubject] = React.useState(a.subject ?? '');
 
@@ -290,16 +291,21 @@ export function ActCard({
             <button
               type="button"
               className="mono"
-              disabled={!a.id || !editBody.trim()}
+              disabled={!a.id || !editBody.trim() || saving}
               onClick={() => {
-                if (!a.id || !editBody.trim()) return;
+                if (!a.id || !editBody.trim() || saving) return;
                 void (async () => {
-                  const result = await onSaveEdit?.(a.id!, {
-                    body: editBody.trim(),
-                    subject: editSubject.trim() ? editSubject.trim() : null,
-                  });
-                  if (result === false) return;
-                  setEditing(false);
+                  setSaving(true);
+                  try {
+                    const result = await onSaveEdit?.(a.id!, {
+                      body: editBody.trim(),
+                      subject: editSubject.trim() ? editSubject.trim() : null,
+                    });
+                    if (result === false) return;
+                    setEditing(false);
+                  } finally {
+                    setSaving(false);
+                  }
                 })();
               }}
               style={{
@@ -310,10 +316,11 @@ export function ActCard({
                 border: '1.5px solid #000',
                 background: accent,
                 color: '#000',
-                cursor: 'pointer',
+                cursor: saving ? 'not-allowed' : 'pointer',
+                opacity: saving ? 0.7 : 1,
               }}
             >
-              save
+              {saving ? 'saving…' : 'save'}
             </button>
           </div>
         </div>
