@@ -14,6 +14,14 @@ type Settings = {
 let getData: Settings | undefined;
 const mutateSpy = vi.fn();
 
+vi.mock('next/link', () => ({
+  default: ({ href, children, ...rest }: any) => (
+    <a href={typeof href === 'string' ? href : String(href)} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     settings: {

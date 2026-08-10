@@ -1,0 +1,453 @@
+'use client';
+
+/**
+ * ImportsClient — LinkedIn CSV / vCard drop zone (v0.2 I3).
+ * Parses client-side, previews matches (with ambiguous pickers), then upserts.
+ */
+
+import * as React from 'react';
+import Link from 'next/link';
+import { trpc } from '@/lib/trpc/client';
+import {
+  IMPORT_MAX_BATCH,
+  normalizeContactsFromFile,
+  type ImportContactDraft,
+} from '@/lib/imports';
+import { accent } from '@/app/chat/_components/tokens';
+
+type Phase = 'idle' | 'parsing' | 'ready' | 'uploading' | 'done' | 'error';
+
+/** `null` = create new; string = merge into that entity. */
+type ResolutionChoice = string | null;
+
+export function ImportsClient() {
+  const [phase, setPhase] = React.useState<Phase>('idle');
+  const [error, setError] = React.useState<string | null>(null);
+  const [filename, setFilename] = React.useState<string | null>(null);
+  const [kind, setKind] = React.useState<'linkedin' | 'vcard' | null>(null);
+  const [contacts, setContacts] = React.useState<ImportContactDraft[]>([]);
+  const [resolutions, setResolutions] = React.useState<Record<number, ResolutionChoice>>({});
+  const [result, setResult] = React.useState<{
+    created: number;
+    matched: number;
+    total: number;
+  } | null>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  /** Bumps on each file selection so a stale `file.text()` cannot overwrite newer state. */
+  const parseGenRef = React.useRef(0);
+
+  const previewEnabled = contacts.length > 0 && (phase === 'ready' || phase === 'uploading');
+  const preview = trpc.imports.previewBatch.useQuery(
+    { contacts },
+    { enabled: previewEnabled },
+  );
+
+  const upsert = trpc.imports.upsertBatch.useMutation({
+    onSuccess: (res) => {
+      setResult({ created: res.created, matched: res.matched, total: res.total });
+      setPhase('done');
+    },
+    onError: () => {
+      setError('import failed — try a smaller file or check the format');
+      setPhase('error');
+    },
+  });
+
+  // Seed default choices when preview reports ambiguous rows.
+  React.useEffect(() => {
+    if (!preview.data) return;
+    setResolutions((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const row of preview.data.rows) {
+        if (row.status !== 'ambiguous') continue;
+        if (next[row.index] !== undefined) continue;
+        // Default: create new (safe) until the user picks.
+        next[row.index] = null;
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [preview.data]);
+
+  async function handleFile(file: File) {
+    const gen = ++parseGenRef.current;
+    setError(null);
+    setResult(null);
+    setPhase('parsing');
+    setFilename(file.name);
+    setContacts([]);
+    setKind(null);
+    setResolutions({});
+    try {
+      const text = await file.text();
+      if (gen !== parseGenRef.current) return;
+      const parsed = normalizeContactsFromFile({ filename: file.name, text });
+      if (gen !== parseGenRef.current) return;
+      if (parsed.contacts.length === 0) {
+        setError('no contacts found in that file');
+        setPhase('error');
+        setContacts([]);
+        setKind(null);
+        return;
+      }
+      if (parsed.contacts.length > IMPORT_MAX_BATCH) {
+        setError(
+          `too many contacts (${parsed.contacts.length}) — split the file to ${IMPORT_MAX_BATCH} or fewer`,
+        );
+        setPhase('error');
+        setContacts([]);
+        setKind(null);
+        return;
+      }
+      setKind(parsed.kind);
+      setContacts(parsed.contacts);
+      setPhase('ready');
+    } catch {
+      if (gen !== parseGenRef.current) return;
+      setError('could not read that file');
+      setPhase('error');
+    }
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) void handleFile(file);
+  }
+
+  const ambiguousRows = preview.data?.rows.filter((r) => r.status === 'ambiguous') ?? [];
+  const unresolved =
+    ambiguousRows.length > 0 &&
+    ambiguousRows.some((r) => resolutions[r.index] === undefined);
+
+  function commitImport() {
+    if (!kind || contacts.length === 0 || unresolved) return;
+    setPhase('uploading');
+    const resolutionPayload = Object.entries(resolutions).map(([index, entityId]) => ({
+      index: Number(index),
+      entityId,
+    }));
+    upsert.mutate({
+      kind,
+      contacts,
+      resolutions: resolutionPayload.length > 0 ? resolutionPayload : undefined,
+    });
+  }
+
+  return (
+    <main
+      data-screen="imports"
+      style={{
+        minHeight: '100dvh',
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'var(--bg-page)',
+        color: 'var(--ink)',
+      }}
+    >
+      <header
+        style={{
+          padding: '14px 20px',
+          borderBottom: '1px solid var(--border-soft)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          position: 'sticky',
+          top: 0,
+          background: 'rgba(10,10,10,0.85)',
+          backdropFilter: 'blur(20px)',
+          zIndex: 30,
+        }}
+      >
+        <span
+          className="mono"
+          style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.5 }}
+        >
+          imports
+        </span>
+        <Link
+          href="/settings"
+          className="mono"
+          style={{
+            fontSize: 10,
+            letterSpacing: 1,
+            textTransform: 'uppercase',
+            color: 'var(--text-40)',
+            textDecoration: 'none',
+          }}
+        >
+          settings →
+        </Link>
+      </header>
+
+      <section
+        style={{
+          padding: '20px 20px 40px',
+          maxWidth: 640,
+          width: '100%',
+          margin: '0 auto',
+          boxSizing: 'border-box',
+        }}
+      >
+        <p
+          className="mono"
+          style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--text-55)', margin: '0 0 16px' }}
+        >
+          drop a LinkedIn <em style={{ fontStyle: 'italic', fontFamily: 'serif' }}>Connections.csv</em>{' '}
+          or a <em style={{ fontStyle: 'italic', fontFamily: 'serif' }}>.vcf</em> — contacts stay
+          private to your account.
+        </p>
+
+        <div
+          data-testid="imports-dropzone"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={onDrop}
+          onClick={() => inputRef.current?.click()}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click();
+          }}
+          style={{
+            padding: '28px 20px',
+            borderRadius: 14,
+            border: `1.5px dashed ${accent}66`,
+            background: `${accent}0d`,
+            textAlign: 'center',
+            cursor: 'pointer',
+            marginBottom: 16,
+          }}
+        >
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
+            {phase === 'parsing' ? 'reading…' : 'tap or drop a file'}
+          </div>
+          <div className="mono" style={{ fontSize: 11, color: 'var(--text-40)' }}>
+            .csv · .vcf · up to {IMPORT_MAX_BATCH} contacts
+          </div>
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".csv,.vcf,.vcard,text/csv,text/vcard,text/x-vcard"
+            hidden
+            data-testid="imports-file-input"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleFile(file);
+              e.target.value = '';
+            }}
+          />
+        </div>
+
+        {error ? (
+          <p
+            role="alert"
+            data-testid="imports-error"
+            className="mono"
+            style={{ fontSize: 12, color: '#FF6B6B', marginBottom: 12 }}
+          >
+            {error}
+          </p>
+        ) : null}
+
+        {phase === 'ready' || phase === 'uploading' ? (
+          <div
+            data-testid="imports-preview"
+            style={{
+              padding: 14,
+              borderRadius: 12,
+              border: '1px solid var(--border-soft)',
+              background: 'var(--surface-1)',
+              marginBottom: 12,
+            }}
+          >
+            <div className="mono" style={{ fontSize: 11, color: 'var(--text-40)', marginBottom: 8 }}>
+              {filename} · {kind} · {contacts.length} contact
+              {contacts.length === 1 ? '' : 's'}
+              {preview.data
+                ? ` · ${preview.data.matchCount} match · ${preview.data.newCount} new · ${preview.data.ambiguousCount} review`
+                : preview.isFetching
+                  ? ' · matching…'
+                  : ''}
+            </div>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+              {contacts.slice(0, 5).map((c) => (
+                <li
+                  key={`${c.name}-${c.email ?? ''}`}
+                  style={{
+                    fontSize: 13,
+                    padding: '6px 0',
+                    borderBottom: '1px solid var(--border-soft)',
+                  }}
+                >
+                  <strong>{c.name}</strong>
+                  {c.company ? (
+                    <span style={{ color: 'var(--text-55)' }}> · {c.company}</span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+            {contacts.length > 5 ? (
+              <div className="mono" style={{ fontSize: 11, color: 'var(--text-40)', marginTop: 8 }}>
+                +{contacts.length - 5} more
+              </div>
+            ) : null}
+
+            {ambiguousRows.length > 0 ? (
+              <div
+                data-testid="imports-conflicts"
+                style={{
+                  marginTop: 14,
+                  paddingTop: 12,
+                  borderTop: '1px solid var(--border-soft)',
+                }}
+              >
+                <div
+                  className="mono"
+                  style={{ fontSize: 11, color: 'var(--text-55)', marginBottom: 10 }}
+                >
+                  {ambiguousRows.length} contact
+                  {ambiguousRows.length === 1 ? '' : 's'} need a match — email / linkedin / name
+                  point at different people.
+                </div>
+                <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                  {ambiguousRows.map((row) => (
+                    <li
+                      key={row.index}
+                      data-testid={`imports-conflict-${row.index}`}
+                      style={{ marginBottom: 12 }}
+                    >
+                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                        {row.contactName}
+                      </div>
+                      <label className="mono" style={{ fontSize: 11, color: 'var(--text-40)' }}>
+                        map to
+                        <select
+                          data-testid={`imports-conflict-select-${row.index}`}
+                          value={
+                            resolutions[row.index] === undefined
+                              ? ''
+                              : resolutions[row.index] === null
+                                ? '__new__'
+                                : resolutions[row.index]!
+                          }
+                          disabled={phase === 'uploading'}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setResolutions((prev) => ({
+                              ...prev,
+                              [row.index]: v === '__new__' ? null : v,
+                            }));
+                          }}
+                          style={{
+                            display: 'block',
+                            width: '100%',
+                            marginTop: 4,
+                            padding: '8px 10px',
+                            borderRadius: 8,
+                            border: '1px solid var(--border-soft)',
+                            background: 'var(--bg-page)',
+                            color: 'var(--ink)',
+                            font: '12px Inter, system-ui, sans-serif',
+                          }}
+                        >
+                          <option value="__new__">create new person</option>
+                          {row.candidates.map((c) => (
+                            <option key={c.entityId} value={c.entityId}>
+                              {c.name} ({c.reasons.join(' + ')})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              data-testid="imports-commit"
+              disabled={
+                phase === 'uploading' ||
+                unresolved ||
+                preview.isFetching ||
+                (preview.isError ?? false)
+              }
+              onClick={commitImport}
+              style={{
+                marginTop: 14,
+                width: '100%',
+                padding: 12,
+                borderRadius: 10,
+                background: accent,
+                color: '#000',
+                border: '1.5px solid #000',
+                boxShadow: '3px 3px 0 #000',
+                font: '700 13px Inter, system-ui, sans-serif',
+                cursor:
+                  phase === 'uploading' || unresolved || preview.isFetching
+                    ? 'not-allowed'
+                    : 'pointer',
+                opacity: phase === 'uploading' || unresolved || preview.isFetching ? 0.7 : 1,
+              }}
+            >
+              {phase === 'uploading'
+                ? 'importing…'
+                : preview.isFetching
+                  ? 'matching…'
+                  : `import ${contacts.length} →`}
+            </button>
+          </div>
+        ) : null}
+
+        {phase === 'done' && result ? (
+          <div
+            data-testid="imports-result"
+            style={{
+              padding: 16,
+              borderRadius: 14,
+              border: `1px solid ${accent}4d`,
+              background: `${accent}14`,
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>import complete</div>
+            <p className="mono" style={{ fontSize: 12, color: 'var(--text-85)', margin: 0 }}>
+              {result.created} new · {result.matched} matched · {result.total} total
+            </p>
+            <Link
+              href="/"
+              className="mono"
+              style={{
+                display: 'inline-block',
+                marginTop: 12,
+                fontSize: 11,
+                color: accent,
+                textDecoration: 'none',
+              }}
+            >
+              back to home →
+            </Link>
+          </div>
+        ) : null}
+
+        {phase === 'idle' ? (
+          <div
+            data-testid="imports-empty"
+            style={{
+              padding: 16,
+              borderRadius: 14,
+              border: '1px dashed var(--border-soft)',
+              color: 'var(--text-55)',
+              fontSize: 13.5,
+              lineHeight: 1.55,
+            }}
+          >
+            tip: LinkedIn → Settings → Data privacy → Get a copy of your data → Connections.
+          </div>
+        ) : null}
+      </section>
+    </main>
+  );
+}
