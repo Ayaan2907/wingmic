@@ -276,7 +276,7 @@ describe('ChatClient', () => {
     expect((draftBtn as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('renders an empty graph card footer when extracted entities are all empty', async () => {
+  it('renders a soft agent reply when extracted entities are all empty', async () => {
     const audioBlob = new Blob(['x'], { type: 'audio/webm' });
     fakeRecorder.audioBlob = audioBlob;
     (globalThis as { fetch: typeof fetch }).fetch = vi.fn(async () =>
@@ -307,9 +307,9 @@ describe('ChatClient', () => {
       await Promise.resolve();
     });
 
-    await waitFor(() => {
-      expect(screen.getByText(/no entities found/i)).toBeTruthy();
-    });
+    const soft = await waitFor(() => screen.getByTestId('agent-reply-soft'));
+    expect(soft.textContent).toMatch(/noted — nothing solid to tag yet/i);
+    expect(screen.queryByText(/no entities found/i)).toBeNull();
   });
 
   it('renders a failed bubble with retry/paste/discard actions on transcribe 502', async () => {

@@ -157,16 +157,17 @@ describe('applyHeuristics', () => {
     }
   });
 
-  it('filters expanded stopwords (today, tomorrow, things, really, talked) from topic candidates', () => {
+  it('filters expanded stopwords (today, tomorrow, things, really, talked, discussed) from topic candidates', () => {
     // Each conversational filler appears ≥4 times so it would dominate
     // the top-3 if not filtered. A single real topic ("compilers") shows
     // up just enough to land in the top-3.
     const transcript =
       'today today today today tomorrow tomorrow tomorrow tomorrow ' +
       'things things things things really really really really ' +
-      'talked talked talked talked compilers compilers compilers.';
+      'talked talked talked talked discussed discussed discussed discussed ' +
+      'compilers compilers compilers.';
     const result = applyHeuristics(emptyResult(), transcript);
-    for (const banned of ['today', 'tomorrow', 'things', 'really', 'talked']) {
+    for (const banned of ['today', 'tomorrow', 'things', 'really', 'talked', 'discussed']) {
       expect(result.topics).not.toContain(banned);
     }
     // and at least one real topic survives

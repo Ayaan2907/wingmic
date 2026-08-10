@@ -246,11 +246,11 @@ function MessageBubble(props: MessageBubbleProps) {
   const showSkeleton = m.status === 'uploading' || m.status === 'transcribing';
   const showLinkSweep = m.status === 'linking';
   const isCommitted = m.status === 'committed';
-  // Agent reply renders only for freshly-committed memos that found something.
-  // Prefetched-history bubbles (graphResult === null) and empty extractions
-  // skip it — the user bubble's "no entities found" footer carries those.
+  // Agent reply renders for every freshly-committed memo with a graphResult
+  // (including sparse ones — soft "noted" copy). Prefetched-history bubbles
+  // (graphResult === null) still skip it.
   const g = m.graphResult;
-  const showAgentReply = isCommitted && g != null && !isEmptyExtraction(g.extracted);
+  const showAgentReply = isCommitted && g != null;
 
   return (
     <>
@@ -315,6 +315,7 @@ function MessageBubble(props: MessageBubbleProps) {
 // matching the entity-detail CTA pattern from PR β₂.
 function AgentReply({ message, result }: { message: ThreadMessage; result: GraphResult }) {
   const { extracted } = result;
+  const sparse = isEmptyExtraction(extracted);
   const counts: string[] = [];
   if (extracted.persons.length) {
     counts.push(`${extracted.persons.length} ${extracted.persons.length === 1 ? 'person' : 'people'}`);
@@ -327,7 +328,9 @@ function AgentReply({ message, result }: { message: ThreadMessage; result: Graph
   if (extracted.events.length) {
     counts.push(`${extracted.events.length} ${extracted.events.length === 1 ? 'event' : 'events'}`);
   }
-  const summary = counts.length ? `captured ${counts.join(', ')}. tap to open.` : 'captured your memo.';
+  const summary = sparse
+    ? 'noted — nothing solid to tag yet.'
+    : `acknowledged. ${counts.length ? `captured ${counts.join(', ')}. tap to open.` : 'captured your memo.'}`;
   const time = message.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   return (
@@ -356,6 +359,7 @@ function AgentReply({ message, result }: { message: ThreadMessage; result: Graph
           </span>
         </div>
         <div
+          data-testid={sparse ? 'agent-reply-soft' : 'agent-reply-ack'}
           style={{
             padding: '12px 14px',
             borderRadius: '4px 14px 14px 14px',
@@ -366,13 +370,15 @@ function AgentReply({ message, result }: { message: ThreadMessage; result: Graph
             lineHeight: 1.55,
           }}
         >
-          acknowledged. {summary}
+          {summary}
         </div>
-        <GraphCard message={message} result={result} />
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <DisabledAction label="draft follow-up →" />
-          <DisabledAction label="open card" ghost />
-        </div>
+        {!sparse ? <GraphCard message={message} result={result} /> : null}
+        {!sparse ? (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <DisabledAction label="draft follow-up →" />
+            <DisabledAction label="open card" ghost />
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -476,9 +482,10 @@ function BubbleFooter({ m }: { m: ThreadMessage }) {
       g.extracted.events.length === 0 &&
       g.extracted.actions.length === 0;
     if (isEmpty) {
+      // Soft agent reply carries the "nothing solid" copy; footer stays timing-only.
       return (
         <div className="mono" style={{ fontSize: 10, color: meta }}>
-          no entities found · {fmtMs(m.transcribeMs)} transcribe · {fmtMs(m.commitMs)} commit
+          {fmtMs(m.transcribeMs)} transcribe · {fmtMs(m.commitMs)} commit
         </div>
       );
     }
