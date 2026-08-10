@@ -171,12 +171,14 @@ With `TURSO_DB_URL` and `TURSO_AUTH_TOKEN` from above, apply the schema from the
 ```bash
 TURSO_DB_URL=libsql://wingmic-prod-<your-org>.turso.io \
 TURSO_AUTH_TOKEN=eyJ... \
-bun --filter=@wingmic/app db:apply
+bun run db:apply
 
 # Expected output:
 #   [migrate] applying migrations to libsql://...
 #   [migrate] done
 ```
+
+**Railway (staging + prod):** every deploy runs `scripts/predeploy-migrate.sh` via `railway.json` → `deploy.preDeployCommand` before `next start`. Pending migrations apply automatically; a failed migration blocks the deploy. First-time DB setup still needs `TURSO_*` set on the Railway service.
 
 Verify the tables landed:
 
@@ -306,7 +308,7 @@ cp apps/app/.env.example apps/app/.env.local
 #   BETTER_AUTH_URL → http://localhost:3211
 #   RESEND_API_KEY → blank → magic links log to console instead of email
 
-bun --filter=@wingmic/app db:apply       # creates local.db
+bun run db:apply       # creates local.db (see AGENTS.md for apps/app path gotcha)
 
 bun run dev:app          # → http://localhost:3211 (product)
 # or
@@ -368,7 +370,7 @@ Error: server returned UNAUTHORIZED
 Error: no such table: user
 ```
 
-→ Migration didn't run on the prod DB. Re-run `bun --filter=@wingmic/app db:apply` with the production URL/token.
+→ Migration didn't run on the DB. Check the Railway deploy log **pre-deploy** phase for `[migrate]` output. Re-run manually with production/staging credentials: `bun run db:apply` (or `bun run db:migrate:deploy` with `TURSO_*` exported). If pre-deploy keeps failing, confirm `TURSO_DB_URL` is `libsql://…` and `TURSO_AUTH_TOKEN` is set on the service.
 
 ### BetterAuth: "no session" right after sign-in
 
