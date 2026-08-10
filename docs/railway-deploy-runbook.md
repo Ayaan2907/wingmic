@@ -23,6 +23,8 @@ GitHub push
         → install: bun install (auto when bun.lock + workspaces visible)
         → build:  bun run build:app  (from railpack.json)
                     → turbo build --filter=@wingmic/app  (from package.json)
+        → pre-deploy: sh scripts/predeploy-migrate.sh  (from railway.json)
+                    → bun run db:apply  (Drizzle migrations → Turso)
         → deploy: bun run start:app  (from railpack.json)
                     → next start -p $PORT  (apps/app)
 ```
@@ -60,6 +62,7 @@ These files live at the **repository root**. Railway’s config file path does *
 {
   "build": { "builder": "RAILPACK" },
   "deploy": {
+    "preDeployCommand": ["sh scripts/predeploy-migrate.sh"],
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",
@@ -71,6 +74,7 @@ These files live at the **repository root**. Railway’s config file path does *
 | Field | Purpose |
 |---|---|
 | `build.builder` | Selects **Railpack** (not Nixpacks). Railway: [Railpack](https://docs.railway.com/builds/build-configuration#railpack). |
+| `deploy.preDeployCommand` | Runs `bun run db:apply` against `TURSO_*` before the app starts ([pre-deploy command](https://docs.railway.com/deployments/pre-deploy-command)). Failed migration blocks deploy. |
 | `deploy.healthcheckPath` | Railway HTTP health check after deploy |
 
 Does **not** define install/build/start commands — those come from `railpack.json` (and Railpack auto-detection).
@@ -192,7 +196,8 @@ After deploy, build logs should include **all** of:
 | 5 | Install step: `bun install` (not `npm install`) | — |
 | 6 | Build step: `bun run build:app` | `railpack.json` |
 | 7 | Turbo tasks for `@wingmic/db`, `@wingmic/extractor`, `@wingmic/app` | `turbo.json` `^build` |
-| 8 | Deploy: `bun run start:app` | `railpack.json` |
+| 8 | Pre-deploy: `[migrate] applying migrations to libsql://…` then `[migrate] done` | `railway.json` → `preDeployCommand` |
+| 9 | Deploy: `bun run start:app` | `railpack.json` |
 
 ---
 
@@ -234,6 +239,15 @@ After deploy, build logs should include **all** of:
 | **Fix** | Set Builder = Railpack; Config file = `railway.json` at repo root |
 | **Source** | [Railway Railpack](https://docs.railway.com/builds/build-configuration#railpack) |
 
+### 7.6 `no such table: …` at runtime
+
+| | |
+|---|---|
+| **Log** | libSQL / Drizzle error referencing a missing table (e.g. `act`) |
+| **Cause** | Deploy ran before `preDeployCommand` landed, or pre-deploy failed/skipped (missing `TURSO_*`) |
+| **Fix** | Check deploy log pre-deploy phase; run `bun run db:apply` once with staging/prod `TURSO_*`; redeploy so automated step runs |
+| **Source** | `packages/db/drizzle/`, `scripts/predeploy-migrate.sh` |
+
 ### 7.5 Build succeeds but runtime 500 / auth errors
 
 | | |
@@ -265,6 +279,7 @@ Simulate what Railpack runs (from repo root):
 ```bash
 bun install --frozen-lockfile
 bun run build:app
+TURSO_DB_URL="file:$(pwd)/packages/db/local.db" bun run db:apply   # local only
 bun run start:app
 ```
 
@@ -274,4 +289,5 @@ bun run start:app
 
 | Date | Change |
 |---|---|
+| 2026-08-10 | Pre-deploy Drizzle migrations via `railway.json` `preDeployCommand` (closes #89) |
 | 2026-05-26 | Initial evidence-based runbook; maps Railway UI to Railpack + Turbo; documents failures seen in production logs |

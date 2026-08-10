@@ -32,6 +32,7 @@
     "format:check":       "prettier --check \"**/*.{ts,tsx,md,json}\"",
     "db:generate":        "bun --filter=@wingmic/db generate",
     "db:apply":           "bun --filter=@wingmic/db apply",
+    "db:migrate:deploy":  "sh scripts/predeploy-migrate.sh",
     "db:studio":          "bun --filter=@wingmic/db studio",
     "db:apply:doppler":   "doppler run -- bun run db:apply",
     "db:studio:doppler":  "doppler run -- bun run db:studio",
