@@ -29,7 +29,14 @@ vi.mock('@/lib/trpc/client', () => ({
         useMutation: () => ({ mutate: dismissMutate, isPending: false }),
       },
       update: {
-        useMutation: () => ({ mutate: updateMutate, isPending: false }),
+        useMutation: () => ({
+          mutate: updateMutate,
+          mutateAsync: async (input: unknown) => {
+            updateMutate(input);
+            return { ok: true };
+          },
+          isPending: false,
+        }),
       },
     },
     useUtils: () => ({

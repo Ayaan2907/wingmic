@@ -151,6 +151,7 @@ describe('acts router', () => {
       kind: 'email',
       intent: 'check-in',
       targetEntityId: 'e_ada',
+      seedBody: 'check in with ada',
     });
     expect(res.ok).toBe(true);
     expect(res.id).toBeTruthy();
@@ -158,7 +159,7 @@ describe('acts router', () => {
     const row = listed.acts.find((a) => a.id === res.id);
     expect(row?.actionKind).toBe('email');
     expect(row?.subject).toBeTruthy();
-    expect(row?.body.toLowerCase()).toContain('ada');
+    expect(row?.body.toLowerCase()).toContain('check in with ada');
   });
 
   it('createDraft refuses unknown target entities', async () => {
@@ -170,7 +171,7 @@ describe('acts router', () => {
     expect(res.ok).toBe(false);
   });
 
-  it('snooze sets status and runAt', async () => {
+  it('snooze sets status and runAt and hides from default list until due', async () => {
     await insertAct('act_snooze_1');
     const res = await caller().snooze({ id: 'act_snooze_1', hours: 24 });
     expect(res.ok).toBe(true);
@@ -178,6 +179,14 @@ describe('acts router', () => {
     expect(res.runAt.getTime()).toBeGreaterThan(Date.now());
     const listed = await caller().list({ status: 'snoozed', limit: 50 });
     expect(listed.acts.map((a) => a.id)).toContain('act_snooze_1');
+    const inbox = await caller().list({ limit: 50 });
+    expect(inbox.acts.map((a) => a.id)).not.toContain('act_snooze_1');
+  });
+
+  it('refuses snooze for another users act', async () => {
+    await insertAct('act_snooze_other', { userId: otherUserId });
+    const res = await caller().snooze({ id: 'act_snooze_other', hours: 24 });
+    expect(res.ok).toBe(false);
   });
 
   it('update edits body and subject', async () => {
@@ -192,5 +201,14 @@ describe('acts router', () => {
     const row = listed.acts.find((a) => a.id === 'act_edit_1');
     expect(row?.body).toBe('revised follow-up');
     expect(row?.subject).toBe('hello again');
+  });
+
+  it('refuses update for another users act', async () => {
+    await insertAct('act_edit_other', { userId: otherUserId });
+    const res = await caller().update({
+      id: 'act_edit_other',
+      body: 'nope',
+    });
+    expect(res.ok).toBe(false);
   });
 });

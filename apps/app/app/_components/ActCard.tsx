@@ -47,7 +47,10 @@ export function ActCard({
   onSent?: (id: string) => void;
   onSnooze?: (id: string) => void;
   onDismiss?: (id: string) => void;
-  onSaveEdit?: (id: string, patch: { body: string; subject: string | null }) => void;
+  onSaveEdit?: (
+    id: string,
+    patch: { body: string; subject: string | null },
+  ) => void | boolean | Promise<void | boolean>;
   /** Shown when markSent fails after a todo send. */
   sendError?: string | null;
 }) {
@@ -269,7 +272,11 @@ export function ActCard({
             <button
               type="button"
               className="mono"
-              onClick={() => setEditing(false)}
+              onClick={() => {
+                setEditBody(a.body ?? a.why);
+                setEditSubject(a.subject ?? '');
+                setEditing(false);
+              }}
               style={{
                 fontSize: 11,
                 background: 'none',
@@ -286,11 +293,14 @@ export function ActCard({
               disabled={!a.id || !editBody.trim()}
               onClick={() => {
                 if (!a.id || !editBody.trim()) return;
-                onSaveEdit?.(a.id, {
-                  body: editBody.trim(),
-                  subject: editSubject.trim() ? editSubject.trim() : null,
-                });
-                setEditing(false);
+                void (async () => {
+                  const result = await onSaveEdit?.(a.id!, {
+                    body: editBody.trim(),
+                    subject: editSubject.trim() ? editSubject.trim() : null,
+                  });
+                  if (result === false) return;
+                  setEditing(false);
+                })();
               }}
               style={{
                 fontSize: 11,

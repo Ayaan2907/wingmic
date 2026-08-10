@@ -124,6 +124,11 @@ export const captureRouter = router({
                   kind: action.kind,
                   intent,
                   targetName: targetName ?? null,
+                  secondaryName:
+                    ownedSecondary != null
+                      ? extracted.persons.find((_, i) => result.entityIds[i] === ownedSecondary)
+                          ?.name ?? null
+                      : null,
                   seedBody: action.body,
                 });
                 return {

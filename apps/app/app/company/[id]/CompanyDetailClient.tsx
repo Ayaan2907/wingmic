@@ -59,7 +59,7 @@ export default function CompanyDetailClient({ detail }: { detail: CompanyDetail 
       }}
       ghostCta={{
         label: 'draft intro',
-        disabled: !primaryPerson,
+        disabled: !primaryPerson || createDraft.isPending,
         title: primaryPerson ? 'draft an intro' : 'add a related person first',
         onClick: primaryPerson
           ? () =>

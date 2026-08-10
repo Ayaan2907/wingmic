@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, describe, it, expect, vi } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
+import { cleanup, render, fireEvent, screen } from '@testing-library/react';
 
 afterEach(() => cleanup());
 
@@ -14,8 +14,11 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+const routerPush = vi.fn();
+const createDraftMutate = vi.fn();
+
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: routerPush, replace: vi.fn(), refresh: vi.fn() }),
   usePathname: () => '/person/en_sarah',
 }));
 
@@ -23,7 +26,13 @@ vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     acts: {
       createDraft: {
-        useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+        useMutation: (opts?: { onSuccess?: (r: { ok: boolean }) => void }) => ({
+          mutate: (input: unknown) => {
+            createDraftMutate(input);
+            opts?.onSuccess?.({ ok: true });
+          },
+          isPending: false,
+        }),
       },
     },
   },
@@ -65,6 +74,11 @@ const detail = {
 };
 
 describe('PersonDetailClient', () => {
+  beforeEach(() => {
+    routerPush.mockClear();
+    createDraftMutate.mockClear();
+  });
+
   it('renders the person hero, stats, captures, related rows', () => {
     const { getByTestId, getAllByTestId, getByRole } = render(
       <PersonDetailClient detail={detail} />,
@@ -89,5 +103,17 @@ describe('PersonDetailClient', () => {
     expect(rows.length).toBe(2);
     expect(rows[0]!.getAttribute('data-related-href')).toBe('/person/en_marcus');
     expect(rows[1]!.getAttribute('data-related-href')).toBe('/company/co_acme');
+  });
+
+  it('draft check-in creates an act and routes to /acts', () => {
+    render(<PersonDetailClient detail={detail} />);
+    fireEvent.click(screen.getByRole('button', { name: /draft check-in/i }));
+    expect(createDraftMutate).toHaveBeenCalledWith({
+      kind: 'email',
+      intent: 'check-in',
+      targetEntityId: 'en_sarah',
+      contextName: 'Acme Corp',
+    });
+    expect(routerPush).toHaveBeenCalledWith('/acts');
   });
 });

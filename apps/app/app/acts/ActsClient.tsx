@@ -193,7 +193,14 @@ export function ActsClient() {
                 onSent={(id) => markSent.mutate({ id })}
                 onSnooze={(id) => snooze.mutate({ id, hours: 24 })}
                 onDismiss={(id) => dismiss.mutate({ id })}
-                onSaveEdit={(id, patch) => update.mutate({ id, ...patch })}
+                onSaveEdit={async (id, patch) => {
+                  try {
+                    const res = await update.mutateAsync({ id, ...patch });
+                    return res.ok;
+                  } catch {
+                    return false;
+                  }
+                }}
               />
             ))}
           </div>
