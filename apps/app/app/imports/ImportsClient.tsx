@@ -2,19 +2,23 @@
 
 /**
  * ImportsClient — LinkedIn CSV / vCard drop zone (v0.2 I3).
- * Parses client-side, then upserts via imports.upsertBatch.
+ * Parses client-side, previews matches (with ambiguous pickers), then upserts.
  */
 
 import * as React from 'react';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc/client';
-import { normalizeContactsFromFile, type ImportContactDraft } from '@/lib/imports';
+import {
+  IMPORT_MAX_BATCH,
+  normalizeContactsFromFile,
+  type ImportContactDraft,
+} from '@/lib/imports';
 import { accent } from '@/app/chat/_components/tokens';
 
 type Phase = 'idle' | 'parsing' | 'ready' | 'uploading' | 'done' | 'error';
 
-/** Must match `MAX_BATCH` on imports.upsertBatch. */
-const MAX_CONTACTS = 1000;
+/** `null` = create new; string = merge into that entity. */
+type ResolutionChoice = string | null;
 
 export function ImportsClient() {
   const [phase, setPhase] = React.useState<Phase>('idle');
@@ -22,6 +26,7 @@ export function ImportsClient() {
   const [filename, setFilename] = React.useState<string | null>(null);
   const [kind, setKind] = React.useState<'linkedin' | 'vcard' | null>(null);
   const [contacts, setContacts] = React.useState<ImportContactDraft[]>([]);
+  const [resolutions, setResolutions] = React.useState<Record<number, ResolutionChoice>>({});
   const [result, setResult] = React.useState<{
     created: number;
     matched: number;
@@ -30,6 +35,12 @@ export function ImportsClient() {
   const inputRef = React.useRef<HTMLInputElement>(null);
   /** Bumps on each file selection so a stale `file.text()` cannot overwrite newer state. */
   const parseGenRef = React.useRef(0);
+
+  const previewEnabled = contacts.length > 0 && (phase === 'ready' || phase === 'uploading');
+  const preview = trpc.imports.previewBatch.useQuery(
+    { contacts },
+    { enabled: previewEnabled },
+  );
 
   const upsert = trpc.imports.upsertBatch.useMutation({
     onSuccess: (res) => {
@@ -42,6 +53,23 @@ export function ImportsClient() {
     },
   });
 
+  // Seed default choices when preview reports ambiguous rows.
+  React.useEffect(() => {
+    if (!preview.data) return;
+    setResolutions((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const row of preview.data.rows) {
+        if (row.status !== 'ambiguous') continue;
+        if (next[row.index] !== undefined) continue;
+        // Default: create new (safe) until the user picks.
+        next[row.index] = null;
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [preview.data]);
+
   async function handleFile(file: File) {
     const gen = ++parseGenRef.current;
     setError(null);
@@ -50,6 +78,7 @@ export function ImportsClient() {
     setFilename(file.name);
     setContacts([]);
     setKind(null);
+    setResolutions({});
     try {
       const text = await file.text();
       if (gen !== parseGenRef.current) return;
@@ -62,9 +91,9 @@ export function ImportsClient() {
         setKind(null);
         return;
       }
-      if (parsed.contacts.length > MAX_CONTACTS) {
+      if (parsed.contacts.length > IMPORT_MAX_BATCH) {
         setError(
-          `too many contacts (${parsed.contacts.length}) — split the file to ${MAX_CONTACTS} or fewer`,
+          `too many contacts (${parsed.contacts.length}) — split the file to ${IMPORT_MAX_BATCH} or fewer`,
         );
         setPhase('error');
         setContacts([]);
@@ -87,10 +116,23 @@ export function ImportsClient() {
     if (file) void handleFile(file);
   }
 
+  const ambiguousRows = preview.data?.rows.filter((r) => r.status === 'ambiguous') ?? [];
+  const unresolved =
+    ambiguousRows.length > 0 &&
+    ambiguousRows.some((r) => resolutions[r.index] === undefined);
+
   function commitImport() {
-    if (!kind || contacts.length === 0) return;
+    if (!kind || contacts.length === 0 || unresolved) return;
     setPhase('uploading');
-    upsert.mutate({ kind, contacts });
+    const resolutionPayload = Object.entries(resolutions).map(([index, entityId]) => ({
+      index: Number(index),
+      entityId,
+    }));
+    upsert.mutate({
+      kind,
+      contacts,
+      resolutions: resolutionPayload.length > 0 ? resolutionPayload : undefined,
+    });
   }
 
   return (
@@ -182,7 +224,7 @@ export function ImportsClient() {
             {phase === 'parsing' ? 'reading…' : 'tap or drop a file'}
           </div>
           <div className="mono" style={{ fontSize: 11, color: 'var(--text-40)' }}>
-            .csv · .vcf · up to 1000 contacts
+            .csv · .vcf · up to {IMPORT_MAX_BATCH} contacts
           </div>
           <input
             ref={inputRef}
@@ -223,6 +265,11 @@ export function ImportsClient() {
             <div className="mono" style={{ fontSize: 11, color: 'var(--text-40)', marginBottom: 8 }}>
               {filename} · {kind} · {contacts.length} contact
               {contacts.length === 1 ? '' : 's'}
+              {preview.data
+                ? ` · ${preview.data.matchCount} match · ${preview.data.newCount} new · ${preview.data.ambiguousCount} review`
+                : preview.isFetching
+                  ? ' · matching…'
+                  : ''}
             </div>
             <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
               {contacts.slice(0, 5).map((c) => (
@@ -246,10 +293,88 @@ export function ImportsClient() {
                 +{contacts.length - 5} more
               </div>
             ) : null}
+
+            {ambiguousRows.length > 0 ? (
+              <div
+                data-testid="imports-conflicts"
+                style={{
+                  marginTop: 14,
+                  paddingTop: 12,
+                  borderTop: '1px solid var(--border-soft)',
+                }}
+              >
+                <div
+                  className="mono"
+                  style={{ fontSize: 11, color: 'var(--text-55)', marginBottom: 10 }}
+                >
+                  {ambiguousRows.length} contact
+                  {ambiguousRows.length === 1 ? '' : 's'} need a match — email / linkedin / name
+                  point at different people.
+                </div>
+                <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                  {ambiguousRows.map((row) => (
+                    <li
+                      key={row.index}
+                      data-testid={`imports-conflict-${row.index}`}
+                      style={{ marginBottom: 12 }}
+                    >
+                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                        {row.contactName}
+                      </div>
+                      <label className="mono" style={{ fontSize: 11, color: 'var(--text-40)' }}>
+                        map to
+                        <select
+                          data-testid={`imports-conflict-select-${row.index}`}
+                          value={
+                            resolutions[row.index] === undefined
+                              ? ''
+                              : resolutions[row.index] === null
+                                ? '__new__'
+                                : resolutions[row.index]!
+                          }
+                          disabled={phase === 'uploading'}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setResolutions((prev) => ({
+                              ...prev,
+                              [row.index]: v === '__new__' ? null : v,
+                            }));
+                          }}
+                          style={{
+                            display: 'block',
+                            width: '100%',
+                            marginTop: 4,
+                            padding: '8px 10px',
+                            borderRadius: 8,
+                            border: '1px solid var(--border-soft)',
+                            background: 'var(--bg-page)',
+                            color: 'var(--ink)',
+                            font: '12px Inter, system-ui, sans-serif',
+                          }}
+                        >
+                          <option value="__new__">create new person</option>
+                          {row.candidates.map((c) => (
+                            <option key={c.entityId} value={c.entityId}>
+                              {c.name} ({c.reasons.join(' + ')})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             <button
               type="button"
               data-testid="imports-commit"
-              disabled={phase === 'uploading'}
+              disabled={
+                phase === 'uploading' ||
+                unresolved ||
+                preview.isFetching ||
+                (preview.isError ?? false)
+              }
               onClick={commitImport}
               style={{
                 marginTop: 14,
@@ -261,11 +386,18 @@ export function ImportsClient() {
                 border: '1.5px solid #000',
                 boxShadow: '3px 3px 0 #000',
                 font: '700 13px Inter, system-ui, sans-serif',
-                cursor: phase === 'uploading' ? 'not-allowed' : 'pointer',
-                opacity: phase === 'uploading' ? 0.7 : 1,
+                cursor:
+                  phase === 'uploading' || unresolved || preview.isFetching
+                    ? 'not-allowed'
+                    : 'pointer',
+                opacity: phase === 'uploading' || unresolved || preview.isFetching ? 0.7 : 1,
               }}
             >
-              {phase === 'uploading' ? 'importing…' : `import ${contacts.length} →`}
+              {phase === 'uploading'
+                ? 'importing…'
+                : preview.isFetching
+                  ? 'matching…'
+                  : `import ${contacts.length} →`}
             </button>
           </div>
         ) : null}

@@ -4,6 +4,25 @@ import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/re
 
 const upsertMutate = vi.fn();
 
+const previewState = vi.hoisted(() => ({
+  data: {
+    rows: [] as Array<{
+      index: number;
+      status: 'new' | 'match' | 'ambiguous';
+      contactName: string;
+      entityId: string | null;
+      candidates: Array<{
+        entityId: string;
+        name: string;
+        reasons: Array<'email' | 'linkedin' | 'name'>;
+      }>;
+    }>,
+    ambiguousCount: 0,
+    matchCount: 0,
+    newCount: 1,
+  },
+}));
+
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: any) => (
     <a href={typeof href === 'string' ? href : String(href)} {...rest}>
@@ -15,6 +34,13 @@ vi.mock('next/link', () => ({
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     imports: {
+      previewBatch: {
+        useQuery: () => ({
+          data: previewState.data,
+          isFetching: false,
+          isError: false,
+        }),
+      },
       upsertBatch: {
         useMutation: (opts?: { onSuccess?: (r: unknown) => void }) => ({
           mutate: (input: unknown) => {
@@ -51,6 +77,12 @@ function csvFor(names: string[]): string {
 afterEach(() => {
   cleanup();
   upsertMutate.mockClear();
+  previewState.data = {
+    rows: [],
+    ambiguousCount: 0,
+    matchCount: 0,
+    newCount: 1,
+  };
   vi.restoreAllMocks();
 });
 
@@ -134,5 +166,47 @@ describe('ImportsClient', () => {
     await new Promise((r) => setTimeout(r, 30));
     expect(screen.getByTestId('imports-preview').textContent).toContain('Grace Hopper');
     expect(screen.getByTestId('imports-preview').textContent).not.toContain('Ada Lovelace');
+  });
+
+  it('shows a selector for ambiguous matches and passes the chosen entityId', async () => {
+    previewState.data = {
+      rows: [
+        {
+          index: 0,
+          status: 'ambiguous',
+          contactName: 'Ada Byron',
+          entityId: null,
+          candidates: [
+            { entityId: 'ent-a', name: 'Ada Lovelace', reasons: ['email'] },
+            { entityId: 'ent-b', name: 'Lord Byron', reasons: ['linkedin'] },
+          ],
+        },
+      ],
+      ambiguousCount: 1,
+      matchCount: 0,
+      newCount: 0,
+    };
+
+    render(<ImportsClient />);
+    const input = screen.getByTestId('imports-file-input') as HTMLInputElement;
+    const csv = `First Name,Last Name,URL,Email Address,Company,Position,Connected On
+Ada,Byron,https://www.linkedin.com/in/byron,ada@example.com,,,01 Jan 2024
+`;
+    fireEvent.change(input, {
+      target: { files: [new File([csv], 'Connections.csv', { type: 'text/csv' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('imports-conflicts')).toBeTruthy();
+    });
+    const select = screen.getByTestId('imports-conflict-select-0') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'ent-a' } });
+    fireEvent.click(screen.getByTestId('imports-commit'));
+
+    expect(upsertMutate).toHaveBeenCalled();
+    const arg = upsertMutate.mock.calls[0]![0] as {
+      resolutions: Array<{ index: number; entityId: string | null }>;
+    };
+    expect(arg.resolutions).toEqual([{ index: 0, entityId: 'ent-a' }]);
   });
 });

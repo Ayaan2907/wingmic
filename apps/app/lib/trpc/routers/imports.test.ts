@@ -162,4 +162,142 @@ describe('imports router', () => {
     expect(res.matched).toBe(1);
     expect(res.entityIds[0]).toBe(res.entityIds[1]);
   });
+
+  it('does not steal another entity LinkedIn map when email matches a different person', async () => {
+    const ada = await caller(userA).upsertBatch({
+      kind: 'linkedin',
+      contacts: [
+        {
+          name: 'Ada Lovelace',
+          email: 'ada@example.com',
+          linkedinUrl: null,
+          company: null,
+          role: null,
+        },
+      ],
+    });
+    const byron = await caller(userA).upsertBatch({
+      kind: 'linkedin',
+      contacts: [
+        {
+          name: 'Lord Byron',
+          email: null,
+          linkedinUrl: 'https://www.linkedin.com/in/byron',
+          company: null,
+          role: null,
+        },
+      ],
+    });
+    const adaId = ada.entityIds[0]!;
+    const byronId = byron.entityIds[0]!;
+
+    const conflicted = await caller(userA).upsertBatch({
+      kind: 'vcard',
+      contacts: [
+        {
+          name: 'Ada Byron',
+          email: 'ada@example.com',
+          linkedinUrl: 'https://www.linkedin.com/in/byron',
+          company: null,
+          role: null,
+        },
+        {
+          name: 'George Byron',
+          email: null,
+          linkedinUrl: 'https://www.linkedin.com/in/byron',
+          company: null,
+          role: null,
+        },
+      ],
+    });
+    // Ambiguous row without resolution → create new (not merge into Ada).
+    expect(conflicted.created).toBe(1);
+    expect(conflicted.matched).toBe(1);
+    expect(conflicted.entityIds[1]).toBe(byronId);
+
+    const linkedinFacts = await client.execute({
+      sql: `SELECT entity_id, value FROM entity_fact WHERE key = 'linkedin' AND lower(value) LIKE '%/in/byron'`,
+      args: [],
+    });
+    const owners = linkedinFacts.rows.map((r) => r.entity_id);
+    expect(owners).toContain(byronId);
+    expect(owners).not.toContain(adaId);
+  });
+
+  it('previewBatch flags email vs linkedin collisions as ambiguous', async () => {
+    await caller(userA).upsertBatch({
+      kind: 'linkedin',
+      contacts: [
+        {
+          name: 'Entity A',
+          email: 'a@example.com',
+          linkedinUrl: null,
+          company: null,
+          role: null,
+        },
+        {
+          name: 'Entity B',
+          email: null,
+          linkedinUrl: 'https://www.linkedin.com/in/entity-b',
+          company: null,
+          role: null,
+        },
+      ],
+    });
+
+    const preview = await caller(userA).previewBatch({
+      contacts: [
+        {
+          name: 'Mixed',
+          email: 'a@example.com',
+          linkedinUrl: 'https://www.linkedin.com/in/entity-b',
+          company: null,
+          role: null,
+        },
+      ],
+    });
+    expect(preview.ambiguousCount).toBe(1);
+    expect(preview.rows[0]!.status).toBe('ambiguous');
+    expect(preview.rows[0]!.candidates).toHaveLength(2);
+  });
+
+  it('honors an explicit resolution to merge an ambiguous contact', async () => {
+    const seeded = await caller(userA).upsertBatch({
+      kind: 'linkedin',
+      contacts: [
+        {
+          name: 'Seed A',
+          email: 'seed-a@example.com',
+          linkedinUrl: null,
+          company: null,
+          role: null,
+        },
+        {
+          name: 'Seed B',
+          email: null,
+          linkedinUrl: 'https://www.linkedin.com/in/seed-b',
+          company: null,
+          role: null,
+        },
+      ],
+    });
+    const seedA = seeded.entityIds[0]!;
+
+    const res = await caller(userA).upsertBatch({
+      kind: 'vcard',
+      contacts: [
+        {
+          name: 'Mixed Seed',
+          email: 'seed-a@example.com',
+          linkedinUrl: 'https://www.linkedin.com/in/seed-b',
+          company: null,
+          role: null,
+        },
+      ],
+      resolutions: [{ index: 0, entityId: seedA }],
+    });
+    expect(res.created).toBe(0);
+    expect(res.matched).toBe(1);
+    expect(res.entityIds[0]).toBe(seedA);
+  });
 });

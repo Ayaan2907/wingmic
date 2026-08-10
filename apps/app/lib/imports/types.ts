@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/** Shared client + server batch ceiling — do not duplicate elsewhere. */
+export const IMPORT_MAX_BATCH = 1000;
+
 /** Normalized contact row ready for upsert — fake PII only in fixtures. */
 export const importContactDraftSchema = z.object({
   name: z.string().trim().min(1).max(200),
