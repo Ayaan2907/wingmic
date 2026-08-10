@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lte, or } from 'drizzle-orm';
 import * as schema from '@wingmic/db/schema';
 import { router, protectedProcedure } from '../trpc';
 import { toPendingAct } from '@/lib/acts/mapAction';
@@ -30,15 +30,27 @@ export const actsRouter = router({
         .default({ limit: 20 }),
     )
     .query(async ({ ctx, input }) => {
-      const statuses = input.status
-        ? [input.status]
-        : (['drafted', 'snoozed'] as const);
+      const now = new Date();
+      // Default inbox: drafted + snoozed that are due (runAt null or <= now).
+      // Explicit status=snoozed still returns all snoozed (including future).
+      const where =
+        input.status === 'snoozed'
+          ? and(eq(schema.acts.userId, ctx.user.id), eq(schema.acts.status, 'snoozed'))
+          : input.status
+            ? and(eq(schema.acts.userId, ctx.user.id), eq(schema.acts.status, input.status))
+            : and(
+                eq(schema.acts.userId, ctx.user.id),
+                or(
+                  eq(schema.acts.status, 'drafted'),
+                  and(
+                    eq(schema.acts.status, 'snoozed'),
+                    or(isNull(schema.acts.runAt), lte(schema.acts.runAt, now)),
+                  ),
+                ),
+              );
 
       const rows = await ctx.db.query.acts.findMany({
-        where: and(
-          eq(schema.acts.userId, ctx.user.id),
-          inArray(schema.acts.status, [...statuses]),
-        ),
+        where,
         orderBy: [desc(schema.acts.createdAt)],
         limit: input.limit,
       });
@@ -214,7 +226,7 @@ export const actsRouter = router({
       if (input.body === undefined && input.subject === undefined) {
         return { ok: true as const };
       }
-      await ctx.db
+      const updated = await ctx.db
         .update(schema.acts)
         .set({
           ...(input.body !== undefined ? { body: input.body } : {}),
@@ -227,8 +239,9 @@ export const actsRouter = router({
             eq(schema.acts.userId, ctx.user.id),
             inArray(schema.acts.status, ['drafted', 'snoozed']),
           ),
-        );
-      return { ok: true as const };
+        )
+        .returning({ id: schema.acts.id });
+      return { ok: updated.length > 0 };
     }),
 
   snooze: protectedProcedure
@@ -248,7 +261,7 @@ export const actsRouter = router({
         return { ok: false as const };
       }
       const runAt = new Date(Date.now() + input.hours * 60 * 60 * 1000);
-      await ctx.db
+      const updated = await ctx.db
         .update(schema.acts)
         .set({ status: 'snoozed', runAt, updatedAt: new Date() })
         .where(
@@ -257,7 +270,9 @@ export const actsRouter = router({
             eq(schema.acts.userId, ctx.user.id),
             inArray(schema.acts.status, ['drafted', 'snoozed']),
           ),
-        );
+        )
+        .returning({ id: schema.acts.id });
+      if (updated.length === 0) return { ok: false as const };
       return { ok: true as const, runAt };
     }),
 

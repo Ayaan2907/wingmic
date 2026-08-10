@@ -340,6 +340,7 @@ export function GraphClient({ data }: { data: GraphData }) {
                       kind: 'reminder',
                       intent: 'reminder',
                       contextName: selected.label,
+                      seedBody: `send check-ins after ${selected.label}`,
                     });
                     return;
                   }

@@ -346,7 +346,7 @@ function CtaRow({
   // Enabled when an onClick handler is provided (A6 / acts agent).
   // Without a handler, keep the prior disabled chrome.
   const primaryInactive = !primary.onClick || Boolean(primary.disabled) || Boolean(primary.pending);
-  const ghostInactive = !ghost.onClick || Boolean(ghost.disabled);
+  const ghostInactive = !ghost.onClick || Boolean(ghost.disabled) || Boolean(ghost.pending);
 
   return (
     <div style={{ display: 'flex', gap: 8, marginBottom: 24 }} data-testid="entity-ctas">

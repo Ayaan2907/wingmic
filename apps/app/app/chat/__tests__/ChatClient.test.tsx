@@ -281,6 +281,13 @@ describe('ChatClient', () => {
     expect(reply.textContent).toMatch(/1 company/);
     const draftBtn = screen.getByRole('button', { name: /draft follow-up/i });
     expect((draftBtn as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(draftBtn);
+    expect(createDraftMutate).toHaveBeenCalledWith({
+      kind: 'email',
+      intent: 'follow-up',
+      targetEntityId: 'en_sarah',
+      sourceInteractionId: 'int-1',
+    });
   });
 
   it('renders an empty graph card footer when extracted entities are all empty', async () => {

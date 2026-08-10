@@ -3,7 +3,7 @@
  *
  * Polishes terse extraction action bodies into permission-first email /
  * check-in drafts. Falls back to deterministic templates when the key is
- * missing or the model call fails (capture must never block on polish).
+ * missing, the model errors, or polish exceeds POLISH_TIMEOUT_MS.
  */
 import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
@@ -26,6 +26,9 @@ export type PolishDraftInput = {
   contextName?: string | null;
   seedBody?: string | null;
 };
+
+/** Hard cap so OpenRouter stalls never block capture / createDraft. */
+export const POLISH_TIMEOUT_MS = 8_000;
 
 const DRAFT_INSTRUCTIONS = `You draft short outbound follow-ups for wingmic, a voice-first networking memory app.
 Permission-first: drafts are reviewed by the user; nothing auto-sends.
@@ -53,50 +56,61 @@ export function createActsDraftAgent(): Agent {
   });
 }
 
+function clampDraft(draft: { subject: string; body: string }): DraftOutput {
+  const subject = draft.subject.trim().slice(0, 120) || 'follow-up';
+  const body = draft.body.trim().slice(0, 2000) || 'follow up.';
+  return { subject, body };
+}
+
+function clampSeed(seed: string | null | undefined): string | null {
+  if (!seed?.trim()) return null;
+  return seed.trim().slice(0, 2000);
+}
+
 /** Deterministic template used when LLM polish is unavailable. */
 export function templateDraft(input: PolishDraftInput): DraftOutput {
   const name = input.targetName?.trim() || 'there';
   const secondary = input.secondaryName?.trim();
   const ctx = input.contextName?.trim();
-  const seed = input.seedBody?.trim();
+  const seed = clampSeed(input.seedBody);
 
   switch (input.intent) {
     case 'intro': {
       const pair = secondary ? `${name} → ${secondary}` : name;
-      return {
+      return clampDraft({
         subject: `intro: ${pair}`,
         body:
           seed ||
           (secondary
             ? `wanted to intro ${name} and ${secondary}${ctx ? ` (via ${ctx})` : ''}. happy to connect you two.`
             : `wanted to make an intro${ctx ? ` around ${ctx}` : ''}.`),
-      };
+      });
     }
     case 'recap':
-      return {
+      return clampDraft({
         subject: ctx ? `recap · ${ctx}` : 'event recap',
         body: seed || `quick recap notes from ${ctx ?? 'the event'} — capture follow-ups while they're fresh.`,
-      };
+      });
     case 'warm-path':
-      return {
+      return clampDraft({
         subject: ctx ? `warm path · ${ctx}` : 'find a warm path',
         body:
           seed ||
           `look for a warm intro into ${ctx ?? 'this company'} from people already in your graph.`,
-      };
+      });
     case 'reminder':
-      return {
+      return clampDraft({
         subject: ctx ? `remind · ${ctx}` : 'reminder',
         body: seed || `follow up with ${name}${ctx ? ` about ${ctx}` : ''}.`,
-      };
+      });
     case 'check-in':
     case 'follow-up':
-      return {
+      return clampDraft({
         subject: `great meeting you${name !== 'there' ? `, ${name.split(/\s+/)[0]}` : ''}`,
         body:
           seed ||
           `hey ${name} — great meeting you${ctx ? ` at ${ctx}` : ''}. wanted to follow up while it's fresh.`,
-      };
+      });
     default: {
       const _exhaustive: never = input.intent;
       return _exhaustive;
@@ -117,29 +131,51 @@ function buildPrompt(input: PolishDraftInput): string {
   ].join('\n');
 }
 
+async function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 /**
  * Polish a draft via Mastra when OPENROUTER_API_KEY is set; otherwise template.
- * Never throws — always returns a usable DraftOutput.
+ * Never throws — always returns a usable DraftOutput within POLISH_TIMEOUT_MS.
  */
 export async function polishDraft(
   input: PolishDraftInput,
-  opts?: { agent?: Agent },
+  opts?: { agent?: Agent; timeoutMs?: number },
 ): Promise<DraftOutput> {
   const fallback = templateDraft(input);
   if (!env.OPENROUTER_API_KEY) return fallback;
 
+  const timeoutMs = opts?.timeoutMs ?? POLISH_TIMEOUT_MS;
   try {
     const agent = opts?.agent ?? createActsDraftAgent();
-    const response = await agent.generate(buildPrompt(input), {
-      structuredOutput: {
-        schema: draftOutputSchema,
-        errorStrategy: 'fallback',
-        fallbackValue: fallback,
-      },
-    });
-    const object = response.object ?? fallback;
-    const parsed = draftOutputSchema.safeParse(object);
-    return parsed.success ? parsed.data : fallback;
+    const polished = await withTimeout(
+      (async () => {
+        const response = await agent.generate(buildPrompt(input), {
+          structuredOutput: {
+            schema: draftOutputSchema,
+            errorStrategy: 'fallback',
+            fallbackValue: fallback,
+          },
+        });
+        const object = response.object ?? fallback;
+        const parsed = draftOutputSchema.safeParse(object);
+        return parsed.success ? clampDraft(parsed.data) : fallback;
+      })(),
+      timeoutMs,
+      fallback,
+    );
+    return polished;
   } catch {
     return fallback;
   }
