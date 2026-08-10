@@ -114,7 +114,7 @@ export function parseLinkedInCsv(text: string): ImportContactDraft[] {
 
   // LinkedIn sometimes prepends notes rows before the real header.
   let headerIdx = 0;
-  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+  for (let i = 0; i < rows.length; i++) {
     const mapped = rows[i]!.map(mapHeader);
     if (mapped.includes('firstName') || mapped.includes('linkedinUrl')) {
       headerIdx = i;

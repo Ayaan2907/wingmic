@@ -23,7 +23,8 @@ function getProp(line: string): { key: string; value: string } | null {
   if (idx < 0) return null;
   const left = line.slice(0, idx);
   const value = decodeQuotedPrintable(line.slice(idx + 1).trim());
-  const key = left.split(';')[0]!.trim().toUpperCase();
+  // Strip optional group prefix (item1.EMAIL → EMAIL).
+  const key = left.split(';')[0]!.trim().split('.').at(-1)!.toUpperCase();
   return { key, value };
 }
 
@@ -54,6 +55,7 @@ export function parseVcard(text: string): ImportContactDraft[] {
   const lines = unfold(text).split('\n');
   const out: ImportContactDraft[] = [];
   let current: Record<string, string> = {};
+  const urls: string[] = [];
   let inCard = false;
 
   const flush = () => {
@@ -63,14 +65,21 @@ export function parseVcard(text: string): ImportContactDraft[] {
     const name = fn || fromN;
     if (!name) {
       current = {};
+      urls.length = 0;
       return;
     }
     const email = current.EMAIL?.trim() || null;
     const org = current.ORG?.split(';')[0]?.trim() || null;
     const role = current.TITLE?.trim() || null;
     const phone = current.TEL?.trim() || null;
-    const url = current.URL ? normalizeUrl(current.URL) : null;
-    const linkedinUrl = url && isLinkedIn(url) ? url : null;
+    let linkedinUrl: string | null = null;
+    for (const raw of urls) {
+      const normalized = normalizeUrl(raw);
+      if (normalized && isLinkedIn(normalized)) {
+        linkedinUrl = normalized;
+        break;
+      }
+    }
     const draft = importContactDraftSchema.safeParse({
       name,
       email: email && email.includes('@') ? email : null,
@@ -82,6 +91,7 @@ export function parseVcard(text: string): ImportContactDraft[] {
     });
     if (draft.success) out.push(draft.data);
     current = {};
+    urls.length = 0;
   };
 
   for (const rawLine of lines) {
@@ -92,6 +102,7 @@ export function parseVcard(text: string): ImportContactDraft[] {
       flush();
       inCard = true;
       current = {};
+      urls.length = 0;
       continue;
     }
     if (upper === 'END:VCARD') {
@@ -102,7 +113,11 @@ export function parseVcard(text: string): ImportContactDraft[] {
     if (!inCard) continue;
     const prop = getProp(line);
     if (!prop) continue;
-    // Keep first occurrence of each key (EMAIL/TEL/URL).
+    if (prop.key === 'URL') {
+      urls.push(prop.value);
+      continue;
+    }
+    // Keep first occurrence of each other key (EMAIL/TEL/FN/…).
     if (current[prop.key] == null) current[prop.key] = prop.value;
   }
   flush();

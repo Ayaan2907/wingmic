@@ -13,6 +13,9 @@ import { accent } from '@/app/chat/_components/tokens';
 
 type Phase = 'idle' | 'parsing' | 'ready' | 'uploading' | 'done' | 'error';
 
+/** Must match `MAX_BATCH` on imports.upsertBatch. */
+const MAX_CONTACTS = 1000;
+
 export function ImportsClient() {
   const [phase, setPhase] = React.useState<Phase>('idle');
   const [error, setError] = React.useState<string | null>(null);
@@ -25,6 +28,8 @@ export function ImportsClient() {
     total: number;
   } | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  /** Bumps on each file selection so a stale `file.text()` cannot overwrite newer state. */
+  const parseGenRef = React.useRef(0);
 
   const upsert = trpc.imports.upsertBatch.useMutation({
     onSuccess: (res) => {
@@ -38,15 +43,29 @@ export function ImportsClient() {
   });
 
   async function handleFile(file: File) {
+    const gen = ++parseGenRef.current;
     setError(null);
     setResult(null);
     setPhase('parsing');
     setFilename(file.name);
+    setContacts([]);
+    setKind(null);
     try {
       const text = await file.text();
+      if (gen !== parseGenRef.current) return;
       const parsed = normalizeContactsFromFile({ filename: file.name, text });
+      if (gen !== parseGenRef.current) return;
       if (parsed.contacts.length === 0) {
         setError('no contacts found in that file');
+        setPhase('error');
+        setContacts([]);
+        setKind(null);
+        return;
+      }
+      if (parsed.contacts.length > MAX_CONTACTS) {
+        setError(
+          `too many contacts (${parsed.contacts.length}) — split the file to ${MAX_CONTACTS} or fewer`,
+        );
         setPhase('error');
         setContacts([]);
         setKind(null);
@@ -56,6 +75,7 @@ export function ImportsClient() {
       setContacts(parsed.contacts);
       setPhase('ready');
     } catch {
+      if (gen !== parseGenRef.current) return;
       setError('could not read that file');
       setPhase('error');
     }

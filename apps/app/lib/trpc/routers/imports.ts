@@ -35,7 +35,6 @@ export const importsRouter = router({
 
       let created = 0;
       let matched = 0;
-      let skipped = 0;
       const entityIds: string[] = [];
 
       const owned = await ctx.db.query.entities.findMany({
@@ -69,6 +68,14 @@ export const importsRouter = router({
         if (f.key === 'linkedin' && !byLinkedIn.has(v)) byLinkedIn.set(v, f.entityId);
       }
 
+      const registerIdentifiers = (entityId: string, contact: ImportContactDraft) => {
+        byName.set(contact.name.trim().toLowerCase(), entityId);
+        if (contact.email) byEmail.set(contact.email.trim().toLowerCase(), entityId);
+        if (contact.linkedinUrl) {
+          byLinkedIn.set(contact.linkedinUrl.trim().toLowerCase(), entityId);
+        }
+      };
+
       for (const contact of input.contacts) {
         const resolved = resolveMatch(contact, { byEmail, byLinkedIn, byName });
         if (resolved) {
@@ -82,6 +89,7 @@ export const importsRouter = router({
                 eq(schema.entities.ownerUserId, ctx.user.id),
               ),
             );
+          registerIdentifiers(resolved, contact);
           matched++;
           entityIds.push(resolved);
           continue;
@@ -98,15 +106,10 @@ export const importsRouter = router({
           })
           .returning({ id: schema.entities.id });
         if (!inserted) {
-          skipped++;
-          continue;
+          throw new Error('failed to insert imported contact');
         }
         await mergeFacts(ctx.db, inserted.id, contact);
-        byName.set(contact.name.trim().toLowerCase(), inserted.id);
-        if (contact.email) byEmail.set(contact.email.trim().toLowerCase(), inserted.id);
-        if (contact.linkedinUrl) {
-          byLinkedIn.set(contact.linkedinUrl.trim().toLowerCase(), inserted.id);
-        }
+        registerIdentifiers(inserted.id, contact);
         created++;
         entityIds.push(inserted.id);
       }
@@ -116,7 +119,6 @@ export const importsRouter = router({
         importSource,
         created,
         matched,
-        skipped,
         total: input.contacts.length,
         entityIds,
       };

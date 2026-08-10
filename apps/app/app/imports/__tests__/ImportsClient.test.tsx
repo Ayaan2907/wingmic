@@ -25,7 +25,6 @@ vi.mock('@/lib/trpc/client', () => ({
               total: 1,
               batchId: 'batch',
               importSource: 'linkedin:batch',
-              skipped: 0,
               entityIds: ['e1'],
             });
           },
@@ -38,9 +37,21 @@ vi.mock('@/lib/trpc/client', () => ({
 
 import { ImportsClient } from '../ImportsClient';
 
+function csvFor(names: string[]): string {
+  const header =
+    'First Name,Last Name,URL,Email Address,Company,Position,Connected On';
+  const rows = names.map((n, i) => {
+    const [first, ...rest] = n.split(' ');
+    const last = rest.join(' ') || 'X';
+    return `${first},${last},https://www.linkedin.com/in/${first!.toLowerCase()}-${i},,Acme,Eng,01 Jan 2024`;
+  });
+  return `${header}\n${rows.join('\n')}\n`;
+}
+
 afterEach(() => {
   cleanup();
   upsertMutate.mockClear();
+  vi.restoreAllMocks();
 });
 
 describe('ImportsClient', () => {
@@ -56,9 +67,7 @@ describe('ImportsClient', () => {
   it('parses a csv file and commits via upsertBatch', async () => {
     render(<ImportsClient />);
     const input = screen.getByTestId('imports-file-input') as HTMLInputElement;
-    const csv = `First Name,Last Name,URL,Email Address,Company,Position,Connected On
-Ada,Lovelace,https://www.linkedin.com/in/ada,ada@example.com,Engines,Math,01 Jan 2024
-`;
+    const csv = csvFor(['Ada Lovelace']);
     const file = new File([csv], 'Connections.csv', { type: 'text/csv' });
     await waitFor(() => {
       fireEvent.change(input, { target: { files: [file] } });
@@ -77,5 +86,53 @@ Ada,Lovelace,https://www.linkedin.com/in/ada,ada@example.com,Engines,Math,01 Jan
     await waitFor(() => {
       expect(screen.getByTestId('imports-result').textContent).toMatch(/import complete/i);
     });
+  });
+
+  it('rejects files with more than 1000 contacts before commit', async () => {
+    render(<ImportsClient />);
+    const input = screen.getByTestId('imports-file-input') as HTMLInputElement;
+    const names = Array.from({ length: 1001 }, (_, i) => `Person ${i}`);
+    const file = new File([csvFor(names)], 'Connections.csv', { type: 'text/csv' });
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => {
+      expect(screen.getByTestId('imports-error').textContent).toMatch(/too many contacts/i);
+    });
+    expect(screen.queryByTestId('imports-commit')).toBeNull();
+    expect(upsertMutate).not.toHaveBeenCalled();
+  });
+
+  it('ignores a stale parse when a newer file is selected', async () => {
+    let resolveSlow: ((v: string) => void) | null = null;
+    const slowText = new Promise<string>((resolve) => {
+      resolveSlow = resolve;
+    });
+
+    const originalText = File.prototype.text;
+    let call = 0;
+    vi.spyOn(File.prototype, 'text').mockImplementation(function (this: File) {
+      call += 1;
+      if (call === 1) return slowText;
+      return originalText.call(this);
+    });
+
+    render(<ImportsClient />);
+    const input = screen.getByTestId('imports-file-input') as HTMLInputElement;
+
+    const slowFile = new File(['slow'], 'slow.csv', { type: 'text/csv' });
+    const fastCsv = csvFor(['Grace Hopper']);
+    const fastFile = new File([fastCsv], 'Connections.csv', { type: 'text/csv' });
+
+    fireEvent.change(input, { target: { files: [slowFile] } });
+    fireEvent.change(input, { target: { files: [fastFile] } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('imports-preview').textContent).toContain('Grace Hopper');
+    });
+
+    resolveSlow!(csvFor(['Ada Lovelace']));
+    // Stale slow parse must not replace the newer preview.
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.getByTestId('imports-preview').textContent).toContain('Grace Hopper');
+    expect(screen.getByTestId('imports-preview').textContent).not.toContain('Ada Lovelace');
   });
 });

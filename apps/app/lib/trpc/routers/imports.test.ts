@@ -137,4 +137,29 @@ describe('imports router', () => {
     expect(second.matched).toBe(1);
     expect(second.entityIds[0]).toBe(first.entityIds[0]);
   });
+
+  it('matches a later row in the same batch by email added earlier', async () => {
+    const res = await caller(userA).upsertBatch({
+      kind: 'vcard',
+      contacts: [
+        {
+          name: 'Katherine Johnson',
+          email: 'kathy@example.com',
+          linkedinUrl: null,
+          company: 'NASA',
+          role: null,
+        },
+        {
+          name: 'K. Johnson',
+          email: 'kathy@example.com',
+          linkedinUrl: 'https://www.linkedin.com/in/kjohnson',
+          company: 'NASA',
+          role: 'Mathematician',
+        },
+      ],
+    });
+    expect(res.created).toBe(1);
+    expect(res.matched).toBe(1);
+    expect(res.entityIds[0]).toBe(res.entityIds[1]);
+  });
 });
