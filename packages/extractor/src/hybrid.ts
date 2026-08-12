@@ -458,11 +458,15 @@ export function sanitizeExtraction(r: ExtractionResult): ExtractionResult {
   const persons = r.persons.filter((p) => !isJunkName(p.name));
   const companies = r.companies.filter((c) => !isJunkName(c.name));
   const events = r.events.filter((e) => !isJunkName(e.name));
+  const entityBag = { persons, companies, events };
   return {
-    persons,
+    persons: persons.map((p) => ({
+      ...p,
+      topics: sanitizeTopics(p.topics, entityBag),
+    })),
     companies,
     events,
-    topics: sanitizeTopics(r.topics, { persons, companies, events }),
+    topics: sanitizeTopics(r.topics, entityBag),
     actions: r.actions,
   };
 }
@@ -480,13 +484,18 @@ export function sanitizeTopics(
   },
 ): string[] {
   const entityNames = new Set<string>();
+  // Only single-token entity names suppress same-token topics ("lucas" ↔ Lucas).
+  // Multi-word entities (e.g. "Research Labs") must not erase independent subjects
+  // like "research" — exact-name + place-fragment filters still apply below.
   const entityTokens = new Set<string>();
   for (const e of [...entities.persons, ...entities.companies, ...entities.events]) {
     const full = e.name.trim().toLowerCase();
     if (!full) continue;
     entityNames.add(full);
-    for (const tok of cleanNameTokens(e.name)) {
-      if (tok.length >= 3) entityTokens.add(tok);
+    const nameToks = cleanNameTokens(e.name);
+    if (nameToks.length === 1) {
+      const tok = nameToks[0]!;
+      if (tok.length >= 2) entityTokens.add(tok);
     }
   }
 
@@ -497,11 +506,11 @@ export function sanitizeTopics(
     if (!t) continue;
     const lower = t.toLowerCase();
     if (seen.has(lower)) continue;
-    if (lower.length < 3) continue;
+    // Match isJunkName floor (2) so short subjects like "AI" / "Go" survive.
+    if (lower.length < 2) continue;
     if (STOPWORDS.has(lower) || JUNK_NAMES.has(lower)) continue;
     if (entityNames.has(lower)) continue;
-    // Single-token topics that are just a piece of an extracted name ("lucas"
-    // when person "Lucas" is already captured) drop out.
+    // Single-token topics that echo a single-token entity name drop out.
     const tokens = cleanNameTokens(t);
     if (tokens.length === 1 && entityTokens.has(tokens[0]!)) continue;
     if (tokens.every((tok) => STOPWORDS.has(tok) || JUNK_NAMES.has(tok))) continue;
