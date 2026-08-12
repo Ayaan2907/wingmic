@@ -52,6 +52,7 @@ function App() {
     { href: '#mcp', label: 'MCP' },
     { href: '#imports', label: 'Imports' },
     { href: '#acts', label: 'Acts' },
+    { href: '/contribute', label: 'Contribute' },
   ];
 
   const handleMobileLinkClick = () => setMobileMenuOpen(false);
