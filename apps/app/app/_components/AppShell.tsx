@@ -26,7 +26,7 @@ const CHROMELESS = ['/signin', '/onboarding'];
 
 function activeFor(pathname: string): BottomTabKey | null {
   if (pathname === '/') return 'home';
-  if (pathname.startsWith('/chat')) return 'capture';
+  if (pathname.startsWith('/chat')) return 'chat';
   if (pathname.startsWith('/graph')) return 'graph';
   if (pathname.startsWith('/acts')) return 'acts';
   return null; // entity / search / settings — no tab highlighted

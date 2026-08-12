@@ -249,9 +249,9 @@ function MessageBubble(props: MessageBubbleProps) {
   const showSkeleton = m.status === 'uploading' || m.status === 'transcribing';
   const showLinkSweep = m.status === 'linking';
   const isCommitted = m.status === 'committed';
-  // Agent reply renders for every freshly-committed memo with a graphResult
-  // (including sparse ones — soft "noted" copy). Prefetched-history bubbles
-  // (graphResult === null) still skip it.
+  // Agent reply renders for every committed memo with a graphResult
+  // (including sparse ones — soft "noted" copy). Prefetch hydrates
+  // graphResult from DB so refresh keeps the two-sided thread.
   const g = m.graphResult;
   const showAgentReply = isCommitted && g != null;
 

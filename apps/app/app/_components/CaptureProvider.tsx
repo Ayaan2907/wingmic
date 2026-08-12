@@ -90,7 +90,7 @@ function seedMessages(initialThread: ChatInitialItem[]): ThreadMessage[] {
     duration: 0,
     transcribeMs: null,
     commitMs: null,
-    graphResult: null,
+    graphResult: item.graphResult ?? null,
     error: null,
     createdAt: new Date(item.capturedAt),
     transcribingStartedAt: null,
