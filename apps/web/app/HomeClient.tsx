@@ -1283,9 +1283,17 @@ function App() {
           map((col) =>
           <div key={col.h}>
               <div className="mono" style={{ fontSize: 11, color: accent, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1.5 }}>{col.h}</div>
-              {col.items.map((it) =>
-            <a key={it} href="#" style={{ display: 'block', fontSize: 13, color: 'rgba(255,255,255,0.6)', padding: '4px 0' }}>{it}</a>
-            )}
+              {col.items.map((it) => {
+              const external = it === 'X / Twitter' ? 'https://x.com/wingmicxyz' : null;
+              return (
+                <a
+                  key={it}
+                  href={external ?? '#'}
+                  {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
+                  style={{ display: 'block', fontSize: 13, color: 'rgba(255,255,255,0.6)', padding: '4px 0' }}
+                >{it}</a>
+              );
+            })}
             </div>
           )}
         </div>
