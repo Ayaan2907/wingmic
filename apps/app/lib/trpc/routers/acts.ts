@@ -24,30 +24,45 @@ export const actsRouter = router({
     .input(
       z
         .object({
+          /** Inbox filter — pending = drafted + due snoozed (default). */
+          filter: z.enum(['pending', 'sent', 'all']).default('pending'),
           status: z.enum(['drafted', 'snoozed', 'sent', 'dismissed']).optional(),
           limit: z.number().int().min(1).max(50).default(20),
         })
-        .default({ limit: 20 }),
+        .default({ limit: 20, filter: 'pending' }),
     )
     .query(async ({ ctx, input }) => {
       const now = new Date();
-      // Default inbox: drafted + snoozed that are due (runAt null or <= now).
-      // Explicit status=snoozed still returns all snoozed (including future).
+      const filter = input.status
+        ? null
+        : (input.filter ?? 'pending');
+      // Explicit status wins (legacy callers); else filter chips.
       const where =
         input.status === 'snoozed'
           ? and(eq(schema.acts.userId, ctx.user.id), eq(schema.acts.status, 'snoozed'))
           : input.status
             ? and(eq(schema.acts.userId, ctx.user.id), eq(schema.acts.status, input.status))
-            : and(
-                eq(schema.acts.userId, ctx.user.id),
-                or(
-                  eq(schema.acts.status, 'drafted'),
-                  and(
-                    eq(schema.acts.status, 'snoozed'),
-                    or(isNull(schema.acts.runAt), lte(schema.acts.runAt, now)),
-                  ),
-                ),
-              );
+            : filter === 'sent'
+              ? and(eq(schema.acts.userId, ctx.user.id), eq(schema.acts.status, 'sent'))
+              : filter === 'all'
+                ? and(
+                    eq(schema.acts.userId, ctx.user.id),
+                    or(
+                      eq(schema.acts.status, 'drafted'),
+                      eq(schema.acts.status, 'snoozed'),
+                      eq(schema.acts.status, 'sent'),
+                    ),
+                  )
+                : and(
+                    eq(schema.acts.userId, ctx.user.id),
+                    or(
+                      eq(schema.acts.status, 'drafted'),
+                      and(
+                        eq(schema.acts.status, 'snoozed'),
+                        or(isNull(schema.acts.runAt), lte(schema.acts.runAt, now)),
+                      ),
+                    ),
+                  );
 
       const rows = await ctx.db.query.acts.findMany({
         where,

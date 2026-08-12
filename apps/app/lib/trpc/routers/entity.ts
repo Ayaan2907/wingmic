@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import type { DB } from '@wingmic/db';
@@ -210,6 +210,17 @@ async function loadPerson(
     eventById,
   });
 
+  // Captures + pending acts targeted at this person (follow-ups strip).
+  const followupRows = await db.query.acts.findMany({
+    where: and(
+      eq(schema.acts.userId, userId),
+      eq(schema.acts.targetEntityId, entityId),
+      or(eq(schema.acts.status, 'drafted'), eq(schema.acts.status, 'snoozed')),
+    ),
+    orderBy: [desc(schema.acts.createdAt)],
+    limit: 10,
+  });
+
   return {
     kind: 'person' as const,
     id: entity.id,
@@ -219,7 +230,7 @@ async function loadPerson(
       role: primaryEc?.role ?? null,
       companyId: primaryCompany?.id ?? null,
       companyName: primaryCompany?.name ?? null,
-      warmFollowup: false,
+      warmFollowup: followupRows.length > 0,
     } satisfies DetailSub,
     stats: [
       { key: 'edges', value: String(edgesCount) },
@@ -227,7 +238,11 @@ async function loadPerson(
       { key: 'since', value: since == null ? '—' : `${since}d` },
     ] satisfies DetailStats,
     captures,
-    followups: [] as Array<{ id: string; body: string; dueHint?: string }>,
+    followups: followupRows.map((a) => ({
+      id: a.id,
+      body: a.subject ? `${a.subject} — ${a.body}` : a.body,
+      dueHint: a.whenHint ?? undefined,
+    })),
     related,
     topics: topics.map((t: any) => ({ id: t.id, name: t.name })),
   };
