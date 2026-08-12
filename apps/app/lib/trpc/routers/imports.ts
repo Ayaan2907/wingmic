@@ -183,7 +183,10 @@ export const importsRouter = router({
             ownerUserId: ctx.user.id,
             kind: 'person',
             name: contact.name.trim(),
-            aliases: [],
+            aliases: [
+              ...(contact.company ? [contact.company.trim()] : []),
+              ...(contact.role ? [contact.role.trim()] : []),
+            ].filter(Boolean),
             importSource,
           })
           .returning({ id: schema.entities.id });
@@ -205,6 +208,34 @@ export const importsRouter = router({
         total: input.contacts.length,
         entityIds,
       };
+    }),
+
+  /**
+   * Soft-delete every entity created in a batch (`importSource = kind:batchId`).
+   * Matched (pre-existing) people are left alone — they never received that stamp.
+   */
+  undoBatch: protectedProcedure
+    .input(
+      z.object({
+        kind: importSourceKindSchema,
+        batchId: z.string().min(1).max(80),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const importSource = formatImportSource(input.kind, input.batchId);
+      const now = new Date();
+      const removed = await ctx.db
+        .update(schema.entities)
+        .set({ deletedAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(schema.entities.ownerUserId, ctx.user.id),
+            eq(schema.entities.importSource, importSource),
+            isNull(schema.entities.deletedAt),
+          ),
+        )
+        .returning({ id: schema.entities.id });
+      return { removed: removed.length, importSource };
     }),
 });
 

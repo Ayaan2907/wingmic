@@ -16,10 +16,10 @@ export const importContactDraftSchema = z.object({
 
 export type ImportContactDraft = z.infer<typeof importContactDraftSchema>;
 
-export const importSourceKindSchema = z.enum(['linkedin', 'vcard']);
+export const importSourceKindSchema = z.enum(['linkedin', 'vcard', 'device']);
 export type ImportSourceKind = z.infer<typeof importSourceKindSchema>;
 
-/** `linkedin:<batchId>` / `vcard:<batchId>` — used for undo (I8) later. */
+/** `linkedin:<batchId>` / `vcard:<batchId>` / `device:<batchId>` — used for undo. */
 export function formatImportSource(kind: ImportSourceKind, batchId: string): string {
   return `${kind}:${batchId}`;
 }
@@ -28,7 +28,7 @@ export function parseImportSource(
   value: string | null | undefined,
 ): { kind: ImportSourceKind; batchId: string } | null {
   if (!value) return null;
-  const m = /^(linkedin|vcard):(.+)$/.exec(value);
+  const m = /^(linkedin|vcard|device):(.+)$/.exec(value);
   if (!m) return null;
   return { kind: m[1] as ImportSourceKind, batchId: m[2]! };
 }

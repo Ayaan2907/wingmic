@@ -12,11 +12,13 @@ import {
 import { PersonAvatar } from '@/app/_components/entity/EntityAvatar';
 import { PersonListRail } from './_components/PersonListRail';
 import { trpc } from '@/lib/trpc/client';
+import { parseImportSource } from '@/lib/imports';
 
 export interface PersonDetail {
   kind: 'person';
   id: string;
   name: string;
+  importSource?: string | null;
   sub: {
     role: string | null;
     companyId: string | null;
@@ -41,6 +43,18 @@ export default function PersonDetailClient({ detail }: { detail: PersonDetail })
   const subText =
     [detail.sub.role, detail.sub.companyName].filter(Boolean).join(' · ') || 'no role yet';
 
+  const parsed = parseImportSource(detail.importSource);
+  const tags =
+    parsed?.kind === 'linkedin'
+      ? ['linkedin']
+      : parsed?.kind === 'vcard'
+        ? ['vcard']
+        : parsed?.kind === 'device'
+          ? ['device']
+          : detail.importSource && detail.importSource !== 'voice-capture'
+            ? ['imported']
+            : undefined;
+
   return (
     // Desktop (≥1120px) splits into [people list | detail]; on mobile the
     // list is display:none and the detail scaffold is the full-width column.
@@ -53,6 +67,7 @@ export default function PersonDetailClient({ detail }: { detail: PersonDetail })
           eyebrow="◉ person"
           name={detail.name}
           sub={subText}
+          tags={tags}
           primaryCta={{
             label: 'draft check-in →',
             pending: createDraft.isPending,
