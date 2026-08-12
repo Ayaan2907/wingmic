@@ -101,6 +101,14 @@ describe('HomeClient', () => {
     expect(list.textContent).toContain('priya knows compiler internals');
     expect(list.textContent).toContain('4');
     expect(list.textContent).toContain('2');
+    expect(screen.getByTestId('home-activity-row-int_1').getAttribute('href')).toBe('/chat');
+  });
+
+  it('surfaces an imports cue on home', () => {
+    render(<HomeClient userName="ayaan" initialData={sampleData} />);
+    const cue = screen.getByTestId('home-imports-cue');
+    expect(cue.getAttribute('href')).toBe('/imports');
+    expect(cue.textContent).toMatch(/import contacts/i);
   });
 
   it('renders the agent stripe with live draft count', () => {

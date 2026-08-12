@@ -54,6 +54,7 @@ export const STOPWORDS: ReadonlySet<string> = new Set([
   'anybody', 'nothing', 'nobody', 'everything', 'everyone', 'everybody',
   // common verbs that aren't topics
   'talk', 'talks', 'talked', 'talking',
+  'discuss', 'discusses', 'discussed', 'discussing', 'discussion', 'discussions',
   'said', 'says', 'saying',
   'know', 'known', 'knew', 'knows', 'knowing',
   'think', 'thinks', 'thought', 'thinking',
@@ -67,6 +68,11 @@ export const STOPWORDS: ReadonlySet<string> = new Set([
   'tell', 'tells', 'told', 'telling',
   'work', 'works', 'worked', 'working',
   'look', 'looks', 'looked', 'looking',
+  'move', 'moves', 'moved', 'moving',
+  'meet', 'meets', 'met', 'meeting', 'meetings',
+  'follow', 'follows', 'followed', 'following',
+  'send', 'sends', 'sent', 'sending',
+  'just', 'also',
   // pronouns continued
   'you', 'one', 'ones', 'self',
   // misc

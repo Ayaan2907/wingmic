@@ -75,6 +75,29 @@ export const entityRouter = router({
       }
       return await loadEvent(db, userId, id);
     }),
+
+  /** Desktop person rail — owned people, newest first. */
+  listPeople: protectedProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(100).default(40) }).optional())
+    .query(async ({ ctx, input }) => {
+      const limit = input?.limit ?? 40;
+      const people = await ctx.db.query.entities.findMany({
+        where: and(
+          eq(schema.entities.ownerUserId, ctx.user.id),
+          isNull(schema.entities.deletedAt),
+          eq(schema.entities.kind, 'person'),
+        ),
+        orderBy: [desc(schema.entities.updatedAt)],
+        limit,
+      });
+      return {
+        people: people.map((p) => ({
+          id: p.id,
+          name: p.name,
+          importSource: p.importSource,
+        })),
+      };
+    }),
 });
 
 // ────────────────────────────────────────────────────────────────────

@@ -55,6 +55,14 @@ describe('AppShell', () => {
     expect(screen.getByText('page')).toBeTruthy();
   });
 
+  it('marks the chat tab active on /chat', async () => {
+    mockPath('/chat');
+    const { AppShell: Shell } = await import('../AppShell');
+    render(<Shell><div>c</div></Shell>);
+    const chat = screen.getByText('chat').closest('a');
+    expect(chat?.getAttribute('aria-current')).toBe('page');
+  });
+
   it('marks the active tab from the pathname', async () => {
     mockPath('/graph');
     const { AppShell: Shell } = await import('../AppShell');

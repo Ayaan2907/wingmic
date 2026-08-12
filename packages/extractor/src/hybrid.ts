@@ -332,6 +332,10 @@ Hard rules:
    speaker's graph. If the transcript plausibly refers to one of them, reuse
    that exact stored name and put the spoken variant in aliases — do not
    mint a near-duplicate.
+9. topics are noun subjects worth remembering (e.g. "rust", "co-working",
+   "relocation"). NEVER verbs ("discussed", "met"), NEVER person or company
+   names already listed under persons/companies, NEVER single fragments of a
+   place name when the full place is already a topic. Prefer fewer topics.
 
 Output the ExtractionResult JSON schema.`;
 
@@ -449,15 +453,73 @@ function isJunkName(name: string): boolean {
   return tokens.every((t) => JUNK_NAMES.has(t) || STOPWORDS.has(t));
 }
 
-/** Drop pronoun/verb/stopword junk from entity names — last step of extractHybrid. */
+/** Drop pronoun/verb/stopword junk from entity names + topics — last step of extractHybrid. */
 export function sanitizeExtraction(r: ExtractionResult): ExtractionResult {
+  const persons = r.persons.filter((p) => !isJunkName(p.name));
+  const companies = r.companies.filter((c) => !isJunkName(c.name));
+  const events = r.events.filter((e) => !isJunkName(e.name));
   return {
-    persons: r.persons.filter((p) => !isJunkName(p.name)),
-    companies: r.companies.filter((c) => !isJunkName(c.name)),
-    events: r.events.filter((e) => !isJunkName(e.name)),
-    topics: r.topics,
+    persons,
+    companies,
+    events,
+    topics: sanitizeTopics(r.topics, { persons, companies, events }),
     actions: r.actions,
   };
+}
+
+/**
+ * Topics must be recallable subjects — not speech verbs, not echoes of
+ * entities already captured as people/companies/events.
+ */
+export function sanitizeTopics(
+  topics: string[],
+  entities: {
+    persons: Array<{ name: string }>;
+    companies: Array<{ name: string }>;
+    events: Array<{ name: string }>;
+  },
+): string[] {
+  const entityNames = new Set<string>();
+  const entityTokens = new Set<string>();
+  for (const e of [...entities.persons, ...entities.companies, ...entities.events]) {
+    const full = e.name.trim().toLowerCase();
+    if (!full) continue;
+    entityNames.add(full);
+    for (const tok of cleanNameTokens(e.name)) {
+      if (tok.length >= 3) entityTokens.add(tok);
+    }
+  }
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of topics) {
+    const t = raw.trim();
+    if (!t) continue;
+    const lower = t.toLowerCase();
+    if (seen.has(lower)) continue;
+    if (lower.length < 3) continue;
+    if (STOPWORDS.has(lower) || JUNK_NAMES.has(lower)) continue;
+    if (entityNames.has(lower)) continue;
+    // Single-token topics that are just a piece of an extracted name ("lucas"
+    // when person "Lucas" is already captured) drop out.
+    const tokens = cleanNameTokens(t);
+    if (tokens.length === 1 && entityTokens.has(tokens[0]!)) continue;
+    if (tokens.every((tok) => STOPWORDS.has(tok) || JUNK_NAMES.has(tok))) continue;
+    seen.add(lower);
+    out.push(t);
+  }
+
+  // Drop single-token topics that are fragments of another kept multi-word topic
+  // (e.g. "francisco" when "San Francisco" is also a topic).
+  const multiTokenBags = out
+    .map((t) => cleanNameTokens(t))
+    .filter((toks) => toks.length >= 2);
+  return out.filter((t) => {
+    const toks = cleanNameTokens(t);
+    if (toks.length !== 1) return true;
+    const alone = toks[0]!;
+    return !multiTokenBags.some((bag) => bag.includes(alone));
+  });
 }
 
 // ──────────────────────────────────────────────────────────────────────

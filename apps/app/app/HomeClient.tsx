@@ -86,6 +86,7 @@ export default function HomeClient({ userName, initialData }: HomeClientProps) {
         }}
       >
         <StatsRow today={todayCount} week={weekCount} />
+        <ImportsCue />
         <HomeActsPanel fallbackCount={pendingActs} />
         <ActivityList items={recent} />
       </section>
@@ -126,31 +127,81 @@ function Header({ userName }: { userName: string | null }) {
           letterSpacing: 1,
           color: 'var(--text-40)',
           textTransform: 'uppercase',
+          flex: 1,
+          textAlign: 'center',
         }}
       >
         home · {userName ?? 'you'}
       </span>
-      <Link
-        href="/settings"
-        aria-label="settings"
-        style={{
-          width: 30,
-          height: 30,
-          borderRadius: 8,
-          background: 'var(--surface-1)',
-          border: '1px solid var(--border-soft)',
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--text-55)',
-          textDecoration: 'none',
-          fontSize: 14,
-          flexShrink: 0,
-        }}
-      >
-        ⚙
-      </Link>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <Link
+          href="/search"
+          aria-label="search"
+          className="mono"
+          style={{
+            padding: '6px 10px',
+            borderRadius: 8,
+            background: 'var(--surface-1)',
+            border: '1px solid var(--border-soft)',
+            color: 'var(--text-55)',
+            textDecoration: 'none',
+            fontSize: 11,
+            letterSpacing: 1,
+            textTransform: 'uppercase',
+          }}
+        >
+          search
+        </Link>
+        <Link
+          href="/settings"
+          aria-label="settings"
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 8,
+            background: 'var(--surface-1)',
+            border: '1px solid var(--border-soft)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-55)',
+            textDecoration: 'none',
+            fontSize: 14,
+            flexShrink: 0,
+          }}
+        >
+          ⚙
+        </Link>
+      </div>
     </header>
+  );
+}
+
+// ─── Imports cue ─────────────────────────────────────────────────────────
+
+function ImportsCue() {
+  return (
+    <Link
+      href="/imports"
+      data-testid="home-imports-cue"
+      style={{
+        display: 'block',
+        marginBottom: 20,
+        padding: '14px 16px',
+        borderRadius: 14,
+        border: `1.5px dashed ${accent}66`,
+        background: `${accent}0d`,
+        textDecoration: 'none',
+        color: 'inherit',
+      }}
+    >
+      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+        import contacts →
+      </div>
+      <div className="mono" style={{ fontSize: 11, color: 'var(--text-55)', lineHeight: 1.4 }}>
+        LinkedIn Connections.csv or a .vcf — cold-start your graph.
+      </div>
+    </Link>
   );
 }
 
@@ -265,14 +316,22 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
             <li
               key={item.id}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '12px 14px',
                 borderBottom:
                   i < items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
               }}
             >
+              <Link
+                href="/chat"
+                data-testid={`home-activity-row-${item.id}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 14px',
+                  textDecoration: 'none',
+                  color: 'inherit',
+                }}
+              >
               {/* Decorative: seeded from interaction id, not a real person — hide from SR
                   so the transcript preview is announced cleanly. */}
               <span aria-hidden="true" style={{ display: 'inline-flex' }}>
@@ -321,6 +380,7 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
               >
                 {timeOf(item.capturedAt)}
               </span>
+              </Link>
             </li>
           ))}
         </ul>

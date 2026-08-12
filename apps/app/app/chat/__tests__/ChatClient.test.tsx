@@ -272,7 +272,7 @@ describe('ChatClient', () => {
     });
     // graph card: shows the person name
     await waitFor(() => {
-      expect(screen.getByText('sarah')).toBeTruthy();
+      expect(screen.getAllByText('sarah').length).toBeGreaterThanOrEqual(1);
     });
     // PR ε / A6: agent reply with live draft follow-up when a person was extracted.
     const reply = await waitFor(() => screen.getByTestId('agent-reply'));
@@ -290,7 +290,7 @@ describe('ChatClient', () => {
     });
   });
 
-  it('renders an empty graph card footer when extracted entities are all empty', async () => {
+  it('renders a soft agent reply when extracted entities are all empty', async () => {
     const audioBlob = new Blob(['x'], { type: 'audio/webm' });
     fakeRecorder.audioBlob = audioBlob;
     (globalThis as { fetch: typeof fetch }).fetch = vi.fn(async () =>
@@ -321,9 +321,9 @@ describe('ChatClient', () => {
       await Promise.resolve();
     });
 
-    await waitFor(() => {
-      expect(screen.getByText(/no entities found/i)).toBeTruthy();
-    });
+    const soft = await waitFor(() => screen.getByTestId('agent-reply-soft'));
+    expect(soft.textContent).toMatch(/noted — nothing solid to tag yet/i);
+    expect(screen.queryByText(/no entities found/i)).toBeNull();
   });
 
   it('renders a failed bubble with retry/paste/discard actions on transcribe 502', async () => {
@@ -609,6 +609,42 @@ describe('ChatClient', () => {
     const order2 = m2.compareDocumentPosition(m3);
     // eslint-disable-next-line no-bitwise
     expect(order2 & 4).toBeTruthy();
+  });
+
+  it('hydrated prefetch with graphResult shows agent reply after cold mount', () => {
+    renderChat({
+      userName: 'ada',
+      initialThread: [
+        {
+          id: 'ix_hydrated',
+          transcript: 'met Ada Lovelace, rust lead',
+          capturedAt: '2026-06-01T14:00:00Z',
+          graphResult: {
+            extracted: {
+              persons: [
+                {
+                  name: 'Ada Lovelace',
+                  role: 'rust lead',
+                  companyHint: null,
+                  topics: ['rust'],
+                },
+              ],
+              companies: [],
+              events: [],
+              topics: ['rust'],
+              actions: [],
+            },
+            newEntities: 1,
+            matchedEntities: 0,
+            interactionId: 'ix_hydrated',
+            entityIds: ['en_ada'],
+          },
+        },
+      ],
+    });
+    expect(screen.getByText('met Ada Lovelace, rust lead')).toBeTruthy();
+    expect(screen.getByText(/captured 1 person/i)).toBeTruthy();
+    expect(screen.getAllByText(/Ada Lovelace/i).length).toBeGreaterThanOrEqual(1);
   });
 
   it('thread dims (opacity 0.4, pointer-events none) when recorder transitions to recording', async () => {

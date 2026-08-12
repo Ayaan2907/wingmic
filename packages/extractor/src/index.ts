@@ -10,5 +10,5 @@ export {
   ActionCandidate,
 } from './schema';
 export { SYSTEM_PROMPT, userPrompt } from './prompt';
-export { extractHybrid, mapProviderEntities, applyHeuristics, mergeResults } from './hybrid';
+export { extractHybrid, mapProviderEntities, applyHeuristics, mergeResults, sanitizeExtraction } from './hybrid';
 export type { AssemblyAIEntity } from './types';

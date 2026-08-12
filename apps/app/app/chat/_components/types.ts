@@ -96,4 +96,6 @@ export interface ChatInitialItem {
   transcript: string;
   /** ISO string — `capturedAt` from the interactions table, serialized for the client. */
   capturedAt: string;
+  /** Rebuilt from facts/topics/acts on prefetch so AgentReply survives refresh. */
+  graphResult?: GraphResult | null;
 }

@@ -173,12 +173,17 @@ All capture stages run inside `apps/app` (the dynamic product on Railway); `apps
  ┌──────────────────────────────────────────────────┐
  │  extractHybrid({ transcript, providerEntities }) │
  │  @wingmic/extractor → src/hybrid.ts              │
- │   • L1 AssemblyAI spans (stubbed — no text NER)  │
- │   • L2 deterministic heuristics (verbs, topics)  │
+ │   • L1 NER spans (AssemblyAI stub — empty today) │
+ │   • L2 heuristics (action verbs + topic words)   │
  │   • L3 Haiku relation linker via OpenRouter      │
+ │   • sanitizeExtraction (junk names + quiet       │
+ │     topics: drop verbs / entity-name echoes)     │
  │   • Zod schema (ExtractionResult)                │
  │   → { persons[], companies[], events[],          │
  │       topics[], actions[] }                       │
+ │  Chat dual-function (#59): classifyIntent is     │
+ │  memo|ask only; acts ride memo via actions[].    │
+ │  Sparse memo → soft "noted" agent line in chat.  │
  └─────────────────┬────────────────────────────────┘
                    │
                    ▼
@@ -365,3 +370,4 @@ We trace these explicitly so the team knows where to look when something breaks.
 - 2026-05-03 — initial version (v0.1.1 as shipped). Update when schema, flow, or framing changes.
 - 2026-05-23 — `apps/app` migrated from Cloudflare Workers (OpenNext) to Railway (Node.js). Issue #7 closed as obsolete.
 - 2026-06-06 — synced doc to shipped v0.1.2: capture is AssemblyAI hosted ASR → `extractHybrid` (heuristics + Haiku linker via OpenRouter) → text-embedding-3-small via OpenRouter; recall runs libSQL `vector_top_k` + cosine rerank (no in-memory path); capture commits render inline in chat; schema is 18 tables with forward-schema flagged dormant. Known gaps tracked for follow-up: `commit()` is not yet transactional, `clientCaptureId` idempotency is unwired, hybrid Layer 1 is a no-op until text-input NER exists.
+- 2026-08-10 — chat dual-function stays memo|ask (`classifyIntent`); acts remain nested under memo via `actions[]`. Topic sanitize drops speech verbs + entity-name echoes; sparse memos get soft agent copy (“noted — nothing solid to tag yet”). Spec: `docs/superpowers/specs/2026-08-10-memo-soft-empty-topics.md`.

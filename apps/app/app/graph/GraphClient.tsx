@@ -369,15 +369,33 @@ export function GraphClient({ data }: { data: GraphData }) {
                       : 'draft check-in →'}
               </button>
               <a
-                href={'/' + selected.kind + '/' + selected.id}
+                href={
+                  selected.kind === 'topic'
+                    ? undefined
+                    : '/' + selected.kind + '/' + selected.id
+                }
+                aria-disabled={selected.kind === 'topic' || undefined}
+                onClick={(e) => {
+                  if (selected.kind === 'topic') e.preventDefault();
+                }}
+                title={
+                  selected.kind === 'topic'
+                    ? 'topics have no detail page yet'
+                    : `open ${selected.kind}`
+                }
                 className="mono"
                 style={{
                   padding: '10px 14px',
                   borderRadius: 10,
-                  color: 'rgba(255,255,255,0.55)',
+                  color:
+                    selected.kind === 'topic'
+                      ? 'rgba(255,255,255,0.25)'
+                      : 'rgba(255,255,255,0.55)',
                   fontSize: 12,
                   textDecoration: 'none',
                   border: '1px solid var(--hair)',
+                  cursor: selected.kind === 'topic' ? 'not-allowed' : 'pointer',
+                  pointerEvents: selected.kind === 'topic' ? 'none' : 'auto',
                 }}
               >
                 open

@@ -20,6 +20,7 @@ const createDraftMutate = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPush, replace: vi.fn(), refresh: vi.fn() }),
   usePathname: () => '/person/en_sarah',
+  useParams: () => ({ id: 'en_sarah' }),
 }));
 
 vi.mock('@/lib/trpc/client', () => ({
@@ -33,6 +34,11 @@ vi.mock('@/lib/trpc/client', () => ({
           },
           isPending: false,
         }),
+      },
+    },
+    entity: {
+      listPeople: {
+        useQuery: () => ({ data: { people: [] }, isLoading: false }),
       },
     },
   },
