@@ -16,10 +16,9 @@ import {
   VoiceBars,
   StatBlock,
   Sticker,
-  MiniPhone,
+  PhoneVideo,
   Step,
   CodeBlock,
-  MarqueeRow,
   LiveFeed,
 } from './_components/marketing-ui';
 
@@ -53,7 +52,6 @@ function App() {
     { href: '#mcp', label: 'MCP' },
     { href: '#imports', label: 'Imports' },
     { href: '#acts', label: 'Acts' },
-    { href: '#testimonials', label: 'Voices' },
   ];
 
   const handleMobileLinkClick = () => setMobileMenuOpen(false);
@@ -94,15 +92,6 @@ function App() {
       setPending(false);
     }
   };
-
-  const reviews = [
-  { quote: 'I met 40 people at YC Demo Day. Wingmic remembered all of them. I remembered like 6.', who: 'Jamie Park', role: 'Founder, Stitchwork', alt: '#FF6B6B' },
-  { quote: 'Sits in my pocket, listens to my voice memos, the graph builds itself. It is the realest tool I shipped this year.', who: 'Devansh Rao', role: 'Staff Eng @ Vercel', alt: '#7DD3FC' },
-  { quote: 'I deleted my Notion CRM. I am free.', who: 'Lina Cho', role: 'PM, Anthropic', alt: '#A78BFA' },
-  { quote: 'The MCP integration is the killer feature. Claude knows my whole network now.', who: 'Marcus K', role: 'Indie hacker', alt: '#FFC452' },
-  { quote: 'Follow-through rate on warm intros went from like 20% to 90%. genuinely.', who: 'Alex Wen', role: 'Investor, Long Run', alt: '#86efac' },
-  { quote: 'Voice-first networking is the only sane interface. I can\'t go back.', who: 'Priya Shah', role: 'CTO, Layerline', alt: '#FF8FAB' }];
-
 
   return (
     <div style={{ minHeight: '100vh', position: 'relative' }}>
@@ -188,14 +177,6 @@ function App() {
           <LiveGraph accent={accent} second={second} third={third} />
         </div>
 
-        {/* Floating stickers — decorative, hidden on small screens */}
-        <div className="wm-hide-mobile">
-          <Sticker color={accent} rotate={-8} x="6%" y="14%" size="lg">v0.1 BETA · LIVE</Sticker>
-          <Sticker color="#fff" rotate={5} x="88%" y="18%">VOICE FIRST</Sticker>
-          <Sticker color={second} rotate={-3} x="4%" y="78%">MCP READY</Sticker>
-          <Sticker color={third} rotate={4} x="86%" y="80%">OPEN BETA</Sticker>
-        </div>
-
         {/* Center hero */}
         <div className="wm-hero-grid" style={{
           maxWidth: 1280, margin: '0 auto', padding: '0 32px',
@@ -263,39 +244,14 @@ function App() {
                 )}
               </div>
               <div className="mono" style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
-                <span style={{ color: '#fff', fontWeight: 700 }}>1,247</span> devs on the waitlist
+                <span style={{ color: '#fff', fontWeight: 700 }}>45+</span> devs on the waitlist
               </div>
             </div>
           </div>
 
-          {/* Right — phone */}
-          <div style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>
-            <div className="wm-hero-phone-wrap" style={{ position: 'relative', transform: 'rotate(2deg)' }}>
-              <MiniPhone accent={accent} />
-              {/* tape strip */}
-              <div className="tape" style={{ top: -12, left: '40%', transform: 'rotate(-6deg)' }} />
-            </div>
-            {/* Floating data chips */}
-            <div className="mono wm-hide-mobile" style={{
-              position: 'absolute', top: 20, right: -30,
-              padding: '8px 12px', borderRadius: 8,
-              background: '#0a0a0a', border: `1px solid ${accent}40`,
-              fontSize: 11, color: accent,
-              transform: 'rotate(6deg)',
-              animation: 'drift-up 5s ease-in-out infinite'
-            }}>
-              + 3 nodes
-            </div>
-            <div className="mono wm-hide-mobile" style={{
-              position: 'absolute', bottom: 80, left: -40,
-              padding: '8px 12px', borderRadius: 8,
-              background: '#0a0a0a', border: `1px solid ${third}40`,
-              fontSize: 11, color: third,
-              transform: 'rotate(-4deg)',
-              animation: 'drift-up 6s ease-in-out infinite 1s'
-            }}>
-              POST /v1/capture · 200
-            </div>
+          {/* Right — phone playing the product explainer */}
+          <div className="wm-hero-phone-wrap" style={{ display: 'flex', justifyContent: 'center' }}>
+            <PhoneVideo accent={accent} />
           </div>
         </div>
       </section>
@@ -1194,7 +1150,7 @@ function App() {
               </h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginTop: 20 }}>
                 <div>
-                  <div style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>1,247</div>
+                  <div style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>45+</div>
                   <div className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1.5 }}>devs on waitlist</div>
                 </div>
                 <div>
@@ -1212,24 +1168,6 @@ function App() {
               <LiveFeed accent={accent} />
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* ─────────────────── TESTIMONIALS — kinetic marquee ─────────────────── */}
-      <section id="testimonials" style={{ padding: '120px 0', background: '#0a0a0a', borderTop: `2px solid ${accent}30`, overflow: 'hidden' }}>
-        <div className="wm-section" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 32px', marginBottom: 48 }}>
-          <div className="mono" style={{ fontSize: 11, color: accent, marginBottom: 16, letterSpacing: 2, textTransform: 'uppercase' }}>
-            ◆ Real users · real graphs
-          </div>
-          <h2 className="wm-section-h2" style={{
-            fontSize: 'clamp(36px, 5vw, 68px)', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1
-          }}>
-            What devs are <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: accent }}>saying.</span>
-          </h2>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <MarqueeRow items={reviews.slice(0, 3)} accent={accent} />
-          <MarqueeRow items={reviews.slice(3)} accent={accent} reverse />
         </div>
       </section>
 
@@ -1255,7 +1193,7 @@ function App() {
             fontSize: 12, color: accent, marginBottom: 28
           }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, animation: 'pulse-d 1.5s infinite' }} />
-            v0.1 beta · 1,247 devs · waves of 50
+            v0.1 beta · 45+ devs · waves of 50
           </div>
 
           <h2 style={{

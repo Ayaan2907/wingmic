@@ -133,126 +133,47 @@ function Sticker({ children, color, rotate = 0, x, y, size = 'sm' }) {
 
 }
 
-// ─────────────────── Mini phone with live capture ───────────────────
-function MiniPhone({ accent }) {
-  const [phase, setPhase] = useState(0);
-  const transcript = "Met Sarah from Acme — Rust lead. Send repo tomorrow.";
-  const [chars, setChars] = useState(0);
+// ─────────────────── Phone frame playing the product explainer ───────────────────
+function PhoneVideo({ accent }) {
+  const ref = useRef(null);
 
+  // Nudge autoplay on mobile browsers that ignore the attribute until a play() call.
   useEffect(() => {
-    const cycle = setInterval(() => {
-      setPhase((p) => (p + 1) % 4);
-      setChars(0);
-    }, 4500);
-    return () => clearInterval(cycle);
+    const v = ref.current;
+    if (!v) return;
+    const play = () => v.play().catch(() => {});
+    play();
   }, []);
-
-  useEffect(() => {
-    if (phase !== 1) return;
-    const id = setInterval(() => {
-      setChars((c) => c < transcript.length ? c + 1 : c);
-    }, 50);
-    return () => clearInterval(id);
-  }, [phase]);
 
   return (
     <div style={{
-      width: 280, height: 560, borderRadius: 36, overflow: 'hidden',
+      width: 280, borderRadius: 40, overflow: 'hidden',
       background: '#0a0a10',
-      border: '8px solid #1a1a20',
-      boxShadow: '0 30px 60px rgba(0,0,0,0.5), inset 0 0 40px rgba(255,196,82,0.05)',
-      display: 'flex', flexDirection: 'column',
-      position: 'relative'
+      border: '10px solid #16161d',
+      boxShadow: `0 30px 60px rgba(0,0,0,0.5), inset 0 0 40px ${accent}0d`,
+      position: 'relative', lineHeight: 0
     }}>
+      <video
+        ref={ref}
+        src="/wingmic-explainer.mp4"
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        aria-label="wingmic product explainer"
+        style={{ display: 'block', width: '100%', height: 'auto' }}
+      />
       {/* Notch */}
-      <div style={{ height: 24, background: '#1a1a20', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ width: 60, height: 14, borderRadius: 8, background: '#0a0a10' }} />
-      </div>
-      {/* Header */}
-      <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: accent }}>wingmic</span>
-        <span className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>● live</span>
-      </div>
-
-      {/* Center stage */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20, gap: 18 }}>
-        {/* Mic + waves */}
-        <div style={{ position: 'relative', width: 100, height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {phase === 1 && [0, 1, 2].map((i) =>
-          <div key={i} style={{
-            position: 'absolute',
-            width: 100 + i * 30, height: 100 + i * 30, borderRadius: '50%',
-            border: `1.5px solid ${accent}`,
-            opacity: 0.4 - i * 0.1,
-            animation: `pulse-d ${1.2 + i * 0.4}s ease-in-out infinite`
-          }} />
-          )}
-          <div style={{
-            width: 70, height: 70, borderRadius: '50%',
-            background: phase === 1 ? accent : 'rgba(255,255,255,0.06)',
-            border: phase === 1 ? `2px solid ${accent}` : '2px solid rgba(255,255,255,0.1)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transition: 'all 0.3s'
-          }}>
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-              <rect x="9" y="2" width="6" height="12" rx="3" fill={phase === 1 ? '#000' : 'rgba(255,255,255,0.5)'} />
-              <path d="M5 11a7 7 0 0014 0" stroke={phase === 1 ? '#000' : 'rgba(255,255,255,0.5)'} strokeWidth="2" strokeLinecap="round" />
-              <path d="M12 18v3" stroke={phase === 1 ? '#000' : 'rgba(255,255,255,0.5)'} strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </div>
-        </div>
-
-        <VoiceBars active={phase === 1} accent={accent} />
-
-        {/* Transcript bubble */}
-        {phase >= 1 &&
-        <div style={{
-          padding: '10px 12px', borderRadius: 12, fontSize: 12,
-          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
-          color: 'rgba(255,255,255,0.75)', minHeight: 50, lineHeight: 1.4
-        }}>
-            {transcript.slice(0, chars)}
-            {phase === 1 && chars < transcript.length &&
-          <span style={{ display: 'inline-block', width: 2, height: 12, background: accent, marginLeft: 1, verticalAlign: 'middle', animation: 'blink 0.7s infinite' }} />
-          }
-          </div>
-        }
-
-        {/* Extracted */}
-        {phase >= 2 &&
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div className="mono" style={{ fontSize: 9, color: accent, letterSpacing: 1, textTransform: 'uppercase' }}>extracted</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {[
-            { label: 'Sarah Chen', color: accent },
-            { label: 'Acme', color: '#7DD3FC' },
-            { label: 'edge_config', color: '#A78BFA' }].
-            map((t) =>
-            <span key={t.label} style={{
-              padding: '3px 8px', borderRadius: 999,
-              background: `${t.color}20`, color: t.color,
-              fontSize: 10, fontWeight: 600
-            }}>{t.label}</span>
-            )}
-            </div>
-            {phase >= 3 &&
-          <div style={{
-            marginTop: 6, padding: '6px 10px', borderRadius: 8,
-            background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.25)',
-            fontSize: 10, color: '#FF8888', display: 'flex', alignItems: 'center', gap: 6
-          }}>
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#FF6B6B' }} />
-                Follow-up scheduled · tomorrow 9am
-              </div>
-          }
-          </div>
-        }
-      </div>
-
+      <div style={{
+        position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+        width: 110, height: 24, background: '#16161d', borderRadius: '0 0 14px 14px'
+      }} />
       {/* Home indicator */}
-      <div style={{ height: 18, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <div style={{ width: 100, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.2)' }} />
-      </div>
+      <div style={{
+        position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
+        width: 100, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.35)'
+      }} />
     </div>);
 
 }
@@ -313,45 +234,6 @@ function CodeBlock({ filename, lines, accent }) {
 
 }
 
-// ─────────────────── Marquee ───────────────────
-function MarqueeRow({ items, accent, reverse }) {
-  return (
-    <div style={{ overflow: 'hidden', maskImage: 'linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)' }}>
-      <div style={{
-        display: 'flex', gap: 16,
-        animation: `marquee ${reverse ? 38 : 42}s linear infinite`,
-        animationDirection: reverse ? 'reverse' : 'normal',
-        width: 'max-content'
-      }}>
-        {[...items, ...items].map((it, i) =>
-        <div key={i} style={{
-          flexShrink: 0, width: 360, padding: 22,
-          background: 'rgba(255,255,255,0.025)',
-          border: '1px solid rgba(255,255,255,0.06)',
-          borderRadius: 16,
-          transform: i % 3 === 0 ? 'rotate(-0.4deg)' : i % 3 === 1 ? 'rotate(0.5deg)' : 'rotate(0deg)'
-        }}>
-            <div className="serif" style={{ fontSize: 28, fontStyle: 'italic', color: accent, lineHeight: 1, marginBottom: 8 }}>"</div>
-            <div style={{ fontSize: 14.5, color: 'rgba(255,255,255,0.78)', lineHeight: 1.55, marginBottom: 16 }}>{it.quote}</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{
-              width: 32, height: 32, borderRadius: 10,
-              background: `linear-gradient(135deg, ${accent}, ${it.alt || '#FF6B6B'})`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 13, fontWeight: 800, color: '#000'
-            }}>{it.who[0]}</div>
-              <div>
-                <div style={{ fontSize: 13, color: '#fff', fontWeight: 600 }}>{it.who}</div>
-                <div className="mono" style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.4)' }}>{it.role}</div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>);
-
-}
-
 // ─────────────────── Live "now happening" feed ───────────────────
 function LiveFeed({ accent }) {
   const events = [
@@ -396,4 +278,4 @@ function LiveFeed({ accent }) {
 
 }
 
-export { LiveGraph, VoiceBars, StatBlock, Sticker, MiniPhone, Step, CodeBlock, MarqueeRow, LiveFeed };
+export { LiveGraph, VoiceBars, StatBlock, Sticker, PhoneVideo, Step, CodeBlock, LiveFeed };

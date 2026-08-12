@@ -272,7 +272,7 @@ a {
     padding: 0 18px !important;
   }
   .wm-hero-phone-wrap {
-    transform: scale(0.85) rotate(2deg) !important;
+    transform: scale(0.85) !important;
     transform-origin: top center;
   }
 
@@ -345,7 +345,7 @@ a {
     padding: 0 14px !important;
   }
   .wm-hero-phone-wrap {
-    transform: scale(0.72) rotate(2deg) !important;
+    transform: scale(0.72) !important;
   }
   .wm-step-grid .serif {
     font-size: 60px !important;
