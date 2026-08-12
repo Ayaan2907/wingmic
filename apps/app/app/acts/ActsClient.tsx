@@ -16,8 +16,12 @@ const accent = '#FFC452';
 
 export function ActsClient() {
   const utils = trpc.useUtils();
+  const [filter, setFilter] = React.useState<'pending' | 'sent' | 'all'>('pending');
   const [markErrors, setMarkErrors] = React.useState<Record<string, string>>({});
-  const { data, isLoading, isError, refetch } = trpc.acts.list.useQuery({ limit: 50 });
+  const { data, isLoading, isError, refetch } = trpc.acts.list.useQuery({
+    limit: 50,
+    filter,
+  });
 
   const invalidate = () => {
     void utils.acts.list.invalidate();
@@ -87,7 +91,7 @@ export function ActsClient() {
             textTransform: 'uppercase',
           }}
         >
-          {isLoading ? '…' : `${acts.length} draft${acts.length === 1 ? '' : 's'}`}
+          {isLoading ? '…' : `${acts.length} ${filter === 'sent' ? 'sent' : filter === 'all' ? 'shown' : 'draft'}${acts.length === 1 ? '' : 's'}`}
         </span>
       </header>
 
@@ -100,6 +104,44 @@ export function ActsClient() {
           boxSizing: 'border-box',
         }}
       >
+        <div
+          data-testid="acts-filters"
+          style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}
+        >
+          {(
+            [
+              ['pending', 'pending'],
+              ['sent', 'sent'],
+              ['all', 'all'],
+            ] as const
+          ).map(([key, label]) => {
+            const active = filter === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                data-testid={`acts-filter-${key}`}
+                aria-pressed={active}
+                onClick={() => setFilter(key)}
+                className="mono"
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 999,
+                  border: active ? `1.5px solid ${accent}` : '1px solid var(--border-soft)',
+                  background: active ? `${accent}22` : 'var(--surface-1)',
+                  color: active ? accent : 'var(--text-55)',
+                  fontSize: 11,
+                  letterSpacing: 1,
+                  textTransform: 'uppercase',
+                  cursor: 'pointer',
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
         <div
           data-testid="acts-banner"
           className="mono"

@@ -5,6 +5,7 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 type ActsListState = {
   data: { acts: Array<Record<string, unknown>> } | undefined;
   isLoading: boolean;
+  lastFilter?: string;
 };
 
 let listState: ActsListState = { data: undefined, isLoading: false };
@@ -17,7 +18,10 @@ vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     acts: {
       list: {
-        useQuery: () => listState,
+        useQuery: (input?: { filter?: string }) => {
+          listState.lastFilter = input?.filter;
+          return listState;
+        },
       },
       markSent: {
         useMutation: () => ({ mutate: markSentMutate, isPending: false }),
@@ -78,6 +82,13 @@ describe('ActsClient', () => {
       'nothing auto-sends',
     );
     expect(screen.queryByText(/v0\.3/i)).toBeNull();
+  });
+
+  it('renders pending/sent/all filter chips', () => {
+    render(<ActsClient />);
+    expect(screen.getByTestId('acts-filter-pending').getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByTestId('acts-filter-sent'));
+    expect(listState.lastFilter).toBe('sent');
   });
 
   it('renders live draft cards with enabled send CTAs', () => {
