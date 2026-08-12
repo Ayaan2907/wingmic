@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import {
   EntityDetailScaffold,
   type EntityCapture,
@@ -9,6 +10,7 @@ import {
   type EntityStat,
 } from '@/app/_components/entity/EntityDetailScaffold';
 import { EventDiamond } from '@/app/_components/entity/EntityAvatar';
+import { trpc } from '@/lib/trpc/client';
 
 export interface EventDetail {
   kind: 'event';
@@ -34,6 +36,16 @@ function fmtDate(iso: string | null): string | null {
 }
 
 export default function EventDetailClient({ detail }: { detail: EventDetail }) {
+  const router = useRouter();
+  const createDraft = trpc.acts.createDraft.useMutation({
+    onSuccess: (res) => {
+      if (res.ok) router.push('/acts');
+    },
+  });
+
+  const relatedPeople = detail.related.filter((r) => r.kind === 'person');
+  const primaryPerson = relatedPeople[0];
+
   const parts = [
     fmtDate(detail.sub.date),
     detail.sub.location,
@@ -48,8 +60,31 @@ export default function EventDetailClient({ detail }: { detail: EventDetail }) {
       eyebrow="◆ event"
       name={detail.name}
       sub={subText}
-      primaryCta={{ label: 'generate recap →' }}
-      ghostCta={{ label: 'check-ins' }}
+      primaryCta={{
+        label: 'generate recap →',
+        pending: createDraft.isPending,
+        onClick: () =>
+          createDraft.mutate({
+            kind: 'todo',
+            intent: 'recap',
+            targetEntityId: primaryPerson?.id,
+            contextName: detail.name,
+          }),
+      }}
+      ghostCta={{
+        label: 'check-ins',
+        pending: createDraft.isPending,
+        onClick: () =>
+          createDraft.mutate({
+            kind: 'reminder',
+            intent: 'reminder',
+            targetEntityId: primaryPerson?.id,
+            contextName: detail.name,
+            seedBody: primaryPerson
+              ? `check in with ${primaryPerson.name} after ${detail.name}`
+              : `send check-ins after ${detail.name}`,
+          }),
+      }}
       stats={detail.stats}
       captures={detail.captures}
       followups={detail.followups}

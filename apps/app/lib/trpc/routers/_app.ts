@@ -6,6 +6,7 @@ import { graphRouter } from './graph';
 import { settingsRouter } from './settings';
 import { onboardingRouter } from './onboarding';
 import { actsRouter } from './acts';
+import { importsRouter } from './imports';
 
 /**
  * Root tRPC router. Capture + recall wedges plus the `ping` / `me`
@@ -25,6 +26,7 @@ export const appRouter = router({
   settings: settingsRouter,
   onboarding: onboardingRouter,
   acts: actsRouter,
+  imports: importsRouter,
 });
 
 export type AppRouter = typeof appRouter;

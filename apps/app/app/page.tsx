@@ -11,7 +11,7 @@
 
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
-import { and, count, desc, eq, gte, inArray, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNull, lte, or } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { requireOnboarded } from '@/lib/onboarding-guard';
 import { db, schema } from '@wingmic/db';
@@ -83,7 +83,13 @@ async function loadHomeData(userId: string): Promise<HomeInitialData> {
       .where(
         and(
           eq(schema.acts.userId, userId),
-          inArray(schema.acts.status, ['drafted', 'snoozed']),
+          or(
+            eq(schema.acts.status, 'drafted'),
+            and(
+              eq(schema.acts.status, 'snoozed'),
+              or(isNull(schema.acts.runAt), lte(schema.acts.runAt, new Date())),
+            ),
+          ),
         ),
       ),
   ]);
