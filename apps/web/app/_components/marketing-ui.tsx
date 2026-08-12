@@ -135,28 +135,77 @@ function Sticker({ children, color, rotate = 0, x, y, size = 'sm' }) {
 
 // ─────────────────── Phone frame playing the product explainer ───────────────────
 function PhoneVideo({ accent, width = 300 }) {
-  const ref = useRef(null);
+  const videoRef = useRef(null);
+  const trackRef = useRef(null);
   const border = Math.round(width / 26);
   const radius = Math.round(width / 7);
 
+  const [playing, setPlaying] = useState(true);
+  const [muted, setMuted] = useState(true);
+  const [cur, setCur] = useState(0);
+  const [dur, setDur] = useState(0);
+  const [hover, setHover] = useState(false);
+
   // Nudge autoplay on mobile browsers that ignore the attribute until a play() call.
   useEffect(() => {
-    const v = ref.current;
+    const v = videoRef.current;
     if (!v) return;
-    const play = () => v.play().catch(() => {});
-    play();
+    v.play().catch(() => {});
   }, []);
 
+  const fmt = (s) => {
+    if (!isFinite(s)) return '0:00';
+    const m = Math.floor(s / 60);
+    const ss = Math.floor(s % 60);
+    return `${m}:${ss < 10 ? '0' : ''}${ss}`;
+  };
+
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) v.play().catch(() => {});
+    else v.pause();
+  };
+
+  const toggleMute = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setMuted(v.muted);
+  };
+
+  const seekToClientX = (clientX) => {
+    const v = videoRef.current;
+    const t = trackRef.current;
+    if (!v || !t || !v.duration) return;
+    const r = t.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+    v.currentTime = ratio * v.duration;
+    setCur(v.currentTime);
+  };
+
+  const progress = dur ? cur / dur : 0;
+  const controlsVisible = hover || !playing;
+
+  const iconBtn = {
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+    background: 'rgba(0,0,0,0.35)', border: 'none', cursor: 'pointer', color: '#fff', padding: 0,
+  };
+
   return (
-    <div style={{
-      width: '100%', maxWidth: width, borderRadius: radius, overflow: 'hidden',
-      background: '#0a0a10',
-      border: `${border}px solid #16161d`,
-      boxShadow: `0 30px 60px rgba(0,0,0,0.5), inset 0 0 40px ${accent}0d`,
-      position: 'relative', lineHeight: 0
-    }}>
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        width: '100%', maxWidth: width, borderRadius: radius, overflow: 'hidden',
+        background: '#0a0a10',
+        border: `${border}px solid #16161d`,
+        boxShadow: `0 30px 60px rgba(0,0,0,0.5), inset 0 0 40px ${accent}0d`,
+        position: 'relative', lineHeight: 0,
+      }}>
       <video
-        ref={ref}
+        ref={videoRef}
         src="/wingmic-explainer.mp4"
         autoPlay
         muted
@@ -164,18 +213,76 @@ function PhoneVideo({ accent, width = 300 }) {
         playsInline
         preload="auto"
         aria-label="wingmic product explainer"
-        style={{ display: 'block', width: '100%', height: 'auto' }}
+        onClick={togglePlay}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onTimeUpdate={(e) => setCur(e.currentTarget.currentTime)}
+        onLoadedMetadata={(e) => setDur(e.currentTarget.duration)}
+        onVolumeChange={(e) => setMuted(e.currentTarget.muted)}
+        style={{ display: 'block', width: '100%', height: 'auto', cursor: 'pointer' }}
       />
+
       {/* Notch */}
       <div style={{
         position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
-        width: '38%', height: Math.round(width / 12), background: '#16161d', borderRadius: '0 0 14px 14px'
+        width: '38%', height: Math.round(width / 12), background: '#16161d', borderRadius: '0 0 14px 14px',
       }} />
-      {/* Home indicator */}
+
+      {/* Center play/pause affordance — shows while paused */}
+      {!playing && (
+        <button
+          type="button"
+          aria-label="Play"
+          onClick={togglePlay}
+          style={{
+            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+            width: 60, height: 60, borderRadius: '50%', border: 'none', cursor: 'pointer',
+            background: accent, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 6px 20px rgba(0,0,0,0.4)',
+          }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z" /></svg>
+        </button>
+      )}
+
+      {/* Control bar */}
       <div style={{
-        position: 'absolute', bottom: Math.round(width / 38), left: '50%', transform: 'translateX(-50%)',
-        width: '34%', height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.35)'
-      }} />
+        position: 'absolute', left: 0, right: 0, bottom: 0,
+        padding: '24px 12px 12px',
+        background: 'linear-gradient(transparent, rgba(0,0,0,0.6))',
+        opacity: controlsVisible ? 1 : 0,
+        transition: 'opacity 0.2s ease',
+        pointerEvents: controlsVisible ? 'auto' : 'none',
+      }}>
+        {/* Seek / peek bar */}
+        <div
+          ref={trackRef}
+          onPointerDown={(e) => { e.currentTarget.setPointerCapture?.(e.pointerId); seekToClientX(e.clientX); }}
+          onPointerMove={(e) => { if (e.buttons === 1) seekToClientX(e.clientX); }}
+          style={{ height: 16, display: 'flex', alignItems: 'center', cursor: 'pointer', touchAction: 'none' }}>
+          <div style={{ position: 'relative', width: '100%', height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.28)' }}>
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${progress * 100}%`, background: accent, borderRadius: 2 }} />
+            <div style={{ position: 'absolute', left: `${progress * 100}%`, top: '50%', transform: 'translate(-50%,-50%)', width: 11, height: 11, borderRadius: '50%', background: accent, boxShadow: '0 1px 4px rgba(0,0,0,0.5)' }} />
+          </div>
+        </div>
+
+        {/* Buttons row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+          <button type="button" aria-label={playing ? 'Pause' : 'Play'} onClick={togglePlay} style={iconBtn}>
+            {playing
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z" /></svg>}
+          </button>
+          <span className="mono" style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.85)', lineHeight: 1 }}>
+            {fmt(cur)} / {fmt(dur)}
+          </span>
+          <div style={{ flex: 1 }} />
+          <button type="button" aria-label={muted ? 'Unmute' : 'Mute'} onClick={toggleMute} style={iconBtn}>
+            {muted
+              ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H3v6h3l5 4V5z" fill="#fff" stroke="none" /><path d="M17 9l4 6M21 9l-4 6" /></svg>
+              : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H3v6h3l5 4V5z" fill="#fff" stroke="none" /><path d="M15.5 8.5a5 5 0 010 7" /></svg>}
+          </button>
+        </div>
+      </div>
     </div>);
 
 }
