@@ -134,8 +134,10 @@ function Sticker({ children, color, rotate = 0, x, y, size = 'sm' }) {
 }
 
 // ─────────────────── Phone frame playing the product explainer ───────────────────
-function PhoneVideo({ accent }) {
+function PhoneVideo({ accent, width = 300 }) {
   const ref = useRef(null);
+  const border = Math.round(width / 26);
+  const radius = Math.round(width / 7);
 
   // Nudge autoplay on mobile browsers that ignore the attribute until a play() call.
   useEffect(() => {
@@ -147,9 +149,9 @@ function PhoneVideo({ accent }) {
 
   return (
     <div style={{
-      width: 280, borderRadius: 40, overflow: 'hidden',
+      width: '100%', maxWidth: width, borderRadius: radius, overflow: 'hidden',
       background: '#0a0a10',
-      border: '10px solid #16161d',
+      border: `${border}px solid #16161d`,
       boxShadow: `0 30px 60px rgba(0,0,0,0.5), inset 0 0 40px ${accent}0d`,
       position: 'relative', lineHeight: 0
     }}>
@@ -167,12 +169,12 @@ function PhoneVideo({ accent }) {
       {/* Notch */}
       <div style={{
         position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
-        width: 110, height: 24, background: '#16161d', borderRadius: '0 0 14px 14px'
+        width: '38%', height: Math.round(width / 12), background: '#16161d', borderRadius: '0 0 14px 14px'
       }} />
       {/* Home indicator */}
       <div style={{
-        position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
-        width: 100, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.35)'
+        position: 'absolute', bottom: Math.round(width / 38), left: '50%', transform: 'translateX(-50%)',
+        width: '34%', height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.35)'
       }} />
     </div>);
 

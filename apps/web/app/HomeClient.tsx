@@ -132,12 +132,16 @@ function App() {
           {navLinks.map((l) =>
             <a key={l.href} href={l.href} style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)' }}>{l.label}</a>
           )}
-          <a href="https://github.com/Ayaan2907/wingmic" target="_blank" rel="noreferrer" style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)', display: 'flex', alignItems: 'center', gap: 5 }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.6-.3-5.4-1.3-5.4-5.9 0-1.3.5-2.4 1.2-3.2-.1-.4-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 016 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.8.1 3.2.7.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0012 .3" /></svg>
-            GitHub
-          </a>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div className="wm-nav-social wm-hide-mobile" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <a href="https://github.com/Ayaan2907/wingmic" target="_blank" rel="noreferrer" aria-label="wingmic on GitHub" style={{ color: 'rgba(255,255,255,0.55)', display: 'flex' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.6-.3-5.4-1.3-5.4-5.9 0-1.3.5-2.4 1.2-3.2-.1-.4-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 016 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.8.1 3.2.7.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0012 .3" /></svg>
+            </a>
+            <a href="https://x.com/wingmicxyz" target="_blank" rel="noreferrer" aria-label="wingmic on X" style={{ color: 'rgba(255,255,255,0.55)', display: 'flex' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 6h2.3l-5 5.7L20 18h-4.6l-3.6-4.7L7.6 18H5.3l5.4-6.1L5 6h4.7l3.3 4.3L16.5 6zm-.8 10.6h1.3L8.4 7.3H7l8.7 9.3z" /></svg>
+            </a>
+          </div>
           <a href="#waitlist" className="wm-nav-cta" style={{
             padding: '8px 16px', borderRadius: 8,
             background: '#fff', color: '#000',
@@ -165,6 +169,7 @@ function App() {
             <a key={l.href} href={l.href} role="menuitem" onClick={handleMobileLinkClick}>{l.label}</a>
           )}
           <a href="https://github.com/Ayaan2907/wingmic" target="_blank" rel="noreferrer" role="menuitem" onClick={handleMobileLinkClick}>GitHub</a>
+          <a href="https://x.com/wingmicxyz" target="_blank" rel="noreferrer" role="menuitem" onClick={handleMobileLinkClick}>X</a>
         </div>
       }
 
@@ -181,7 +186,7 @@ function App() {
         {/* Center hero */}
         <div className="wm-hero-grid" style={{
           maxWidth: 1280, margin: '0 auto', padding: '0 32px',
-          display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 40, alignItems: 'center',
+          display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 48, alignItems: 'center',
           position: 'relative'
         }}>
 
@@ -252,7 +257,7 @@ function App() {
 
           {/* Right — phone playing the product explainer */}
           <div className="wm-hero-phone-wrap" style={{ display: 'flex', justifyContent: 'center' }}>
-            <PhoneVideo accent={accent} />
+            <PhoneVideo accent={accent} width={420} />
           </div>
         </div>
       </section>
