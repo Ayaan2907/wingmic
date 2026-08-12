@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import * as schema from '@wingmic/db/schema';
@@ -299,5 +300,30 @@ describe('imports router', () => {
     expect(res.created).toBe(0);
     expect(res.matched).toBe(1);
     expect(res.entityIds[0]).toBe(seedA);
+  });
+
+  it('undoBatch soft-deletes only entities stamped with that importSource', async () => {
+    const created = await caller(userA).upsertBatch({
+      kind: 'linkedin',
+      contacts: [
+        {
+          name: 'Undo Me',
+          email: 'undo-me@example.com',
+          linkedinUrl: null,
+          company: null,
+          role: null,
+        },
+      ],
+    });
+    const undone = await caller(userA).undoBatch({
+      kind: 'linkedin',
+      batchId: created.batchId,
+    });
+    expect(undone.removed).toBe(1);
+
+    const stillThere = await db.query.entities.findFirst({
+      where: eq(schema.entities.id, created.entityIds[0]!),
+    });
+    expect(stillThere?.deletedAt).not.toBeNull();
   });
 });

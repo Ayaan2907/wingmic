@@ -11,11 +11,14 @@ import { trpc } from '@/lib/trpc/client';
 import {
   IMPORT_MAX_BATCH,
   normalizeContactsFromFile,
+  deviceContactsSupported,
+  pickDeviceContacts,
   type ImportContactDraft,
+  type ImportSourceKind,
 } from '@/lib/imports';
 import { accent } from '@/app/chat/_components/tokens';
 
-type Phase = 'idle' | 'parsing' | 'ready' | 'uploading' | 'done' | 'error';
+type Phase = 'idle' | 'parsing' | 'ready' | 'uploading' | 'done' | 'error' | 'undone';
 
 /** `null` = create new; string = merge into that entity. */
 type ResolutionChoice = string | null;
@@ -24,14 +27,17 @@ export function ImportsClient() {
   const [phase, setPhase] = React.useState<Phase>('idle');
   const [error, setError] = React.useState<string | null>(null);
   const [filename, setFilename] = React.useState<string | null>(null);
-  const [kind, setKind] = React.useState<'linkedin' | 'vcard' | null>(null);
+  const [kind, setKind] = React.useState<ImportSourceKind | null>(null);
   const [contacts, setContacts] = React.useState<ImportContactDraft[]>([]);
   const [resolutions, setResolutions] = React.useState<Record<number, ResolutionChoice>>({});
   const [result, setResult] = React.useState<{
     created: number;
     matched: number;
     total: number;
+    batchId: string;
+    kind: ImportSourceKind;
   } | null>(null);
+  const [deviceSupported] = React.useState(() => deviceContactsSupported());
   const inputRef = React.useRef<HTMLInputElement>(null);
   /** Bumps on each file selection so a stale `file.text()` cannot overwrite newer state. */
   const parseGenRef = React.useRef(0);
@@ -44,12 +50,34 @@ export function ImportsClient() {
 
   const upsert = trpc.imports.upsertBatch.useMutation({
     onSuccess: (res) => {
-      setResult({ created: res.created, matched: res.matched, total: res.total });
+      const parsedKind = (res.importSource.split(':')[0] ?? 'vcard') as ImportSourceKind;
+      setResult({
+        created: res.created,
+        matched: res.matched,
+        total: res.total,
+        batchId: res.batchId,
+        kind: parsedKind,
+      });
       setPhase('done');
     },
     onError: () => {
       setError('import failed — try a smaller file or check the format');
       setPhase('error');
+    },
+  });
+
+  const undo = trpc.imports.undoBatch.useMutation({
+    onSuccess: (res) => {
+      setPhase('undone');
+      setError(null);
+      setResult((prev) =>
+        prev
+          ? { ...prev, created: 0, matched: prev.matched, total: res.removed }
+          : prev,
+      );
+    },
+    onError: () => {
+      setError('could not undo — try again');
     },
   });
 
@@ -114,6 +142,42 @@ export function ImportsClient() {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
     if (file) void handleFile(file);
+  }
+
+  async function handleDevicePick() {
+    setError(null);
+    setResult(null);
+    setPhase('parsing');
+    setFilename('device contacts');
+    setContacts([]);
+    setKind(null);
+    setResolutions({});
+    try {
+      const picked = await pickDeviceContacts();
+      if (picked == null) {
+        setError('device contacts not available — drop a .vcf instead');
+        setPhase('error');
+        return;
+      }
+      if (picked.length === 0) {
+        setError('no contacts selected');
+        setPhase('error');
+        return;
+      }
+      if (picked.length > IMPORT_MAX_BATCH) {
+        setError(
+          `too many contacts (${picked.length}) — select ${IMPORT_MAX_BATCH} or fewer`,
+        );
+        setPhase('error');
+        return;
+      }
+      setKind('device');
+      setContacts(picked);
+      setPhase('ready');
+    } catch {
+      setError('could not read device contacts');
+      setPhase('error');
+    }
   }
 
   const ambiguousRows = preview.data?.rows.filter((r) => r.status === 'ambiguous') ?? [];
@@ -239,6 +303,27 @@ export function ImportsClient() {
             }}
           />
         </div>
+
+        {deviceSupported ? (
+          <button
+            type="button"
+            data-testid="imports-device-pick"
+            onClick={() => void handleDevicePick()}
+            style={{
+              width: '100%',
+              marginBottom: 16,
+              padding: 12,
+              borderRadius: 10,
+              border: '1px solid var(--border-soft)',
+              background: 'var(--surface-1)',
+              color: 'var(--ink)',
+              font: '600 13px Inter, system-ui, sans-serif',
+              cursor: 'pointer',
+            }}
+          >
+            pick from phone contacts →
+          </button>
+        ) : null}
 
         {error ? (
           <p
@@ -416,19 +501,61 @@ export function ImportsClient() {
             <p className="mono" style={{ fontSize: 12, color: 'var(--text-85)', margin: 0 }}>
               {result.created} new · {result.matched} matched · {result.total} total
             </p>
-            <Link
-              href="/"
-              className="mono"
-              style={{
-                display: 'inline-block',
-                marginTop: 12,
-                fontSize: 11,
-                color: accent,
-                textDecoration: 'none',
-              }}
-            >
-              back to home →
-            </Link>
+            <div style={{ display: 'flex', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
+              {result.created > 0 ? (
+                <button
+                  type="button"
+                  data-testid="imports-undo"
+                  disabled={undo.isPending}
+                  onClick={() =>
+                    undo.mutate({ kind: result.kind, batchId: result.batchId })
+                  }
+                  className="mono"
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--text-55)',
+                    background: 'transparent',
+                    border: '1px solid var(--border-soft)',
+                    borderRadius: 8,
+                    padding: '8px 10px',
+                    cursor: undo.isPending ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {undo.isPending ? 'undoing…' : 'undo this import'}
+                </button>
+              ) : null}
+              <Link
+                href="/"
+                className="mono"
+                style={{
+                  display: 'inline-block',
+                  fontSize: 11,
+                  color: accent,
+                  textDecoration: 'none',
+                  padding: '8px 0',
+                }}
+              >
+                back to home →
+              </Link>
+            </div>
+          </div>
+        ) : null}
+
+        {phase === 'undone' ? (
+          <div
+            data-testid="imports-undone"
+            style={{
+              padding: 16,
+              borderRadius: 14,
+              border: '1px solid var(--border-soft)',
+              background: 'var(--surface-1)',
+              marginBottom: 12,
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>import undone</div>
+            <p className="mono" style={{ fontSize: 12, color: 'var(--text-55)', margin: 0 }}>
+              newly created contacts from that batch were soft-deleted.
+            </p>
           </div>
         ) : null}
 

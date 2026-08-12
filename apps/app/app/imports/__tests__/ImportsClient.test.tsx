@@ -57,6 +57,12 @@ vi.mock('@/lib/trpc/client', () => ({
           isPending: false,
         }),
       },
+      undoBatch: {
+        useMutation: () => ({
+          mutate: vi.fn(),
+          isPending: false,
+        }),
+      },
     },
   },
 }));

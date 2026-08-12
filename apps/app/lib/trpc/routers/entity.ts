@@ -214,6 +214,7 @@ async function loadPerson(
     kind: 'person' as const,
     id: entity.id,
     name: entity.name,
+    importSource: entity.importSource ?? null,
     sub: {
       role: primaryEc?.role ?? null,
       companyId: primaryCompany?.id ?? null,

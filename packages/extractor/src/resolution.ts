@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { DB } from '@wingmic/db';
 import * as schema from '@wingmic/db/schema';
 import {
@@ -108,8 +108,29 @@ export async function commit(
 
   // ── Persons (private, ownerUserId-scoped) ────────────────────────────
   const userEntities = await writeDb.query.entities.findMany({
-    where: eq(schema.entities.ownerUserId, userId),
+    where: and(
+      eq(schema.entities.ownerUserId, userId),
+      isNull(schema.entities.deletedAt),
+    ),
   });
+
+  const ownedIds = userEntities.map((e) => e.id);
+  const emailFacts =
+    ownedIds.length > 0
+      ? await writeDb.query.entityFacts.findMany({
+          where: and(
+            inArray(schema.entityFacts.entityId, ownedIds),
+            eq(schema.entityFacts.key, 'email'),
+          ),
+          columns: { entityId: true, value: true },
+        })
+      : [];
+  const emailsByEntity = new Map<string, string[]>();
+  for (const f of emailFacts) {
+    const list = emailsByEntity.get(f.entityId) ?? [];
+    list.push(f.value.trim().toLowerCase());
+    emailsByEntity.set(f.entityId, list);
+  }
 
   const entityIds: string[] = [];
   let newEntities = 0;
@@ -119,7 +140,14 @@ export async function commit(
     const cand = extracted.persons[i];
     const candEmbedding = personEmbeddings[i];
 
-    const match = resolvePerson(cand, userEntities, candEmbedding, companyIds, topicIds);
+    const match = resolvePerson(
+      cand,
+      userEntities,
+      candEmbedding,
+      companyIds,
+      topicIds,
+      emailsByEntity,
+    );
 
     let entityId: string;
     if (match && match.score >= 0.85) {
@@ -356,6 +384,7 @@ function resolvePerson(
   candEmbedding: number[],
   companyIds: Map<string, string>,
   _topicIds: Map<string, string>,
+  emailsByEntity: Map<string, string[]> = new Map(),
 ): ResolvedMatch | null {
   if (userEntities.length === 0) return null;
 
@@ -380,7 +409,19 @@ function resolvePerson(
       embeddingScore = cosine(entity.embedding, candEmbedding);
     }
 
-    const score = 0.55 * nameMax + 0.25 * embeddingScore + 0.2 * companyBoost;
+    let emailBoost = 0;
+    const candEmail = cand.email?.trim().toLowerCase();
+    if (candEmail) {
+      const emails = emailsByEntity.get(entity.id) ?? [];
+      if (emails.includes(candEmail)) emailBoost = 1;
+    }
+
+    // Prefer imported contacts on near-ties so cold-start LinkedIn/vCard wins.
+    const importBoost =
+      entity.importSource && entity.importSource !== 'voice-capture' ? 0.05 : 0;
+
+    const score =
+      0.5 * nameMax + 0.2 * embeddingScore + 0.15 * companyBoost + 0.3 * emailBoost + importBoost;
     if (!best || score > best.score) {
       best = { entityId: entity.id, score };
     }

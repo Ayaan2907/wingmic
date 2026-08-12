@@ -122,4 +122,14 @@ describe('PersonDetailClient', () => {
     });
     expect(routerPush).toHaveBeenCalledWith('/acts');
   });
+
+  it('shows a linkedin import badge when importSource is set', () => {
+    render(
+      <PersonDetailClient
+        detail={{ ...detail, importSource: 'linkedin:batch123' }}
+      />,
+    );
+    const tags = screen.getByTestId('entity-tags');
+    expect(tags.textContent?.toLowerCase()).toContain('linkedin');
+  });
 });

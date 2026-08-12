@@ -39,19 +39,34 @@ export const captureRouter = router({
             eq(schema.entities.ownerUserId, ctx.user.id),
             isNull(schema.entities.deletedAt),
           ),
-          columns: { id: true, name: true },
+          columns: { id: true, name: true, aliases: true, importSource: true },
           orderBy: desc(schema.entities.updatedAt),
-          limit: 30,
+          limit: 40,
         });
 
         const entityIds = recentEntities.map((e) => e.id);
         let companyNames: string[] = [];
+        const emailByEntity = new Map<string, string>();
         if (entityIds.length > 0) {
-          const links = await ctx.db.query.entityCompanies.findMany({
-            where: inArray(schema.entityCompanies.entityId, entityIds),
-            columns: { companyId: true },
-            limit: 60,
-          });
+          const [links, emailFacts] = await Promise.all([
+            ctx.db.query.entityCompanies.findMany({
+              where: inArray(schema.entityCompanies.entityId, entityIds),
+              columns: { companyId: true },
+              limit: 60,
+            }),
+            ctx.db.query.entityFacts.findMany({
+              where: and(
+                inArray(schema.entityFacts.entityId, entityIds),
+                eq(schema.entityFacts.key, 'email'),
+              ),
+              columns: { entityId: true, value: true },
+            }),
+          ]);
+          for (const f of emailFacts) {
+            if (!emailByEntity.has(f.entityId)) {
+              emailByEntity.set(f.entityId, f.value.trim().toLowerCase());
+            }
+          }
           const companyIds = [...new Set(links.map((l) => l.companyId))].slice(0, 20);
           if (companyIds.length > 0) {
             const companies = await ctx.db.query.companies.findMany({
@@ -62,11 +77,20 @@ export const captureRouter = router({
           }
         }
 
+        const knownPersons = recentEntities.map((e) => {
+          const aliases = Array.isArray(e.aliases) ? e.aliases.filter(Boolean) : [];
+          const email = emailByEntity.get(e.id);
+          const bits = [e.name, ...aliases.slice(0, 3)];
+          if (email) bits.push(`<${email}>`);
+          if (e.importSource && e.importSource !== 'voice-capture') bits.push('[imported]');
+          return bits.join(' · ');
+        });
+
         const extracted = await extractHybrid({
           transcript: input.transcript,
           providerEntities,
           knownContacts: {
-            persons: recentEntities.map((e) => e.name),
+            persons: knownPersons,
             companies: companyNames,
           },
         });
