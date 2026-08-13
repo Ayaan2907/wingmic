@@ -56,8 +56,23 @@ describe('templateDraft', () => {
       contextName: longCtx,
       seedBody: 'y'.repeat(3000),
     });
-    expect(draft.subject.length).toBeLessThanOrEqual(120);
+    expect(draft.subject.length).toBeLessThanOrEqual(60);
     expect(draft.body.length).toBeLessThanOrEqual(2000);
+  });
+
+  it('falls back whitespace-only context to the event / this company', () => {
+    const recap = templateDraft({
+      kind: 'todo',
+      intent: 'recap',
+      contextName: '   ',
+    });
+    expect(recap.body).toContain('the event');
+    const warm = templateDraft({
+      kind: 'todo',
+      intent: 'warm-path',
+      contextName: '   ',
+    });
+    expect(warm.body).toContain('this company');
   });
 });
 

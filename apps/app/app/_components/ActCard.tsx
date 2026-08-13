@@ -61,12 +61,14 @@ export function ActCard({
   const emailBlocked = needsEmail && !hasEmail;
   const [editing, setEditing] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+  const [editError, setEditError] = React.useState<string | null>(null);
   const [editBody, setEditBody] = React.useState(a.body ?? a.why);
   const [editSubject, setEditSubject] = React.useState(a.subject ?? '');
 
   React.useEffect(() => {
     setEditBody(a.body ?? a.why);
     setEditSubject(a.subject ?? '');
+    setEditError(null);
   }, [a.body, a.why, a.subject, a.id]);
 
   function handleSend() {
@@ -276,6 +278,7 @@ export function ActCard({
               onClick={() => {
                 setEditBody(a.body ?? a.why);
                 setEditSubject(a.subject ?? '');
+                setEditError(null);
                 setEditing(false);
               }}
               style={{
@@ -296,13 +299,19 @@ export function ActCard({
                 if (!a.id || !editBody.trim() || saving) return;
                 void (async () => {
                   setSaving(true);
+                  setEditError(null);
                   try {
                     const result = await onSaveEdit?.(a.id!, {
                       body: editBody.trim(),
                       subject: editSubject.trim() ? editSubject.trim() : null,
                     });
-                    if (result === false) return;
+                    if (result === false) {
+                      setEditError('could not save — try again');
+                      return;
+                    }
                     setEditing(false);
+                  } catch {
+                    setEditError('could not save — try again');
                   } finally {
                     setSaving(false);
                   }
@@ -323,6 +332,16 @@ export function ActCard({
               {saving ? 'saving…' : 'save'}
             </button>
           </div>
+          {editError ? (
+            <span
+              className="mono"
+              role="alert"
+              data-testid="act-edit-error"
+              style={{ fontSize: 9, color: '#FF6B6B', letterSpacing: 0.3 }}
+            >
+              {editError}
+            </span>
+          ) : null}
         </div>
       ) : (
         <div style={{ display: 'flex', gap: 10 }}>

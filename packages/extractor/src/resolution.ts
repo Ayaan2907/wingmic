@@ -25,6 +25,8 @@ interface ResolveContext {
   userId: string;
   transcript: string;
   capturedAt: Date;
+  /** Optional client-generated idempotency key (interactions.client_capture_id). */
+  clientCaptureId?: string | null;
 }
 
 /**
@@ -45,7 +47,7 @@ export async function commit(
   extracted: ExtractionResult,
   ctx: ResolveContext,
 ): Promise<CommitResult> {
-  const { db, userId, transcript, capturedAt } = ctx;
+  const { db, userId, transcript, capturedAt, clientCaptureId } = ctx;
 
   // ── Embeddings (parallel) ────────────────────────────────────────────
   const transcriptEmbedding = await embedText(transcript);
@@ -102,6 +104,7 @@ export async function commit(
       transcript,
       capturedAt,
       embedding: transcriptEmbedding,
+      ...(clientCaptureId ? { clientCaptureId } : {}),
     })
     .returning({ id: schema.interactions.id });
   const interactionId = insertedInteraction[0].id;

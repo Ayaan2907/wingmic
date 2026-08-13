@@ -120,6 +120,21 @@ describe('acts router', () => {
     expect(row?.targetEmail).toBe('ada@example.com');
   });
 
+  it('omits targetEmail when the target entity is soft-deleted', async () => {
+    await client.execute({
+      sql: `INSERT INTO entity VALUES ('e_gone', ?, 'person', 'Gone Person', '[]', null, null, ?, ?, ?)`,
+      args: [userId, now, now, now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity_fact VALUES ('fact_gone', 'e_gone', 'email', 'gone@example.com', null, 95, null, ?)`,
+      args: [now],
+    });
+    await insertAct('act_gone_email', { target: 'e_gone' });
+    const result = await caller().list({ limit: 50 });
+    const row = result.acts.find((a) => a.id === 'act_gone_email');
+    expect(row?.targetEmail).toBeNull();
+  });
+
   it('markSent updates status to sent and drops from default list', async () => {
     await insertAct('act_send_1');
     const res = await caller().markSent({ id: 'act_send_1' });

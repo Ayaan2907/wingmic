@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, act, waitFor } from '@testing-library/react';
 
 type ActsListState = {
   data: { acts: Array<Record<string, unknown>> } | undefined;
@@ -13,6 +13,8 @@ const markSentMutate = vi.fn();
 const snoozeMutate = vi.fn();
 const dismissMutate = vi.fn();
 const updateMutate = vi.fn();
+let snoozeOnError: ((err: unknown, vars: { id: string }) => void) | undefined;
+let dismissOnError: ((err: unknown, vars: { id: string }) => void) | undefined;
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
@@ -27,10 +29,20 @@ vi.mock('@/lib/trpc/client', () => ({
         useMutation: () => ({ mutate: markSentMutate, isPending: false }),
       },
       snooze: {
-        useMutation: () => ({ mutate: snoozeMutate, isPending: false }),
+        useMutation: (opts?: {
+          onError?: (err: unknown, vars: { id: string }) => void;
+        }) => {
+          snoozeOnError = opts?.onError;
+          return { mutate: snoozeMutate, isPending: false };
+        },
       },
       dismiss: {
-        useMutation: () => ({ mutate: dismissMutate, isPending: false }),
+        useMutation: (opts?: {
+          onError?: (err: unknown, vars: { id: string }) => void;
+        }) => {
+          dismissOnError = opts?.onError;
+          return { mutate: dismissMutate, isPending: false };
+        },
       },
       update: {
         useMutation: () => ({
@@ -115,6 +127,27 @@ describe('ActsClient', () => {
     render(<ActsClient />);
     fireEvent.click(screen.getByTestId('act-dismiss'));
     expect(dismissMutate).toHaveBeenCalledWith({ id: 'act_1' });
+  });
+
+  it('surfaces snooze/dismiss errors on the card like markSent', async () => {
+    render(<ActsClient />);
+    await act(async () => {
+      snoozeOnError?.(new Error('fail'), { id: 'act_1' });
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/could not snooze/i)).toBeTruthy();
+    });
+    await act(async () => {
+      dismissOnError?.(new Error('fail'), { id: 'act_1' });
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/could not dismiss/i)).toBeTruthy();
+    });
+  });
+
+  it('uses correct header plural for pending drafts', () => {
+    render(<ActsClient />);
+    expect(screen.getByText('1 draft')).toBeTruthy();
   });
 
   it('does not mark sent when opening a reminder calendar file', () => {

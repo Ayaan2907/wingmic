@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { env } from '@/lib/config/env';
 
 export const draftOutputSchema = z.object({
-  subject: z.string().min(1).max(120),
+  subject: z.string().min(1).max(60),
   body: z.string().min(1).max(2000),
 });
 
@@ -57,7 +57,7 @@ export function createActsDraftAgent(): Agent {
 }
 
 function clampDraft(draft: { subject: string; body: string }): DraftOutput {
-  const subject = draft.subject.trim().slice(0, 120) || 'follow-up';
+  const subject = draft.subject.trim().slice(0, 60) || 'follow-up';
   const body = draft.body.trim().slice(0, 2000) || 'follow up.';
   return { subject, body };
 }
@@ -89,14 +89,14 @@ export function templateDraft(input: PolishDraftInput): DraftOutput {
     case 'recap':
       return clampDraft({
         subject: ctx ? `recap · ${ctx}` : 'event recap',
-        body: seed || `quick recap notes from ${ctx ?? 'the event'} — capture follow-ups while they're fresh.`,
+        body: seed || `quick recap notes from ${ctx || 'the event'} — capture follow-ups while they're fresh.`,
       });
     case 'warm-path':
       return clampDraft({
         subject: ctx ? `warm path · ${ctx}` : 'find a warm path',
         body:
           seed ||
-          `look for a warm intro into ${ctx ?? 'this company'} from people already in your graph.`,
+          `look for a warm intro into ${ctx || 'this company'} from people already in your graph.`,
       });
     case 'reminder':
       return clampDraft({
@@ -179,8 +179,14 @@ export async function polishDraft(
           },
         });
         const object = response.object ?? fallback;
-        const parsed = draftOutputSchema.safeParse(object);
-        return parsed.success ? clampDraft(parsed.data) : fallback;
+        // Clamp before safeParse so slightly-oversize LLM output is truncated
+        // instead of discarded for the deterministic template.
+        const candidate = clampDraft({
+          subject: typeof object.subject === 'string' ? object.subject : fallback.subject,
+          body: typeof object.body === 'string' ? object.body : fallback.body,
+        });
+        const parsed = draftOutputSchema.safeParse(candidate);
+        return parsed.success ? candidate : fallback;
       },
       timeoutMs,
       fallback,
