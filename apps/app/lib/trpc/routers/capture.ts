@@ -34,6 +34,47 @@ export const captureRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        // Idempotent retry: same clientCaptureId → return existing interaction.
+        if (input.clientCaptureId) {
+          const existing = await ctx.db.query.interactions.findFirst({
+            where: and(
+              eq(schema.interactions.userId, ctx.user.id),
+              eq(schema.interactions.clientCaptureId, input.clientCaptureId),
+            ),
+            columns: { id: true },
+          });
+          if (existing) {
+            const [factLinks, topicLinks] = await Promise.all([
+              ctx.db.query.entityFacts.findMany({
+                where: eq(schema.entityFacts.sourceInteractionId, existing.id),
+                columns: { entityId: true },
+              }),
+              ctx.db.query.entityTopics.findMany({
+                where: eq(schema.entityTopics.sourceInteractionId, existing.id),
+                columns: { entityId: true },
+              }),
+            ]);
+            const entityIds = [
+              ...new Set([
+                ...factLinks.map((f) => f.entityId),
+                ...topicLinks.map((t) => t.entityId),
+              ]),
+            ];
+            return {
+              extracted: {
+                persons: [],
+                companies: [],
+                events: [],
+                topics: [],
+                actions: [],
+              },
+              interactionId: existing.id,
+              entityIds,
+              duplicate: true as const,
+            };
+          }
+        }
+
         const providerEntities = await transcribeEntities(input.transcript);
 
         const recentEntities = await ctx.db.query.entities.findMany({

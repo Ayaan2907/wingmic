@@ -355,7 +355,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       const c0 = performance.now();
       try {
         const result = await commitMutation.mutateAsync(
-          { transcript },
+          { transcript, clientCaptureId: id },
           { signal } as unknown as Parameters<typeof commitMutation.mutateAsync>[1],
         );
         if (signal.aborted) {
@@ -563,7 +563,10 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       });
       const c0 = performance.now();
       try {
-        const result = await commitMutation.mutateAsync({ transcript: text });
+        const result = await commitMutation.mutateAsync({
+          transcript: text,
+          clientCaptureId: id,
+        });
         patch(id, {
           status: 'committed',
           commitMs: Math.round(performance.now() - c0),
@@ -605,7 +608,10 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         patch(id, { status: 'linking', error: null });
         const c0 = performance.now();
         try {
-          const result = await commitMutation.mutateAsync({ transcript: msg.transcript });
+          const result = await commitMutation.mutateAsync({
+            transcript: msg.transcript,
+            clientCaptureId: id,
+          });
           patch(id, {
             status: 'committed',
             commitMs: Math.round(performance.now() - c0),
@@ -673,7 +679,10 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       ]);
       const c0 = performance.now();
       try {
-        const result = await commitMutation.mutateAsync({ transcript: trimmed });
+        const result = await commitMutation.mutateAsync({
+          transcript: trimmed,
+          clientCaptureId: id,
+        });
         patch(id, {
           status: 'committed',
           commitMs: Math.round(performance.now() - c0),
@@ -698,7 +707,10 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       patch(id, { status: 'linking', intent: 'memo', error: null, ask: null });
       const c0 = performance.now();
       try {
-        const result = await commitMutation.mutateAsync({ transcript: msg.transcript });
+        const result = await commitMutation.mutateAsync({
+          transcript: msg.transcript,
+          clientCaptureId: id,
+        });
         patch(id, {
           status: 'committed',
           commitMs: Math.round(performance.now() - c0),

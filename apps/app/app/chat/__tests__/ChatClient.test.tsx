@@ -264,8 +264,13 @@ describe('ChatClient', () => {
 
     await waitFor(() => {
       expect(mutateAsyncMock).toHaveBeenCalled();
-      // First call positional arg = the tRPC input
-      expect(mutateAsyncMock.mock.calls[0]?.[0]).toEqual({ transcript: 'met sarah at acme' });
+      // First call positional arg = the tRPC input (stable bubble id for idempotency)
+      expect(mutateAsyncMock.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({
+          transcript: 'met sarah at acme',
+          clientCaptureId: expect.any(String),
+        }),
+      );
     });
     await waitFor(() => {
       expect(screen.getByText('met sarah at acme')).toBeTruthy();
