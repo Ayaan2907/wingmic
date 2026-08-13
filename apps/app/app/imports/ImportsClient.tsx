@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { trpc } from '@/lib/trpc/client';
 import {
   IMPORT_MAX_BATCH,
+  IMPORT_MAX_BYTES,
   normalizeContactsFromFile,
   deviceContactsSupported,
   pickDeviceContacts,
@@ -42,6 +43,7 @@ export function ImportsClient() {
   /** Bumps on each file selection so a stale `file.text()` cannot overwrite newer state. */
   const parseGenRef = React.useRef(0);
 
+  const busyUploading = phase === 'uploading';
   const previewEnabled = contacts.length > 0 && (phase === 'ready' || phase === 'uploading');
   const preview = trpc.imports.previewBatch.useQuery(
     { contacts },
@@ -99,6 +101,7 @@ export function ImportsClient() {
   }, [preview.data]);
 
   async function handleFile(file: File) {
+    if (busyUploading) return;
     const gen = ++parseGenRef.current;
     setError(null);
     setResult(null);
@@ -108,6 +111,14 @@ export function ImportsClient() {
     setKind(null);
     setResolutions({});
     try {
+      if (file.size > IMPORT_MAX_BYTES) {
+        if (gen !== parseGenRef.current) return;
+        setError(
+          `file too large (${Math.ceil(file.size / (1024 * 1024))}MB) — keep under ${Math.floor(IMPORT_MAX_BYTES / (1024 * 1024))}MB`,
+        );
+        setPhase('error');
+        return;
+      }
       const text = await file.text();
       if (gen !== parseGenRef.current) return;
       const parsed = normalizeContactsFromFile({ filename: file.name, text });
@@ -140,11 +151,13 @@ export function ImportsClient() {
 
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
+    if (busyUploading) return;
     const file = e.dataTransfer.files?.[0];
     if (file) void handleFile(file);
   }
 
   async function handleDevicePick() {
+    if (busyUploading) return;
     setError(null);
     setResult(null);
     setPhase('parsing');
@@ -184,9 +197,12 @@ export function ImportsClient() {
   const unresolved =
     ambiguousRows.length > 0 &&
     ambiguousRows.some((r) => resolutions[r.index] === undefined);
+  const previewFailed = Boolean(preview.isError);
+  const commitBlocked =
+    busyUploading || unresolved || preview.isFetching || previewFailed;
 
   function commitImport() {
-    if (!kind || contacts.length === 0 || unresolved) return;
+    if (!kind || contacts.length === 0 || unresolved || previewFailed) return;
     setPhase('uploading');
     const resolutionPayload = Object.entries(resolutions).map(([index, entityId]) => ({
       index: Number(index),
@@ -268,10 +284,15 @@ export function ImportsClient() {
           data-testid="imports-dropzone"
           onDragOver={(e) => e.preventDefault()}
           onDrop={onDrop}
-          onClick={() => inputRef.current?.click()}
+          onClick={() => {
+            if (busyUploading) return;
+            inputRef.current?.click();
+          }}
           role="button"
-          tabIndex={0}
+          tabIndex={busyUploading ? -1 : 0}
+          aria-disabled={busyUploading}
           onKeyDown={(e) => {
+            if (busyUploading) return;
             if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click();
           }}
           style={{
@@ -280,12 +301,17 @@ export function ImportsClient() {
             border: `1.5px dashed ${accent}66`,
             background: `${accent}0d`,
             textAlign: 'center',
-            cursor: 'pointer',
+            cursor: busyUploading ? 'not-allowed' : 'pointer',
             marginBottom: 16,
+            opacity: busyUploading ? 0.6 : 1,
           }}
         >
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
-            {phase === 'parsing' ? 'reading…' : 'tap or drop a file'}
+            {phase === 'parsing'
+              ? 'reading…'
+              : busyUploading
+                ? 'importing…'
+                : 'tap or drop a file'}
           </div>
           <div className="mono" style={{ fontSize: 11, color: 'var(--text-40)' }}>
             .csv · .vcf · up to {IMPORT_MAX_BATCH} contacts
@@ -296,7 +322,12 @@ export function ImportsClient() {
             accept=".csv,.vcf,.vcard,text/csv,text/vcard,text/x-vcard"
             hidden
             data-testid="imports-file-input"
+            disabled={busyUploading}
             onChange={(e) => {
+              if (busyUploading) {
+                e.target.value = '';
+                return;
+              }
               const file = e.target.files?.[0];
               if (file) void handleFile(file);
               e.target.value = '';
@@ -308,6 +339,7 @@ export function ImportsClient() {
           <button
             type="button"
             data-testid="imports-device-pick"
+            disabled={busyUploading}
             onClick={() => void handleDevicePick()}
             style={{
               width: '100%',
@@ -318,7 +350,8 @@ export function ImportsClient() {
               background: 'var(--surface-1)',
               color: 'var(--ink)',
               font: '600 13px Inter, system-ui, sans-serif',
-              cursor: 'pointer',
+              cursor: busyUploading ? 'not-allowed' : 'pointer',
+              opacity: busyUploading ? 0.7 : 1,
             }}
           >
             pick from phone contacts →
@@ -379,6 +412,41 @@ export function ImportsClient() {
               </div>
             ) : null}
 
+            {previewFailed ? (
+              <div
+                data-testid="imports-preview-error"
+                role="alert"
+                style={{
+                  marginTop: 14,
+                  paddingTop: 12,
+                  borderTop: '1px solid var(--border-soft)',
+                }}
+              >
+                <p
+                  className="mono"
+                  style={{ fontSize: 12, color: '#FF6B6B', margin: '0 0 10px' }}
+                >
+                  could not match contacts — check your connection and retry
+                </p>
+                <button
+                  type="button"
+                  data-testid="imports-preview-retry"
+                  onClick={() => void preview.refetch()}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: '1px solid var(--border-soft)',
+                    background: 'var(--bg-page)',
+                    color: 'var(--ink)',
+                    font: '600 12px Inter, system-ui, sans-serif',
+                    cursor: 'pointer',
+                  }}
+                >
+                  retry matching →
+                </button>
+              </div>
+            ) : null}
+
             {ambiguousRows.length > 0 ? (
               <div
                 data-testid="imports-conflicts"
@@ -417,7 +485,7 @@ export function ImportsClient() {
                                 ? '__new__'
                                 : resolutions[row.index]!
                           }
-                          disabled={phase === 'uploading'}
+                          disabled={busyUploading}
                           onChange={(e) => {
                             const v = e.target.value;
                             setResolutions((prev) => ({
@@ -454,12 +522,7 @@ export function ImportsClient() {
             <button
               type="button"
               data-testid="imports-commit"
-              disabled={
-                phase === 'uploading' ||
-                unresolved ||
-                preview.isFetching ||
-                (preview.isError ?? false)
-              }
+              disabled={commitBlocked}
               onClick={commitImport}
               style={{
                 marginTop: 14,
@@ -471,18 +534,17 @@ export function ImportsClient() {
                 border: '1.5px solid #000',
                 boxShadow: '3px 3px 0 #000',
                 font: '700 13px Inter, system-ui, sans-serif',
-                cursor:
-                  phase === 'uploading' || unresolved || preview.isFetching
-                    ? 'not-allowed'
-                    : 'pointer',
-                opacity: phase === 'uploading' || unresolved || preview.isFetching ? 0.7 : 1,
+                cursor: commitBlocked ? 'not-allowed' : 'pointer',
+                opacity: commitBlocked ? 0.7 : 1,
               }}
             >
-              {phase === 'uploading'
+              {busyUploading
                 ? 'importing…'
-                : preview.isFetching
-                  ? 'matching…'
-                  : `import ${contacts.length} →`}
+                : previewFailed
+                  ? 'matching failed'
+                  : preview.isFetching
+                    ? 'matching…'
+                    : `import ${contacts.length} →`}
             </button>
           </div>
         ) : null}

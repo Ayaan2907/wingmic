@@ -1,4 +1,5 @@
-import { importContactDraftSchema, type ImportContactDraft } from './types';
+import { z } from 'zod';
+import { importContactDraftSchema, isLinkedInHost, type ImportContactDraft } from './types';
 
 /** LinkedIn Connections.csv header aliases (export variants). */
 const HEADER_ALIASES: Record<string, keyof RowFields> = {
@@ -87,15 +88,21 @@ function emptyToNull(s: string | undefined): string | null {
   return t.length ? t : null;
 }
 
+/** Invalid / placeholder emails become null so the rest of the row still imports. */
+function parseEmail(raw: string | null): string | null {
+  if (!raw) return null;
+  const parsed = z.string().trim().email().safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
 function normalizeLinkedInUrl(raw: string | null): string | null {
   if (!raw) return null;
   const trimmed = raw.trim();
   if (!trimmed) return null;
   try {
-    const u = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
-    if (!/linkedin\.com$/i.test(u.hostname) && !/\.linkedin\.com$/i.test(u.hostname)) {
-      return null;
-    }
+    const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    const u = new URL(withScheme);
+    if (!isLinkedInHost(u.hostname)) return null;
     u.hash = '';
     u.search = '';
     return u.toString().replace(/\/$/, '');
@@ -143,7 +150,7 @@ export function parseLinkedInCsv(text: string): ImportContactDraft[] {
 
     const draft = importContactDraftSchema.safeParse({
       name,
-      email: emptyToNull(raw.email),
+      email: parseEmail(emptyToNull(raw.email)),
       linkedinUrl: normalizeLinkedInUrl(emptyToNull(raw.linkedinUrl)),
       company: emptyToNull(raw.company),
       role: emptyToNull(raw.role),

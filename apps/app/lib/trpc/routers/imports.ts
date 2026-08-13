@@ -11,6 +11,7 @@ import {
   resolveMatch,
   registerIdentifiers,
   filterSafeIdentifierFacts,
+  identifierFacts,
   type ImportContactDraft,
   type MatchIndexes,
 } from '@/lib/imports';
@@ -21,6 +22,18 @@ const resolutionSchema = z.object({
   /** Explicit entity id, or `null` to force create. */
   entityId: z.string().min(1).nullable(),
 });
+
+function collectOwnedIds(indexes: MatchIndexes): Set<string> {
+  const ownedIds = new Set<string>();
+  for (const owners of [
+    ...indexes.byName.values(),
+    ...indexes.byEmail.values(),
+    ...indexes.byLinkedIn.values(),
+  ]) {
+    for (const id of owners) ownedIds.add(id);
+  }
+  return ownedIds;
+}
 
 /**
  * Contact imports — LinkedIn CSV / vCard upsert into private person entities.
@@ -117,97 +130,99 @@ export const importsRouter = router({
         resolutionByIndex.set(r.index, r.entityId);
       }
 
-      let created = 0;
-      let matched = 0;
-      const entityIds: string[] = [];
+      return ctx.db.transaction(async (tx) => {
+        const db = tx as unknown as DB;
+        let created = 0;
+        let matched = 0;
+        const entityIds: string[] = [];
 
-      const indexes = await loadMatchIndexes(ctx.db, ctx.user.id);
-      const ownedIds = new Set(
-        [...indexes.byName.values(), ...indexes.byEmail.values(), ...indexes.byLinkedIn.values()],
-      );
+        const indexes = await loadMatchIndexes(db, ctx.user.id);
+        const ownedIds = collectOwnedIds(indexes);
 
-      for (let i = 0; i < input.contacts.length; i++) {
-        const contact = input.contacts[i]!;
-        const override = resolutionByIndex.get(i);
-        const match = resolveMatch(contact, indexes);
+        for (let i = 0; i < input.contacts.length; i++) {
+          const contact = input.contacts[i]!;
+          const override = resolutionByIndex.get(i);
+          const match = resolveMatch(contact, indexes);
 
-        let targetId: string | null = null;
-        let forceCreate = false;
+          let targetId: string | null = null;
+          let forceCreate = false;
 
-        if (override !== undefined) {
-          if (override === null) {
-            forceCreate = true;
-          } else {
-            if (!ownedIds.has(override)) {
-              // Verify ownership against DB in case indexes missed a person with no facts yet.
-              const owned = await ctx.db.query.entities.findFirst({
-                where: and(
-                  eq(schema.entities.id, override),
-                  eq(schema.entities.ownerUserId, ctx.user.id),
-                  isNull(schema.entities.deletedAt),
-                ),
-                columns: { id: true },
-              });
-              if (!owned) throw new Error('resolution targets an entity you do not own');
-              ownedIds.add(owned.id);
+          if (override !== undefined) {
+            if (override === null) {
+              forceCreate = true;
+            } else {
+              if (!ownedIds.has(override)) {
+                // Verify ownership against DB in case indexes missed a person with no facts yet.
+                const owned = await db.query.entities.findFirst({
+                  where: and(
+                    eq(schema.entities.id, override),
+                    eq(schema.entities.ownerUserId, ctx.user.id),
+                    isNull(schema.entities.deletedAt),
+                  ),
+                  columns: { id: true },
+                });
+                if (!owned) throw new Error('resolution targets an entity you do not own');
+                ownedIds.add(owned.id);
+              }
+              targetId = override;
             }
-            targetId = override;
+          } else if (match.kind === 'match') {
+            targetId = match.entityId;
+          } else if (match.kind === 'ambiguous') {
+            // Without an explicit choice, create new rather than guessing wrong.
+            forceCreate = true;
           }
-        } else if (match.kind === 'match') {
-          targetId = match.entityId;
-        } else if (match.kind === 'ambiguous') {
-          // Without an explicit choice, create new rather than guessing wrong.
-          forceCreate = true;
+
+          if (targetId && !forceCreate) {
+            await mergeFacts(db, indexes, targetId, contact, { filterIdentifiers: true });
+            await db
+              .update(schema.entities)
+              .set({ updatedAt: new Date() })
+              .where(
+                and(
+                  eq(schema.entities.id, targetId),
+                  eq(schema.entities.ownerUserId, ctx.user.id),
+                ),
+              );
+            registerIdentifiers(indexes, targetId, contact);
+            matched++;
+            entityIds.push(targetId);
+            continue;
+          }
+
+          const [inserted] = await db
+            .insert(schema.entities)
+            .values({
+              ownerUserId: ctx.user.id,
+              kind: 'person',
+              name: contact.name.trim(),
+              aliases: [
+                ...(contact.company ? [contact.company.trim()] : []),
+                ...(contact.role ? [contact.role.trim()] : []),
+              ].filter(Boolean),
+              importSource,
+            })
+            .returning({ id: schema.entities.id });
+          if (!inserted) {
+            throw new Error('failed to insert imported contact');
+          }
+          ownedIds.add(inserted.id);
+          // Force-create keeps identifiers even when they collide with other owners.
+          await mergeFacts(db, indexes, inserted.id, contact, { filterIdentifiers: false });
+          registerIdentifiers(indexes, inserted.id, contact);
+          created++;
+          entityIds.push(inserted.id);
         }
 
-        if (targetId && !forceCreate) {
-          await mergeFacts(ctx.db, indexes, targetId, contact);
-          await ctx.db
-            .update(schema.entities)
-            .set({ updatedAt: new Date() })
-            .where(
-              and(
-                eq(schema.entities.id, targetId),
-                eq(schema.entities.ownerUserId, ctx.user.id),
-              ),
-            );
-          registerIdentifiers(indexes, targetId, contact);
-          matched++;
-          entityIds.push(targetId);
-          continue;
-        }
-
-        const [inserted] = await ctx.db
-          .insert(schema.entities)
-          .values({
-            ownerUserId: ctx.user.id,
-            kind: 'person',
-            name: contact.name.trim(),
-            aliases: [
-              ...(contact.company ? [contact.company.trim()] : []),
-              ...(contact.role ? [contact.role.trim()] : []),
-            ].filter(Boolean),
-            importSource,
-          })
-          .returning({ id: schema.entities.id });
-        if (!inserted) {
-          throw new Error('failed to insert imported contact');
-        }
-        ownedIds.add(inserted.id);
-        await mergeFacts(ctx.db, indexes, inserted.id, contact);
-        registerIdentifiers(indexes, inserted.id, contact);
-        created++;
-        entityIds.push(inserted.id);
-      }
-
-      return {
-        batchId,
-        importSource,
-        created,
-        matched,
-        total: input.contacts.length,
-        entityIds,
-      };
+        return {
+          batchId,
+          importSource,
+          created,
+          matched,
+          total: input.contacts.length,
+          entityIds,
+        };
+      });
     }),
 
   /**
@@ -244,6 +259,15 @@ async function loadMatchIndexes(db: DB, userId: string): Promise<MatchIndexes> {
   return indexes;
 }
 
+function addToOwnerSet(map: Map<string, Set<string>>, key: string, entityId: string): void {
+  let owners = map.get(key);
+  if (!owners) {
+    owners = new Set();
+    map.set(key, owners);
+  }
+  owners.add(entityId);
+}
+
 async function loadMatchIndexesWithNames(
   db: DB,
   userId: string,
@@ -252,10 +276,10 @@ async function loadMatchIndexesWithNames(
     where: and(eq(schema.entities.ownerUserId, userId), isNull(schema.entities.deletedAt)),
     columns: { id: true, name: true },
   });
-  const byName = new Map<string, string>();
+  const byName = new Map<string, Set<string>>();
   const nameById = new Map<string, string>();
   for (const e of owned) {
-    byName.set(e.name.trim().toLowerCase(), e.id);
+    addToOwnerSet(byName, e.name.trim().toLowerCase(), e.id);
     nameById.set(e.id, e.name);
   }
 
@@ -270,12 +294,12 @@ async function loadMatchIndexesWithNames(
           columns: { entityId: true, key: true, value: true },
         })
       : [];
-  const byEmail = new Map<string, string>();
-  const byLinkedIn = new Map<string, string>();
+  const byEmail = new Map<string, Set<string>>();
+  const byLinkedIn = new Map<string, Set<string>>();
   for (const f of factRows) {
     const v = f.value.trim().toLowerCase();
-    if (f.key === 'email' && !byEmail.has(v)) byEmail.set(v, f.entityId);
-    if (f.key === 'linkedin' && !byLinkedIn.has(v)) byLinkedIn.set(v, f.entityId);
+    if (f.key === 'email') addToOwnerSet(byEmail, v, f.entityId);
+    if (f.key === 'linkedin') addToOwnerSet(byLinkedIn, v, f.entityId);
   }
   return { indexes: { byEmail, byLinkedIn, byName }, nameById };
 }
@@ -285,6 +309,7 @@ async function mergeFacts(
   indexes: MatchIndexes,
   entityId: string,
   contact: ImportContactDraft,
+  opts: { filterIdentifiers: boolean },
 ) {
   const existing = await db.query.entityFacts.findMany({
     where: eq(schema.entityFacts.entityId, entityId),
@@ -293,7 +318,9 @@ async function mergeFacts(
   const have = new Set(existing.map((f) => `${f.key}:${f.value.trim().toLowerCase()}`));
 
   const candidates: Array<{ key: string; value: string }> = [
-    ...filterSafeIdentifierFacts(indexes, entityId, contact),
+    ...(opts.filterIdentifiers
+      ? filterSafeIdentifierFacts(indexes, entityId, contact)
+      : identifierFacts(contact)),
   ];
   if (contact.company) candidates.push({ key: 'company', value: contact.company.trim() });
   if (contact.role) candidates.push({ key: 'role', value: contact.role.trim() });

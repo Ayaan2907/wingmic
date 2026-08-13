@@ -13,7 +13,8 @@ describe('imports router', () => {
   let now = Date.now();
 
   beforeAll(async () => {
-    client = createClient({ url: ':memory:' });
+    // Shared cache so drizzle transactions see the same in-memory schema.
+    client = createClient({ url: 'file::memory:?cache=shared' });
     db = drizzle(client, { schema });
     await client.executeMultiple(`
       CREATE TABLE user (
@@ -211,10 +212,12 @@ describe('imports router', () => {
         },
       ],
     });
-    // Ambiguous row without resolution → create new (not merge into Ada).
-    expect(conflicted.created).toBe(1);
-    expect(conflicted.matched).toBe(1);
-    expect(conflicted.entityIds[1]).toBe(byronId);
+    // Ambiguous row without resolution → force-create (keeps identifiers).
+    // Second row then sees a multi-owner LinkedIn key → also force-creates.
+    expect(conflicted.created).toBe(2);
+    expect(conflicted.matched).toBe(0);
+    expect(conflicted.entityIds[0]).not.toBe(adaId);
+    expect(conflicted.entityIds[0]).not.toBe(byronId);
 
     const linkedinFacts = await client.execute({
       sql: `SELECT entity_id, value FROM entity_fact WHERE key = 'linkedin' AND lower(value) LIKE '%/in/byron'`,
@@ -222,7 +225,57 @@ describe('imports router', () => {
     });
     const owners = linkedinFacts.rows.map((r) => r.entity_id);
     expect(owners).toContain(byronId);
+    expect(owners).toContain(conflicted.entityIds[0]);
     expect(owners).not.toContain(adaId);
+  });
+
+  it('force-create keeps identifier facts even when they collide', async () => {
+    const seeded = await caller(userA).upsertBatch({
+      kind: 'linkedin',
+      contacts: [
+        {
+          name: 'Owner Email',
+          email: 'collide@example.com',
+          linkedinUrl: null,
+          company: null,
+          role: null,
+        },
+        {
+          name: 'Owner LinkedIn',
+          email: null,
+          linkedinUrl: 'https://www.linkedin.com/in/collide',
+          company: null,
+          role: null,
+        },
+      ],
+    });
+    const emailOwner = seeded.entityIds[0]!;
+    const liOwner = seeded.entityIds[1]!;
+
+    const created = await caller(userA).upsertBatch({
+      kind: 'vcard',
+      contacts: [
+        {
+          name: 'Force Keep Ids',
+          email: 'collide@example.com',
+          linkedinUrl: 'https://www.linkedin.com/in/collide',
+          company: null,
+          role: null,
+        },
+      ],
+    });
+    expect(created.created).toBe(1);
+    const newId = created.entityIds[0]!;
+    expect(newId).not.toBe(emailOwner);
+    expect(newId).not.toBe(liOwner);
+
+    const facts = await client.execute({
+      sql: `SELECT key, value FROM entity_fact WHERE entity_id = ? ORDER BY key`,
+      args: [newId],
+    });
+    const byKey = Object.fromEntries(facts.rows.map((r) => [r.key, r.value]));
+    expect(byKey.email).toBe('collide@example.com');
+    expect(String(byKey.linkedin)).toContain('/in/collide');
   });
 
   it('previewBatch flags email vs linkedin collisions as ambiguous', async () => {
