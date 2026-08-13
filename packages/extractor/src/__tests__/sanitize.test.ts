@@ -97,4 +97,54 @@ describe('sanitizeExtraction', () => {
     });
     expect(r.topics).toEqual(['relocation', 'San Francisco', 'co-working']);
   });
+
+  it('sanitizes person-scoped topics the same way as canonical topics', () => {
+    const r = sanitizeExtraction({
+      ...empty(),
+      persons: [
+        {
+          name: 'Lucas',
+          role: null,
+          companyHint: null,
+          topics: ['discussed', 'rust', 'lucas', 'AI'],
+          notes: null,
+          email: null,
+          linkedin: null,
+          aliases: [],
+        },
+      ],
+      topics: ['discussed'],
+    });
+    expect(r.persons[0]!.topics).toEqual(['rust', 'AI']);
+    expect(r.topics).toEqual([]);
+  });
+
+  it('keeps short subjects like AI and Go', () => {
+    const r = sanitizeExtraction({
+      ...empty(),
+      topics: ['AI', 'Go', 'a', 'rust'],
+    });
+    expect(r.topics).toEqual(['AI', 'Go', 'rust']);
+  });
+
+  it('does not erase one-word topics that share a token with a multi-word entity', () => {
+    const r = sanitizeExtraction({
+      ...empty(),
+      topics: ['research', 'rust'],
+      companies: [{ name: 'Research Labs', domainHint: null, industry: [] }],
+      persons: [
+        {
+          name: 'Lucas',
+          role: null,
+          companyHint: null,
+          topics: [],
+          notes: null,
+          email: null,
+          linkedin: null,
+          aliases: [],
+        },
+      ],
+    });
+    expect(r.topics).toEqual(['research', 'rust']);
+  });
 });
