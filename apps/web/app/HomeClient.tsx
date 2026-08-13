@@ -257,7 +257,7 @@ function App() {
 
           {/* Right — phone playing the product explainer */}
           <div className="wm-hero-phone-wrap" style={{ display: 'flex', justifyContent: 'center' }}>
-            <PhoneVideo accent={accent} width={420} />
+            <PhoneVideo width={420} />
           </div>
         </div>
       </section>

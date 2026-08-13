@@ -135,74 +135,24 @@ function Sticker({ children, color, rotate = 0, x, y, size = 'sm' }) {
 }
 
 // ─────────────────── iPhone frame playing the product explainer ───────────────────
-function PhoneVideo({ accent, width = 300 }) {
+function PhoneVideo({ width = 300 }) {
   const videoRef = useRef(null);
-  const trackRef = useRef(null);
 
-  const [playing, setPlaying] = useState(true);
-  const [muted, setMuted] = useState(true);
-  const [cur, setCur] = useState(0);
-  const [dur, setDur] = useState(0);
-  const [hover, setHover] = useState(false);
-
-  // Nudge autoplay on mobile browsers that ignore the attribute until a play() call.
+  // Nudge autoplay on browsers that ignore the attribute until a play() call.
   useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    v.play().catch(() => {});
+    videoRef.current?.play?.().catch(() => {});
   }, []);
 
-  const fmt = (s) => {
-    if (!isFinite(s)) return '0:00';
-    const m = Math.floor(s / 60);
-    const ss = Math.floor(s % 60);
-    return `${m}:${ss < 10 ? '0' : ''}${ss}`;
-  };
-
-  const togglePlay = () => {
-    const v = videoRef.current;
-    if (!v) return;
-    if (v.paused) v.play().catch(() => {});
-    else v.pause();
-  };
-
-  const toggleMute = () => {
-    const v = videoRef.current;
-    if (!v) return;
-    v.muted = !v.muted;
-    setMuted(v.muted);
-  };
-
-  const seekToClientX = (clientX) => {
-    const v = videoRef.current;
-    const t = trackRef.current;
-    if (!v || !t || !v.duration) return;
-    const r = t.getBoundingClientRect();
-    const ratio = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
-    v.currentTime = ratio * v.duration;
-    setCur(v.currentTime);
-  };
-
-  const progress = dur ? cur / dur : 0;
-  const controlsVisible = hover || !playing;
-
-  const iconBtn = {
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
-    background: 'rgba(0,0,0,0.4)', border: 'none', cursor: 'pointer', color: '#fff', padding: 0,
-  };
-
   return (
-    <div
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        position: 'relative', width: '100%', maxWidth: width, aspectRatio: IPHONE_ASPECT,
-        filter: 'drop-shadow(0 26px 50px rgba(0,0,0,0.55))',
-      }}>
+    <div style={{
+      position: 'relative', width: '100%', maxWidth: width, aspectRatio: IPHONE_ASPECT,
+      filter: 'drop-shadow(0 26px 50px rgba(0,0,0,0.55))',
+    }}>
+      {/* iPhone frame (Magic UI) — bezel + shape, behind the screen */}
+      <IphoneFrame style={{ zIndex: 0 }} />
 
-      {/* Screen — the live video, behind the frame so the island overlays it */}
-      <div style={{ position: 'absolute', overflow: 'hidden', zIndex: 0, background: '#050509', ...screenBox }}>
+      {/* The video — on top, filling the screen, with native controls */}
+      <div style={{ position: 'absolute', overflow: 'hidden', zIndex: 1, background: '#050509', ...screenBox }}>
         <video
           ref={videoRef}
           src="/wingmic-explainer.mp4"
@@ -210,79 +160,18 @@ function PhoneVideo({ accent, width = 300 }) {
           muted
           loop
           playsInline
+          controls
           preload="auto"
           aria-label="wingmic product explainer"
-          onClick={togglePlay}
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-          onTimeUpdate={(e) => setCur(e.currentTarget.currentTime)}
-          onLoadedMetadata={(e) => setDur(e.currentTarget.duration)}
-          onVolumeChange={(e) => setMuted(e.currentTarget.muted)}
-          style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
+          style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
         />
       </div>
 
-      {/* iPhone frame (Magic UI) — decorative, click-through */}
-      <IphoneFrame style={{ zIndex: 1 }} />
-
-      {/* Player controls — above everything, positioned inside the screen */}
-      <div style={{ position: 'absolute', zIndex: 2, overflow: 'hidden', pointerEvents: 'none', ...screenBox }}>
-        {/* Center play affordance — while paused */}
-        {!playing && (
-          <button
-            type="button"
-            aria-label="Play"
-            onClick={togglePlay}
-            style={{
-              position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-              width: 62, height: 62, borderRadius: '50%', border: 'none', cursor: 'pointer',
-              background: accent, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 6px 22px rgba(0,0,0,0.45)', pointerEvents: 'auto',
-            }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z" /></svg>
-          </button>
-        )}
-
-        {/* Control bar */}
-        <div style={{
-          position: 'absolute', left: 0, right: 0, bottom: 0,
-          padding: '26px 14px 16px',
-          background: 'linear-gradient(transparent, rgba(0,0,0,0.65))',
-          opacity: controlsVisible ? 1 : 0,
-          transition: 'opacity 0.2s ease',
-          pointerEvents: controlsVisible ? 'auto' : 'none',
-        }}>
-          {/* Seek / peek bar */}
-          <div
-            ref={trackRef}
-            onPointerDown={(e) => { e.currentTarget.setPointerCapture?.(e.pointerId); seekToClientX(e.clientX); }}
-            onPointerMove={(e) => { if (e.buttons === 1) seekToClientX(e.clientX); }}
-            style={{ height: 16, display: 'flex', alignItems: 'center', cursor: 'pointer', touchAction: 'none' }}>
-            <div style={{ position: 'relative', width: '100%', height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.3)' }}>
-              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${progress * 100}%`, background: accent, borderRadius: 2 }} />
-              <div style={{ position: 'absolute', left: `${progress * 100}%`, top: '50%', transform: 'translate(-50%,-50%)', width: 11, height: 11, borderRadius: '50%', background: accent, boxShadow: '0 1px 4px rgba(0,0,0,0.5)' }} />
-            </div>
-          </div>
-
-          {/* Buttons row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-            <button type="button" aria-label={playing ? 'Pause' : 'Play'} onClick={togglePlay} style={iconBtn}>
-              {playing
-                ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
-                : <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z" /></svg>}
-            </button>
-            <span className="mono" style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.85)', lineHeight: 1 }}>
-              {fmt(cur)} / {fmt(dur)}
-            </span>
-            <div style={{ flex: 1 }} />
-            <button type="button" aria-label={muted ? 'Unmute' : 'Mute'} onClick={toggleMute} style={iconBtn}>
-              {muted
-                ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H3v6h3l5 4V5z" fill="#fff" stroke="none" /><path d="M17 9l4 6M21 9l-4 6" /></svg>
-                : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H3v6h3l5 4V5z" fill="#fff" stroke="none" /><path d="M15.5 8.5a5 5 0 010 7" /></svg>}
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* Dynamic Island — sits over the video for the iPhone look */}
+      <div aria-hidden style={{
+        position: 'absolute', zIndex: 2, top: '3.5%', left: '50%', transform: 'translateX(-50%)',
+        width: '28.5%', height: '4.1%', background: '#08080c', borderRadius: 999, pointerEvents: 'none',
+      }} />
     </div>);
 
 }
