@@ -168,6 +168,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const handoffBubbleIdRef = useRef<string | null>(null);
   /** Tap during encoding/ready queues the next take after the prior blob finalizes. */
   const pendingBeginRef = useRef(false);
+  /** Tracks whether Space is currently held — used to lock or stop a deferred begin. */
+  const spaceDownRef = useRef(false);
   const pipelineControllersRef = useRef<Map<string, AbortController>>(new Map());
   const undoTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   /** Bumped on undo so a late delete response cannot win over restore. */
@@ -181,6 +183,19 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
 
   const patch = useCallback((id: string, p: Partial<ThreadMessage>) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...p } : m)));
+  }, []);
+
+  /** Schedule an undo chip + auto-expire timer for a soft-deleted bubble. */
+  const enqueueUndo = useCallback((id: string) => {
+    const until = Date.now() + UNDO_WINDOW_MS;
+    setUndoQueue((q) => [...q, { id, until }]);
+    const t = setTimeout(() => {
+      undoTimersRef.current.delete(id);
+      setUndoQueue((q) => q.filter((u) => u.id !== id || u.until !== until));
+    }, UNDO_WINDOW_MS);
+    const prev = undoTimersRef.current.get(id);
+    if (prev) clearTimeout(prev);
+    undoTimersRef.current.set(id, t);
   }, []);
 
   /** Map bubble id → interactions.id for persist. Live commits stash it on
@@ -384,6 +399,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   // the thread. The pipeline runs in parallel with the route change.
   // On `encoding`, detach the bubble id so a second take can arm while the
   // prior blob finalizes (U3 — non-blocking record loop).
+  // Pending next-take is drained on `idle` (after reset), not via a microtask
+  // after reset — recorderRef.status is still stale until React re-renders.
   useEffect(() => {
     if (recorder.status === 'encoding' && activeIdRef.current) {
       handoffBubbleIdRef.current = activeIdRef.current;
@@ -402,10 +419,6 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       const dur = recorder.duration;
       void runCapturePipeline(id, blob, dur);
       recorder.reset();
-      if (pendingBeginRef.current) {
-        pendingBeginRef.current = false;
-        void Promise.resolve().then(() => beginCapture());
-      }
       if (pathnameRef.current !== '/chat') {
         try {
           router.push('/chat');
@@ -434,15 +447,22 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         },
       });
       recorder.reset();
+    }
+    if (recorder.status === 'idle') {
+      if (activeIdRef.current) {
+        const id = activeIdRef.current;
+        activeIdRef.current = null;
+        setMessages((prev) => prev.filter((m) => m.id !== id));
+      }
       if (pendingBeginRef.current) {
         pendingBeginRef.current = false;
-        void Promise.resolve().then(() => beginCapture());
+        void (async () => {
+          await beginCapture();
+          if (spaceDownRef.current) {
+            recorderRef.current.lock();
+          }
+        })();
       }
-    }
-    if (recorder.status === 'idle' && activeIdRef.current) {
-      const id = activeIdRef.current;
-      activeIdRef.current = null;
-      setMessages((prev) => prev.filter((m) => m.id !== id));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recorder.status]);
@@ -464,13 +484,30 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           recorder.status === 'encoding'
         ) {
           e.preventDefault();
+          spaceDownRef.current = true;
           void (async () => {
             await beginCapture();
-            recorderRef.current.lock();
+            // beginCapture may have only queued (encoding/ready). After it
+            // returns, either stop if the key already released, or lock for
+            // hold-to-talk if Space is still down.
+            if (!spaceDownRef.current) {
+              const s = recorderRef.current.status;
+              if (
+                s === 'recording' ||
+                s === 'locked' ||
+                s === 'lock_armed' ||
+                s === 'cancel_armed'
+              ) {
+                recorderRef.current.stop();
+              }
+            } else {
+              recorderRef.current.lock();
+            }
           })();
         }
       }
       if (e.code === 'Space' && e.type === 'keyup') {
+        spaceDownRef.current = false;
         if (
           recorder.status === 'recording' ||
           recorder.status === 'locked' ||
@@ -478,6 +515,9 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         ) {
           e.preventDefault();
           recorderRef.current.stop();
+        } else if (recorder.status === 'encoding' || recorder.status === 'ready') {
+          // Released before the deferred take started — cancel the queue.
+          pendingBeginRef.current = false;
         }
       }
       if (e.code === 'Escape' && e.type === 'keydown') {
@@ -690,22 +730,18 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       const msg = messages.find((m) => m.id === id);
       const interactionId = interactionIdFor(msg);
       patch(id, { status: 'deleted' });
-      const until = Date.now() + UNDO_WINDOW_MS;
-      setUndoQueue((q) => [...q, { id, until }]);
-      const t = setTimeout(() => {
-        undoTimersRef.current.delete(id);
-        setUndoQueue((q) => q.filter((u) => u.id !== id || u.until !== until));
-      }, UNDO_WINDOW_MS);
-      const prev = undoTimersRef.current.get(id);
-      if (prev) clearTimeout(prev);
-      undoTimersRef.current.set(id, t);
+      enqueueUndo(id);
       if (interactionId) {
         const genAtDelete = deleteGenerationRef.current.get(interactionId) ?? 0;
         void deleteMutation
           .mutateAsync({ id: interactionId })
           .then(() => {
             if ((deleteGenerationRef.current.get(interactionId) ?? 0) !== genAtDelete) {
-              void restoreMutation.mutateAsync({ id: interactionId });
+              void restoreMutation.mutateAsync({ id: interactionId }).catch(() => {
+                // Compensating restore failed — put the undo chip back so the user can retry.
+                patch(id, { status: 'deleted' });
+                enqueueUndo(id);
+              });
             }
           })
           .catch(() => {
@@ -719,7 +755,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           });
       }
     },
-    [messages, interactionIdFor, patch, deleteMutation],
+    [messages, interactionIdFor, patch, enqueueUndo, deleteMutation, restoreMutation],
   );
 
   const undoDelete = useCallback(
@@ -740,11 +776,11 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         );
         void restoreMutation.mutateAsync({ id: interactionId }).catch(() => {
           patch(id, { status: 'deleted' });
-          setUndoQueue((q) => [...q, { id, until: Date.now() + UNDO_WINDOW_MS }]);
+          enqueueUndo(id);
         });
       }
     },
-    [messages, interactionIdFor, patch, restoreMutation],
+    [messages, interactionIdFor, patch, enqueueUndo, restoreMutation],
   );
 
   // Idempotent seed. Merge-prepends server-prefetched committed memos so any
