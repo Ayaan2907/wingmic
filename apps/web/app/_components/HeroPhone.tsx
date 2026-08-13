@@ -51,47 +51,78 @@ function parseEntities(raw) {
   return { name, company, topic, followup };
 }
 
-// ─────────────────── Web Speech hook (with graceful fallback) ───────────────────
+// ─────────────────── Web Speech hook ───────────────────
+// Keeps listening until the user taps stop: browsers (Chrome) auto-end
+// recognition on a pause, so we restart on `onend` instead of treating it as
+// finished. The scripted fallback fires ONLY on genuine failures — no Web
+// Speech at all, or a permission/device error — never on normal speech.
 function useSpeech() {
   const recRef = useRef(null);
+  const stoppedRef = useRef(true);
+  const onFailRef = useRef(null);
+  const finalRef = useRef('');
   const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const finalRef = useRef('');
 
   useEffect(() => {
     const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
     setSupported(!!SR);
+    return () => { stoppedRef.current = true; try { recRef.current?.abort?.(); } catch {} };
   }, []);
 
-  const start = (onFail) => {
-    const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
-    if (!SR) return false;
+  const build = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const rec = new SR();
     rec.lang = 'en-US';
     rec.interimResults = true;
     rec.continuous = true;
-    finalRef.current = '';
-    setTranscript('');
-    let got = false;
     rec.onresult = (e) => {
-      got = true;
       let interim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const chunk = e.results[i][0].transcript;
-        if (e.results[i].isFinal) finalRef.current += chunk;
+        if (e.results[i].isFinal) finalRef.current += chunk + ' ';
         else interim += chunk;
       }
-      setTranscript((finalRef.current + ' ' + interim).trim());
+      setTranscript((finalRef.current + interim).trim());
     };
-    // Permission denied / network / no-service → hand off to the scripted demo.
-    rec.onerror = () => { setListening(false); onFail?.(); };
-    rec.onend = () => { setListening(false); if (!got && !finalRef.current) onFail?.(); };
-    recRef.current = rec;
-    try { rec.start(); setListening(true); return true; } catch { return false; }
+    rec.onerror = (ev) => {
+      // Fatal (no mic / denied) → fall back. Transient (no-speech/aborted/network) → let onend restart.
+      if (ev?.error === 'not-allowed' || ev?.error === 'service-not-allowed' || ev?.error === 'audio-capture') {
+        stoppedRef.current = true;
+        setListening(false);
+        onFailRef.current?.();
+      }
+    };
+    rec.onend = () => {
+      if (stoppedRef.current) { setListening(false); return; }
+      // user hasn't stopped → keep listening
+      setTimeout(() => { if (!stoppedRef.current) { try { recRef.current?.start(); } catch {} } }, 120);
+    };
+    return rec;
   };
 
-  const stop = () => { try { recRef.current?.stop(); } catch {} setListening(false); };
+  const start = (onFail) => {
+    const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
+    if (!SR) return false;
+    onFailRef.current = onFail;
+    stoppedRef.current = false;
+    finalRef.current = '';
+    setTranscript('');
+    try {
+      const rec = build();
+      recRef.current = rec;
+      rec.start();
+      setListening(true);
+      return true;
+    } catch { stoppedRef.current = true; return false; }
+  };
+
+  const stop = () => {
+    stoppedRef.current = true;
+    try { recRef.current?.stop(); } catch {}
+    setListening(false);
+  };
   const reset = () => { finalRef.current = ''; setTranscript(''); };
 
   return { supported, listening, transcript, start, stop, reset };
@@ -190,23 +221,40 @@ function DemoScreen({ micRef, onMicHint }) {
   const [phase, setPhase] = useState('idle'); // idle | recording | extracting | result
   const [text, setText] = useState('');
   const [data, setData] = useState(null);
+  const [hint, setHint] = useState('');
   const scriptTimer = useRef(null);
+  const maxTimer = useRef(null);
   const scriptedRef = useRef(false);
 
-  useEffect(() => () => clearTimeout(scriptTimer.current), []);
-  useEffect(() => { if (speech.listening) setText(speech.transcript); }, [speech.transcript, speech.listening]);
+  useEffect(() => () => { clearTimeout(scriptTimer.current); clearTimeout(maxTimer.current); }, []);
+  // mirror the live transcript into the recording view (real speech path)
+  useEffect(() => { if (speech.listening && !scriptedRef.current) setText(speech.transcript); }, [speech.transcript, speech.listening]);
 
+  const extract = (src) => {
+    clearTimeout(maxTimer.current);
+    setPhase('extracting');
+    setTimeout(() => { setData(parseEntities(src) || parseEntities(SAMPLE)); setPhase('result'); }, 850);
+  };
+
+  // User tapped stop — use whatever real speech we captured.
+  const finish = () => {
+    clearTimeout(maxTimer.current);
+    speech.stop();
+    const src = (speech.transcript || text || '').trim();
+    if (!src) { setPhase('idle'); setHint("didn't catch that — tap and try again"); return; }
+    extract(src);
+  };
+
+  // Fallback ONLY: no Web Speech, or the user denied mic access. Types the sample.
   const runScript = () => {
-    // Fallback (no Web Speech, permission denied, or no result): type the sample.
     if (scriptedRef.current) return;
     scriptedRef.current = true;
-    speech.stop();
     let i = 0;
     const tick = () => {
       i += 2;
       setText(SAMPLE.slice(0, i));
       if (i < SAMPLE.length) scriptTimer.current = setTimeout(tick, 45);
-      else finish(SAMPLE);
+      else extract(SAMPLE);
     };
     tick();
   };
@@ -214,21 +262,19 @@ function DemoScreen({ micRef, onMicHint }) {
   const start = () => {
     onMicHint?.();
     scriptedRef.current = false;
+    setHint('');
     setData(null);
     setText('');
     setPhase('recording');
+    // safety: auto-finish after 30s so it never runs forever
+    maxTimer.current = setTimeout(() => finish(), 30000);
     if (!speech.start(() => runScript())) runScript();
   };
 
-  const finish = (finalText) => {
-    speech.stop();
-    clearTimeout(scriptTimer.current);
-    const src = (finalText || text || SAMPLE).trim() || SAMPLE;
-    setPhase('extracting');
-    setTimeout(() => { setData(parseEntities(src)); setPhase('result'); }, 850);
+  const reset = () => {
+    clearTimeout(scriptTimer.current); clearTimeout(maxTimer.current);
+    speech.reset(); scriptedRef.current = false; setText(''); setData(null); setHint(''); setPhase('idle');
   };
-
-  const reset = () => { speech.reset(); scriptedRef.current = false; setText(''); setData(null); setPhase('idle'); };
 
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: '#08080d' }}>
@@ -246,13 +292,17 @@ function DemoScreen({ micRef, onMicHint }) {
           <div style={{ margin: 'auto', textAlign: 'center', padding: '0 6px' }}>
             <div className="serif" style={{ fontStyle: 'italic', fontSize: 22, color: '#fff', lineHeight: 1.15, marginBottom: 10 }}>who did you just meet?</div>
             <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>tap the mic and say it out loud — like <span style={{ color: 'rgba(255,255,255,0.75)' }}>"met Sarah from Acme, she leads Rust…"</span></div>
+            {hint && <div className="mono" style={{ marginTop: 12, fontSize: 11, color: THIRD }}>{hint}</div>}
           </div>
         )}
 
         {(phase === 'recording' || phase === 'extracting') && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 6 }}>
             {phase === 'recording' && <div style={{ display: 'flex', justifyContent: 'center' }}><Bars active /></div>}
-            <div className="mono" style={{ fontSize: 9, color: ACCENT, letterSpacing: 1, textTransform: 'uppercase' }}>transcript</div>
+            <div className="mono" style={{ fontSize: 9, color: ACCENT, letterSpacing: 1, textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
+              <span>transcript</span>
+              {phase === 'recording' && <span style={{ color: 'rgba(255,255,255,0.4)' }}>tap mic to stop ■</span>}
+            </div>
             <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', lineHeight: 1.5, fontFamily: 'Instrument Serif, serif', fontStyle: 'italic', minHeight: 44 }}>
               {text || <span style={{ color: 'rgba(255,255,255,0.35)' }}>listening…</span>}
               {phase === 'recording' && <span style={{ display: 'inline-block', width: 2, height: 14, background: ACCENT, marginLeft: 2, verticalAlign: 'middle', animation: 'blink 0.7s infinite' }} />}
