@@ -3,7 +3,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { IphoneFrame, screenBox, IPHONE_ASPECT } from './Iphone';
 
 // ─────────────────── Living graph background (canvas) ───────────────────
 function LiveGraph({ accent, second, third, density = 1 }) {
@@ -134,48 +133,6 @@ function Sticker({ children, color, rotate = 0, x, y, size = 'sm' }) {
 
 }
 
-// ─────────────────── iPhone frame playing the product explainer ───────────────────
-function PhoneVideo({ width = 300 }) {
-  const videoRef = useRef(null);
-
-  // Nudge autoplay on browsers that ignore the attribute until a play() call.
-  useEffect(() => {
-    videoRef.current?.play?.().catch(() => {});
-  }, []);
-
-  return (
-    <div style={{
-      position: 'relative', width: '100%', maxWidth: width, aspectRatio: IPHONE_ASPECT,
-      filter: 'drop-shadow(0 26px 50px rgba(0,0,0,0.55))',
-    }}>
-      {/* iPhone frame (Magic UI) — bezel + shape, behind the screen */}
-      <IphoneFrame style={{ zIndex: 0 }} />
-
-      {/* The video — on top, filling the screen, with native controls */}
-      <div style={{ position: 'absolute', overflow: 'hidden', zIndex: 1, background: '#050509', ...screenBox }}>
-        <video
-          ref={videoRef}
-          src="/wingmic-explainer.mp4"
-          autoPlay
-          muted
-          loop
-          playsInline
-          controls
-          preload="auto"
-          aria-label="wingmic product explainer"
-          style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
-        />
-      </div>
-
-      {/* Dynamic Island — sits over the video for the iPhone look */}
-      <div aria-hidden style={{
-        position: 'absolute', zIndex: 2, top: '3.5%', left: '50%', transform: 'translateX(-50%)',
-        width: '28.5%', height: '4.1%', background: '#08080c', borderRadius: 999, pointerEvents: 'none',
-      }} />
-    </div>);
-
-}
-
 // ─────────────────── How-it-works numbered step ───────────────────
 function Step({ n, title, body, side, accent }) {
   return (
@@ -276,4 +233,4 @@ function LiveFeed({ accent }) {
 
 }
 
-export { LiveGraph, VoiceBars, StatBlock, Sticker, PhoneVideo, Step, CodeBlock, LiveFeed };
+export { LiveGraph, VoiceBars, StatBlock, Sticker, Step, CodeBlock, LiveFeed };

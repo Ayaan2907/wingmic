@@ -16,11 +16,11 @@ import {
   VoiceBars,
   StatBlock,
   Sticker,
-  PhoneVideo,
   Step,
   CodeBlock,
   LiveFeed,
 } from './_components/marketing-ui';
+import HeroPhone from './_components/HeroPhone';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3211';
 
@@ -255,9 +255,9 @@ function App() {
             </div>
           </div>
 
-          {/* Right — phone playing the product explainer */}
+          {/* Right — interactive phone: explainer video + live demo */}
           <div className="wm-hero-phone-wrap" style={{ display: 'flex', justifyContent: 'center' }}>
-            <PhoneVideo width={420} />
+            <HeroPhone width={420} />
           </div>
         </div>
       </section>
