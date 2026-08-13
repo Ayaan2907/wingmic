@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   toPendingAct,
   resolveTargetEntityId,
+  resolveIntroEntityIds,
   buildIcs,
   mailtoHref,
 } from '../mapAction';
@@ -62,23 +63,60 @@ describe('resolveTargetEntityId', () => {
     expect(resolveTargetEntityId('Ann', [{ name: 'Joanne Smith' }], ['e_joanne'])).toBeNull();
   });
 
+  it('matches unicode letter tokens', () => {
+    expect(
+      resolveTargetEntityId('佐藤', [{ name: '佐藤 花子' }], ['e_sato']),
+    ).toBe('e_sato');
+  });
+
   it('returns null when no person matches', () => {
     expect(resolveTargetEntityId('Unknown', persons, ids)).toBeNull();
     expect(resolveTargetEntityId(null, persons, ids)).toBeNull();
   });
 });
 
+describe('resolveIntroEntityIds', () => {
+  it('does not pick a secondary when the target is unresolved', () => {
+    const result = resolveIntroEntityIds(
+      { kind: 'intro', targetPersonName: null },
+      [{ name: 'Ada' }, { name: 'Grace' }],
+      ['e_ada', 'e_grace'],
+    );
+    expect(result).toEqual({ targetEntityId: null, secondaryEntityId: null });
+  });
+
+  it('picks a different person as secondary when target resolves', () => {
+    const result = resolveIntroEntityIds(
+      { kind: 'intro', targetPersonName: 'Ada' },
+      [{ name: 'Ada' }, { name: 'Grace' }],
+      ['e_ada', 'e_grace'],
+    );
+    expect(result).toEqual({ targetEntityId: 'e_ada', secondaryEntityId: 'e_grace' });
+  });
+});
+
 describe('buildIcs + mailtoHref', () => {
-  it('builds a VEVENT with escaped body', () => {
+  it('builds a VEVENT with escaped body including CR/CRLF', () => {
     const ics = buildIcs({
       title: 'coffee',
-      description: 'line1\nline2, ok',
+      description: 'line1\r\nline2\rok',
       whenHint: '2026-08-10T15:00:00.000Z',
     });
     expect(ics).toContain('BEGIN:VEVENT');
     expect(ics).toContain('SUMMARY:coffee');
-    expect(ics).toContain('DESCRIPTION:line1\\nline2\\, ok');
+    expect(ics).toContain('DESCRIPTION:line1\\nline2\\nok');
     expect(ics).toContain('DTSTART:20260810T150000Z');
+  });
+
+  it('emits VALUE=DATE for date-only whenHint', () => {
+    const ics = buildIcs({
+      title: 'meetup',
+      description: 'all day',
+      whenHint: '2026-08-10',
+    });
+    expect(ics).toContain('DTSTART;VALUE=DATE:20260810');
+    expect(ics).toContain('DTEND;VALUE=DATE:20260811');
+    expect(ics).not.toContain('DTSTART:20260810T');
   });
 
   it('builds a mailto href with subject + body', () => {

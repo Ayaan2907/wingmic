@@ -8,7 +8,7 @@ import { parseVcard } from './parseVcard';
 
 /**
  * Detect format from filename / mime and return normalized drafts.
- * Throws only on empty input; parsers themselves skip bad rows.
+ * Returns an empty list for empty input; parsers themselves skip bad rows.
  */
 export function normalizeContactsFromFile(opts: {
   filename: string;
@@ -22,7 +22,7 @@ export function normalizeContactsFromFile(opts: {
       ? 'vcard'
       : name.endsWith('.csv')
         ? 'linkedin'
-        : opts.text.includes('BEGIN:VCARD')
+        : /BEGIN:VCARD/i.test(opts.text)
           ? 'vcard'
           : 'linkedin');
 

@@ -43,4 +43,18 @@ describe('ActCard', () => {
     fireEvent.click(btn);
     expect(onSent).toHaveBeenCalledWith('act_todo');
   });
+
+  it('shows an inline edit error when save returns false', async () => {
+    const onSaveEdit = vi.fn(async () => false);
+    render(
+      <ActCard
+        act={{ ...ACT, id: 'act_edit', actionKind: 'todo', body: 'ship the note' }}
+        onSaveEdit={onSaveEdit}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('act-edit-toggle'));
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+    expect(await screen.findByTestId('act-edit-error')).toBeTruthy();
+    expect(screen.getByTestId('act-edit')).toBeTruthy();
+  });
 });

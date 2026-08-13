@@ -1,9 +1,9 @@
 import type { ImportContactDraft } from './types';
 
 export type MatchIndexes = {
-  byEmail: Map<string, string>;
-  byLinkedIn: Map<string, string>;
-  byName: Map<string, string>;
+  byEmail: Map<string, Set<string>>;
+  byLinkedIn: Map<string, Set<string>>;
+  byName: Map<string, Set<string>>;
 };
 
 export type MatchCandidate = {
@@ -16,60 +16,82 @@ export type MatchResult =
   | { kind: 'match'; entityId: string; reasons: MatchCandidate['reasons'] }
   | { kind: 'ambiguous'; candidates: MatchCandidate[] };
 
-/** Collect every index hit; one id = match, multiple = ambiguous. */
-export function resolveMatch(contact: ImportContactDraft, indexes: MatchIndexes): MatchResult {
-  const reasonsById = new Map<string, MatchCandidate['reasons']>();
-
-  const add = (id: string | undefined, reason: MatchCandidate['reasons'][number]) => {
-    if (!id) return;
+function addOwners(
+  reasonsById: Map<string, MatchCandidate['reasons']>,
+  owners: Set<string> | undefined,
+  reason: MatchCandidate['reasons'][number],
+): void {
+  if (!owners) return;
+  for (const id of owners) {
     const existing = reasonsById.get(id) ?? [];
     if (!existing.includes(reason)) existing.push(reason);
     reasonsById.set(id, existing);
-  };
+  }
+}
+
+function toCandidates(
+  reasonsById: Map<string, MatchCandidate['reasons']>,
+): MatchCandidate[] {
+  return [...reasonsById.entries()].map(([entityId, reasons]) => ({
+    entityId,
+    reasons,
+  }));
+}
+
+/** Collect every index hit; one id = match, multiple = ambiguous. Name-only → ambiguous. */
+export function resolveMatch(contact: ImportContactDraft, indexes: MatchIndexes): MatchResult {
+  const reasonsById = new Map<string, MatchCandidate['reasons']>();
 
   if (contact.email) {
-    add(indexes.byEmail.get(contact.email.trim().toLowerCase()), 'email');
+    addOwners(reasonsById, indexes.byEmail.get(contact.email.trim().toLowerCase()), 'email');
   }
   if (contact.linkedinUrl) {
-    add(indexes.byLinkedIn.get(contact.linkedinUrl.trim().toLowerCase()), 'linkedin');
+    addOwners(
+      reasonsById,
+      indexes.byLinkedIn.get(contact.linkedinUrl.trim().toLowerCase()),
+      'linkedin',
+    );
   }
-  add(indexes.byName.get(contact.name.trim().toLowerCase()), 'name');
+  addOwners(reasonsById, indexes.byName.get(contact.name.trim().toLowerCase()), 'name');
 
   if (reasonsById.size === 0) return { kind: 'none' };
+
+  const hasStrong = [...reasonsById.values()].some((reasons) =>
+    reasons.some((r) => r === 'email' || r === 'linkedin'),
+  );
+  // Name alone is too weak for an automatic merge — surface for confirmation.
+  if (!hasStrong) {
+    return { kind: 'ambiguous', candidates: toCandidates(reasonsById) };
+  }
+
   if (reasonsById.size === 1) {
     const [entityId, reasons] = [...reasonsById.entries()][0]!;
     return { kind: 'match', entityId, reasons };
   }
-  return {
-    kind: 'ambiguous',
-    candidates: [...reasonsById.entries()].map(([entityId, reasons]) => ({
-      entityId,
-      reasons,
-    })),
-  };
+  return { kind: 'ambiguous', candidates: toCandidates(reasonsById) };
 }
 
-/**
- * Register contact identifiers for later rows in the same batch.
- * Never overwrite a key that already points at a different entity.
- */
+/** Register contact identifiers for later rows in the same batch (union into owner sets). */
 export function registerIdentifiers(
   indexes: MatchIndexes,
   entityId: string,
   contact: ImportContactDraft,
 ): void {
-  const setIfOwnOrAbsent = (map: Map<string, string>, key: string) => {
-    const existing = map.get(key);
-    if (existing !== undefined && existing !== entityId) return;
-    map.set(key, entityId);
+  const addOwner = (map: Map<string, Set<string>>, key: string) => {
+    let owners = map.get(key);
+    if (!owners) {
+      owners = new Set();
+      map.set(key, owners);
+    }
+    owners.add(entityId);
   };
 
-  setIfOwnOrAbsent(indexes.byName, contact.name.trim().toLowerCase());
+  addOwner(indexes.byName, contact.name.trim().toLowerCase());
   if (contact.email) {
-    setIfOwnOrAbsent(indexes.byEmail, contact.email.trim().toLowerCase());
+    addOwner(indexes.byEmail, contact.email.trim().toLowerCase());
   }
   if (contact.linkedinUrl) {
-    setIfOwnOrAbsent(indexes.byLinkedIn, contact.linkedinUrl.trim().toLowerCase());
+    addOwner(indexes.byLinkedIn, contact.linkedinUrl.trim().toLowerCase());
   }
 }
 
@@ -83,17 +105,30 @@ export function filterSafeIdentifierFacts(
   contact: ImportContactDraft,
 ): Array<{ key: string; value: string }> {
   const out: Array<{ key: string; value: string }> = [];
+  const hasForeignOwner = (owners: Set<string> | undefined) =>
+    !!owners && [...owners].some((id) => id !== entityId);
+
   if (contact.email) {
-    const owner = indexes.byEmail.get(contact.email.trim().toLowerCase());
-    if (owner == null || owner === entityId) {
+    const key = contact.email.trim().toLowerCase();
+    if (!hasForeignOwner(indexes.byEmail.get(key))) {
       out.push({ key: 'email', value: contact.email.trim() });
     }
   }
   if (contact.linkedinUrl) {
-    const owner = indexes.byLinkedIn.get(contact.linkedinUrl.trim().toLowerCase());
-    if (owner == null || owner === entityId) {
+    const key = contact.linkedinUrl.trim().toLowerCase();
+    if (!hasForeignOwner(indexes.byLinkedIn.get(key))) {
       out.push({ key: 'linkedin', value: contact.linkedinUrl.trim() });
     }
   }
+  return out;
+}
+
+/** Unfiltered identifier facts — used when force-creating a new person. */
+export function identifierFacts(
+  contact: ImportContactDraft,
+): Array<{ key: string; value: string }> {
+  const out: Array<{ key: string; value: string }> = [];
+  if (contact.email) out.push({ key: 'email', value: contact.email.trim() });
+  if (contact.linkedinUrl) out.push({ key: 'linkedin', value: contact.linkedinUrl.trim() });
   return out;
 }

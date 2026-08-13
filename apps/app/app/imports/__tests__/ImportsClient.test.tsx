@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { IMPORT_MAX_BYTES } from '@/lib/imports';
 
 const upsertMutate = vi.fn();
+const previewRefetch = vi.fn();
 
 const previewState = vi.hoisted(() => ({
   data: {
@@ -21,6 +23,8 @@ const previewState = vi.hoisted(() => ({
     matchCount: 0,
     newCount: 1,
   },
+  isError: false,
+  isFetching: false,
 }));
 
 vi.mock('next/link', () => ({
@@ -36,9 +40,10 @@ vi.mock('@/lib/trpc/client', () => ({
     imports: {
       previewBatch: {
         useQuery: () => ({
-          data: previewState.data,
-          isFetching: false,
-          isError: false,
+          data: previewState.isError ? undefined : previewState.data,
+          isFetching: previewState.isFetching,
+          isError: previewState.isError,
+          refetch: previewRefetch,
         }),
       },
       upsertBatch: {
@@ -83,18 +88,22 @@ function csvFor(names: string[]): string {
 afterEach(() => {
   cleanup();
   upsertMutate.mockClear();
+  previewRefetch.mockClear();
   previewState.data = {
     rows: [],
     ambiguousCount: 0,
     matchCount: 0,
     newCount: 1,
   };
+  previewState.isError = false;
+  previewState.isFetching = false;
   vi.restoreAllMocks();
 });
 
 describe('ImportsClient', () => {
   beforeEach(() => {
     upsertMutate.mockClear();
+    previewRefetch.mockClear();
   });
 
   it('shows empty tip before a file is chosen', () => {
@@ -139,6 +148,20 @@ describe('ImportsClient', () => {
     expect(upsertMutate).not.toHaveBeenCalled();
   });
 
+  it('rejects oversized files by byte size before reading text', async () => {
+    const textSpy = vi.spyOn(File.prototype, 'text');
+    render(<ImportsClient />);
+    const input = screen.getByTestId('imports-file-input') as HTMLInputElement;
+    const big = new File([new Uint8Array(IMPORT_MAX_BYTES + 1)], 'huge.csv', {
+      type: 'text/csv',
+    });
+    fireEvent.change(input, { target: { files: [big] } });
+    await waitFor(() => {
+      expect(screen.getByTestId('imports-error').textContent).toMatch(/file too large/i);
+    });
+    expect(textSpy).not.toHaveBeenCalled();
+  });
+
   it('ignores a stale parse when a newer file is selected', async () => {
     let resolveSlow: ((v: string) => void) | null = null;
     const slowText = new Promise<string>((resolve) => {
@@ -172,6 +195,25 @@ describe('ImportsClient', () => {
     await new Promise((r) => setTimeout(r, 30));
     expect(screen.getByTestId('imports-preview').textContent).toContain('Grace Hopper');
     expect(screen.getByTestId('imports-preview').textContent).not.toContain('Ada Lovelace');
+  });
+
+  it('shows preview error with retry and blocks commit', async () => {
+    previewState.isError = true;
+    render(<ImportsClient />);
+    const input = screen.getByTestId('imports-file-input') as HTMLInputElement;
+    const csv = csvFor(['Ada Lovelace']);
+    fireEvent.change(input, {
+      target: { files: [new File([csv], 'Connections.csv', { type: 'text/csv' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('imports-preview-error')).toBeTruthy();
+    });
+    const commit = screen.getByTestId('imports-commit') as HTMLButtonElement;
+    expect(commit.disabled).toBe(true);
+    expect(commit.textContent).toMatch(/matching failed/i);
+    fireEvent.click(screen.getByTestId('imports-preview-retry'));
+    expect(previewRefetch).toHaveBeenCalled();
   });
 
   it('shows a selector for ambiguous matches and passes the chosen entityId', async () => {

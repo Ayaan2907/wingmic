@@ -44,11 +44,45 @@ export function ActsClient() {
       }));
     },
   });
-  const snooze = trpc.acts.snooze.useMutation({ onSuccess: invalidate });
-  const dismiss = trpc.acts.dismiss.useMutation({ onSuccess: invalidate });
+  const snooze = trpc.acts.snooze.useMutation({
+    onSuccess: (_data, vars) => {
+      setMarkErrors((prev) => {
+        if (!prev[vars.id]) return prev;
+        const next = { ...prev };
+        delete next[vars.id];
+        return next;
+      });
+      invalidate();
+    },
+    onError: (_err, vars) => {
+      setMarkErrors((prev) => ({
+        ...prev,
+        [vars.id]: 'could not snooze — try again',
+      }));
+    },
+  });
+  const dismiss = trpc.acts.dismiss.useMutation({
+    onSuccess: (_data, vars) => {
+      setMarkErrors((prev) => {
+        if (!prev[vars.id]) return prev;
+        const next = { ...prev };
+        delete next[vars.id];
+        return next;
+      });
+      invalidate();
+    },
+    onError: (_err, vars) => {
+      setMarkErrors((prev) => ({
+        ...prev,
+        [vars.id]: 'could not dismiss — try again',
+      }));
+    },
+  });
   const update = trpc.acts.update.useMutation({ onSuccess: invalidate });
 
   const acts = data?.acts ?? [];
+  const countLabel =
+    filter === 'sent' ? 'sent' : filter === 'all' ? 'shown' : acts.length === 1 ? 'draft' : 'drafts';
 
   return (
     <main
@@ -91,7 +125,7 @@ export function ActsClient() {
             textTransform: 'uppercase',
           }}
         >
-          {isLoading ? '…' : `${acts.length} ${filter === 'sent' ? 'sent' : filter === 'all' ? 'shown' : 'draft'}${acts.length === 1 ? '' : 's'}`}
+          {isLoading ? '…' : `${acts.length} ${countLabel}`}
         </span>
       </header>
 

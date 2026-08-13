@@ -89,12 +89,14 @@ export const actsRouter = router({
             })
           : [];
       const nameById = new Map(entities.map((e) => [e.id, e.name]));
+      // Only active (non-deleted, owner-scoped) entities may expose mailto targets.
+      const activeIds = entities.map((e) => e.id);
 
       const emailFacts =
-        entityIds.length > 0
+        activeIds.length > 0
           ? await ctx.db.query.entityFacts.findMany({
               where: and(
-                inArray(schema.entityFacts.entityId, entityIds),
+                inArray(schema.entityFacts.entityId, activeIds),
                 eq(schema.entityFacts.key, 'email'),
               ),
               columns: { entityId: true, value: true },
@@ -301,7 +303,7 @@ export const actsRouter = router({
       if (existing.status !== 'drafted' && existing.status !== 'snoozed') {
         return { ok: false as const };
       }
-      await ctx.db
+      const updated = await ctx.db
         .update(schema.acts)
         .set({ status: 'sent', updatedAt: new Date() })
         .where(
@@ -310,8 +312,9 @@ export const actsRouter = router({
             eq(schema.acts.userId, ctx.user.id),
             inArray(schema.acts.status, ['drafted', 'snoozed']),
           ),
-        );
-      return { ok: true as const };
+        )
+        .returning({ id: schema.acts.id });
+      return { ok: updated.length > 0 };
     }),
 
   dismiss: protectedProcedure
@@ -324,7 +327,7 @@ export const actsRouter = router({
       if (existing.status !== 'drafted' && existing.status !== 'snoozed') {
         return { ok: false as const };
       }
-      await ctx.db
+      const updated = await ctx.db
         .update(schema.acts)
         .set({ status: 'dismissed', updatedAt: new Date() })
         .where(
@@ -333,7 +336,8 @@ export const actsRouter = router({
             eq(schema.acts.userId, ctx.user.id),
             inArray(schema.acts.status, ['drafted', 'snoozed']),
           ),
-        );
-      return { ok: true as const };
+        )
+        .returning({ id: schema.acts.id });
+      return { ok: updated.length > 0 };
     }),
 });

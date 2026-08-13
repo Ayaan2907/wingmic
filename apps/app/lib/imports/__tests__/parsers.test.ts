@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { parseLinkedInCsv } from '../parseLinkedInCsv';
 import { parseVcard } from '../parseVcard';
 import { normalizeContactsFromFile } from '../normalizeContact';
+import { isLinkedInHost } from '../types';
 
 const LINKEDIN_CSV = `First Name,Last Name,URL,Email Address,Company,Position,Connected On
 Ada,Lovelace,https://www.linkedin.com/in/ada-lovelace,ada@example.com,Analytical Engines,Mathematician,01 Jan 2024
@@ -63,6 +64,35 @@ Ada,Lovelace,https://www.linkedin.com/in/ada,ada@example.com,Engines,Math,01 Jan
     expect(rows).toHaveLength(1);
     expect(rows[0]!.name).toBe('Ada Lovelace');
   });
+
+  it('rejects phishing lookalike hosts', () => {
+    const csv = `First Name,Last Name,URL,Email Address,Company,Position,Connected On
+Ada,Lovelace,https://evillinkedin.com/in/ada,ada@example.com,Engines,Math,01 Jan 2024
+`;
+    const rows = parseLinkedInCsv(csv);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.linkedinUrl).toBeNull();
+  });
+
+  it('keeps the row when email is invalid placeholder text', () => {
+    const csv = `First Name,Last Name,URL,Email Address,Company,Position,Connected On
+Ada,Lovelace,https://www.linkedin.com/in/ada,(not specified),Engines,Math,01 Jan 2024
+`;
+    const rows = parseLinkedInCsv(csv);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.name).toBe('Ada Lovelace');
+    expect(rows[0]!.email).toBeNull();
+    expect(rows[0]!.linkedinUrl).toContain('linkedin.com/in/ada');
+  });
+});
+
+describe('isLinkedInHost', () => {
+  it('accepts linkedin.com and subdomains only', () => {
+    expect(isLinkedInHost('linkedin.com')).toBe(true);
+    expect(isLinkedInHost('www.linkedin.com')).toBe(true);
+    expect(isLinkedInHost('evillinkedin.com')).toBe(false);
+    expect(isLinkedInHost('linkedin.com.evil.example')).toBe(false);
+  });
 });
 
 describe('parseVcard', () => {
@@ -104,6 +134,42 @@ END:VCARD
     expect(rows).toHaveLength(1);
     expect(rows[0]!.linkedinUrl).toContain('linkedin.com/in/ada-lovelace');
   });
+
+  it('normalizes uppercase scheme and strips search/hash on LinkedIn URLs', () => {
+    const card = `BEGIN:VCARD
+VERSION:3.0
+FN:Ada Lovelace
+URL:HTTPS://www.linkedin.com/in/ada-lovelace?trk=share#section
+END:VCARD
+`;
+    const rows = parseVcard(card);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.linkedinUrl).toBe('https://www.linkedin.com/in/ada-lovelace');
+  });
+
+  it('keeps escaped semicolons inside ORG company name', () => {
+    const card = `BEGIN:VCARD
+VERSION:3.0
+FN:Ada Lovelace
+ORG:Foo\\;Bar Engines;Dept
+END:VCARD
+`;
+    const rows = parseVcard(card);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.company).toBe('Foo;Bar Engines');
+  });
+
+  it('maps NOTE into notes', () => {
+    const card = `BEGIN:VCARD
+VERSION:3.0
+FN:Ada Lovelace
+NOTE:Met at Analytical Engines demo
+END:VCARD
+`;
+    const rows = parseVcard(card);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.notes).toBe('Met at Analytical Engines demo');
+  });
 });
 
 describe('normalizeContactsFromFile', () => {
@@ -119,6 +185,16 @@ describe('normalizeContactsFromFile', () => {
       text: LINKEDIN_CSV,
     });
     expect(res.kind).toBe('linkedin');
+    expect(res.contacts.length).toBe(2);
+  });
+
+  it('sniffs lowercase begin:vcard when filename is unrecognized', () => {
+    const lowercase = VCARD.replace(/BEGIN:VCARD/g, 'begin:vcard').replace(
+      /END:VCARD/g,
+      'end:vcard',
+    );
+    const res = normalizeContactsFromFile({ filename: 'contacts.txt', text: lowercase });
+    expect(res.kind).toBe('vcard');
     expect(res.contacts.length).toBe(2);
   });
 });

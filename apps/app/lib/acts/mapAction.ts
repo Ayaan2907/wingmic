@@ -57,7 +57,7 @@ function nameTokens(name: string): string[] {
   return name
     .toLowerCase()
     .split(/\s+/)
-    .map((t) => t.replace(/[^a-z0-9'-]/g, ''))
+    .map((t) => t.replace(/[^\p{L}\p{N}'-]/gu, ''))
     .filter(Boolean);
 }
 
@@ -98,6 +98,11 @@ export function resolveIntroEntityIds(
   if (action.kind !== 'intro') {
     return { targetEntityId, secondaryEntityId: null };
   }
+  // Only attach a secondary once a target resolved — otherwise the first
+  // person becomes a misleading "→ Alice" intro with no real target.
+  if (!targetEntityId) {
+    return { targetEntityId: null, secondaryEntityId: null };
+  }
   for (let i = 0; i < persons.length; i++) {
     const id = entityIds[i];
     if (id && id !== targetEntityId) {
@@ -105,6 +110,19 @@ export function resolveIntroEntityIds(
     }
   }
   return { targetEntityId, secondaryEntityId: null };
+}
+
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Escape ICS TEXT values (CRLF/CR/LF → literal \\n). */
+function escapeIcsText(s: string): string {
+  return s
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r\n/g, '\\n')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\n');
 }
 
 /** Build a minimal .ics calendar invite for meeting/reminder CTAs. */
@@ -117,10 +135,39 @@ export function buildIcs(opts: {
     .toISOString()
     .replace(/[-:]/g, '')
     .replace(/\.\d{3}Z$/, 'Z');
+  const uidSuffix =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+
+  const hint = opts.whenHint?.trim() ?? '';
+  // Date-only ISO → all-day VALUE=DATE (avoids UTC-midnight day shift).
+  if (DATE_ONLY_RE.test(hint)) {
+    const startDay = hint.replace(/-/g, '');
+    const next = new Date(`${hint}T00:00:00.000Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    const endDay = next.toISOString().slice(0, 10).replace(/-/g, '');
+    return [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//wingmic//acts//EN',
+      'BEGIN:VEVENT',
+      `UID:wingmic-${stamp}-${uidSuffix}@wingmic.xyz`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${startDay}`,
+      `DTEND;VALUE=DATE:${endDay}`,
+      `SUMMARY:${escapeIcsText(opts.title)}`,
+      `DESCRIPTION:${escapeIcsText(opts.description)}`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+      '',
+    ].join('\r\n');
+  }
+
   // If whenHint isn't ISO, schedule +24h as a safe default — user edits in calendar.
   let start = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  if (opts.whenHint) {
-    const parsed = Date.parse(opts.whenHint);
+  if (hint) {
+    const parsed = Date.parse(hint);
     if (!Number.isNaN(parsed)) start = new Date(parsed);
   }
   const end = new Date(start.getTime() + 30 * 60 * 1000);
@@ -129,12 +176,6 @@ export function buildIcs(opts: {
       .toISOString()
       .replace(/[-:]/g, '')
       .replace(/\.\d{3}Z$/, 'Z');
-  const escape = (s: string) =>
-    s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
-  const uidSuffix =
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -144,8 +185,8 @@ export function buildIcs(opts: {
     `DTSTAMP:${stamp}`,
     `DTSTART:${fmt(start)}`,
     `DTEND:${fmt(end)}`,
-    `SUMMARY:${escape(opts.title)}`,
-    `DESCRIPTION:${escape(opts.description)}`,
+    `SUMMARY:${escapeIcsText(opts.title)}`,
+    `DESCRIPTION:${escapeIcsText(opts.description)}`,
     'END:VEVENT',
     'END:VCALENDAR',
     '',

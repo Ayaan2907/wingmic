@@ -1,5 +1,7 @@
 export {
   IMPORT_MAX_BATCH,
+  IMPORT_MAX_BYTES,
+  isLinkedInHost,
   importContactDraftSchema,
   importSourceKindSchema,
   formatImportSource,
@@ -15,6 +17,7 @@ export {
   resolveMatch,
   registerIdentifiers,
   filterSafeIdentifierFacts,
+  identifierFacts,
   type MatchIndexes,
   type MatchResult,
   type MatchCandidate,

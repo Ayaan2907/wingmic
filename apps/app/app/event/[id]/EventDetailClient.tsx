@@ -43,9 +43,6 @@ export default function EventDetailClient({ detail }: { detail: EventDetail }) {
     },
   });
 
-  const relatedPeople = detail.related.filter((r) => r.kind === 'person');
-  const primaryPerson = relatedPeople[0];
-
   const parts = [
     fmtDate(detail.sub.date),
     detail.sub.location,
@@ -67,7 +64,6 @@ export default function EventDetailClient({ detail }: { detail: EventDetail }) {
           createDraft.mutate({
             kind: 'todo',
             intent: 'recap',
-            targetEntityId: primaryPerson?.id,
             contextName: detail.name,
           }),
       }}
@@ -78,11 +74,8 @@ export default function EventDetailClient({ detail }: { detail: EventDetail }) {
           createDraft.mutate({
             kind: 'reminder',
             intent: 'reminder',
-            targetEntityId: primaryPerson?.id,
             contextName: detail.name,
-            seedBody: primaryPerson
-              ? `check in with ${primaryPerson.name} after ${detail.name}`
-              : `send check-ins after ${detail.name}`,
+            seedBody: `send check-ins after ${detail.name}`,
           }),
       }}
       stats={detail.stats}

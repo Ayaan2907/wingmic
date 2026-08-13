@@ -14,6 +14,10 @@ function emptyIndexes(): MatchIndexes {
   };
 }
 
+function setOwner(map: Map<string, Set<string>>, key: string, ...ids: string[]) {
+  map.set(key, new Set(ids));
+}
+
 describe('resolveMatch', () => {
   it('returns none when no indexes hit', () => {
     const res = resolveMatch(
@@ -25,8 +29,8 @@ describe('resolveMatch', () => {
 
   it('returns match when all hits agree', () => {
     const indexes = emptyIndexes();
-    indexes.byEmail.set('ada@example.com', 'ent-a');
-    indexes.byName.set('ada lovelace', 'ent-a');
+    setOwner(indexes.byEmail, 'ada@example.com', 'ent-a');
+    setOwner(indexes.byName, 'ada lovelace', 'ent-a');
     const res = resolveMatch(
       { name: 'Ada Lovelace', email: 'ada@example.com' },
       indexes,
@@ -40,8 +44,8 @@ describe('resolveMatch', () => {
 
   it('returns ambiguous when email and linkedin point at different entities', () => {
     const indexes = emptyIndexes();
-    indexes.byEmail.set('ada@example.com', 'ent-a');
-    indexes.byLinkedIn.set('https://www.linkedin.com/in/byron', 'ent-b');
+    setOwner(indexes.byEmail, 'ada@example.com', 'ent-a');
+    setOwner(indexes.byLinkedIn, 'https://www.linkedin.com/in/byron', 'ent-b');
     const res = resolveMatch(
       {
         name: 'Ada Byron',
@@ -55,27 +59,53 @@ describe('resolveMatch', () => {
       expect(res.candidates.map((c) => c.entityId).sort()).toEqual(['ent-a', 'ent-b']);
     }
   });
+
+  it('returns ambiguous when one key is owned by multiple entities', () => {
+    const indexes = emptyIndexes();
+    setOwner(indexes.byEmail, 'shared@example.com', 'ent-a', 'ent-b');
+    const res = resolveMatch(
+      { name: 'Shared Person', email: 'shared@example.com' },
+      indexes,
+    );
+    expect(res.kind).toBe('ambiguous');
+    if (res.kind === 'ambiguous') {
+      expect(res.candidates.map((c) => c.entityId).sort()).toEqual(['ent-a', 'ent-b']);
+    }
+  });
+
+  it('demotes name-only hits to ambiguous', () => {
+    const indexes = emptyIndexes();
+    setOwner(indexes.byName, 'john smith', 'ent-a');
+    const res = resolveMatch({ name: 'John Smith', email: null }, indexes);
+    expect(res.kind).toBe('ambiguous');
+    if (res.kind === 'ambiguous') {
+      expect(res.candidates).toEqual([{ entityId: 'ent-a', reasons: ['name'] }]);
+    }
+  });
 });
 
 describe('registerIdentifiers', () => {
-  it('does not overwrite a mapping that belongs to another entity', () => {
+  it('unions owners when a key already belongs to another entity', () => {
     const indexes = emptyIndexes();
-    indexes.byLinkedIn.set('https://www.linkedin.com/in/byron', 'ent-b');
+    setOwner(indexes.byLinkedIn, 'https://www.linkedin.com/in/byron', 'ent-b');
     registerIdentifiers(indexes, 'ent-a', {
       name: 'Ada Byron',
       email: 'ada@example.com',
       linkedinUrl: 'https://www.linkedin.com/in/byron',
     });
-    expect(indexes.byLinkedIn.get('https://www.linkedin.com/in/byron')).toBe('ent-b');
-    expect(indexes.byEmail.get('ada@example.com')).toBe('ent-a');
-    expect(indexes.byName.get('ada byron')).toBe('ent-a');
+    expect([...indexes.byLinkedIn.get('https://www.linkedin.com/in/byron')!].sort()).toEqual([
+      'ent-a',
+      'ent-b',
+    ]);
+    expect([...indexes.byEmail.get('ada@example.com')!]).toEqual(['ent-a']);
+    expect([...indexes.byName.get('ada byron')!]).toEqual(['ent-a']);
   });
 });
 
 describe('filterSafeIdentifierFacts', () => {
   it('drops identifier facts owned by another entity', () => {
     const indexes = emptyIndexes();
-    indexes.byLinkedIn.set('https://www.linkedin.com/in/byron', 'ent-b');
+    setOwner(indexes.byLinkedIn, 'https://www.linkedin.com/in/byron', 'ent-b');
     const facts = filterSafeIdentifierFacts(indexes, 'ent-a', {
       name: 'Ada Byron',
       email: 'ada@example.com',

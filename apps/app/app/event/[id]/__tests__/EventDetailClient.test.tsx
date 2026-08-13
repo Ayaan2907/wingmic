@@ -95,21 +95,19 @@ describe('EventDetailClient', () => {
     expect(createDraftMutate).toHaveBeenCalledWith({
       kind: 'todo',
       intent: 'recap',
-      targetEntityId: 'en_sarah',
       contextName: 'DevConnect 26',
     });
     expect(routerPush).toHaveBeenCalledWith('/acts');
   });
 
-  it('check-ins CTA creates a reminder draft and routes to /acts', () => {
+  it('check-ins CTA creates a reminder draft without person targetEntityId', () => {
     render(<EventDetailClient detail={detail} />);
     fireEvent.click(screen.getByRole('button', { name: /check-ins/i }));
     expect(createDraftMutate).toHaveBeenCalledWith({
       kind: 'reminder',
       intent: 'reminder',
-      targetEntityId: 'en_sarah',
       contextName: 'DevConnect 26',
-      seedBody: 'check in with Sarah Chen after DevConnect 26',
+      seedBody: 'send check-ins after DevConnect 26',
     });
     expect(routerPush).toHaveBeenCalledWith('/acts');
   });
