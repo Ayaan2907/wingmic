@@ -1,0 +1,43 @@
+apps/web/app/_components/HeroPhone.tsx
+  s_4b994ff892fde4::t_18a64583d6ec77 6,8-9,12,49-67,143-200,278,290,292,297,300,308-310,312-313,340,342-343,351-353,357-359,362,368,376-381,383,387-394,396-397,422,426-427,442-446,463,472,482,489-490,514-515
+  s_4b994ff892fde4::t_1ce296a1df02bd 324,331-332,336,339,348
+  s_4b994ff892fde4::t_c651e004b54b27 395
+  s_4b994ff892fde4::t_3f4858b89c7ead 464,467
+  s_4b994ff892fde4::t_9e50366ddd9e6f 428
+  s_4b994ff892fde4::t_7daecb7465e195 134,136-137
+  s_4b994ff892fde4::t_c891e6866cae37 7
+  s_4b994ff892fde4::t_bc8f7b36d1597a 291,298,302-305,314-323,325-330,333-335,338,341,344-347,349-350,356,367,369-375,382
+  s_4b994ff892fde4::t_2908bc30d1c45a 75-77,80,86-93,98,102-104,106-110,112,116,132-133,135,138-142
+  s_4b994ff892fde4::t_a396961412a7ad 122-123,128-129,131
+  s_4b994ff892fde4::t_0ae41090cc0264 68-69,72-73,84-85,94-97,99-101,115,118-121,124-127,130
+  s_4b994ff892fde4::t_5355b6421387ce 13
+  s_4b994ff892fde4::t_3258c17f7e966c 289
+  s_4b994ff892fde4::t_f01280012299e1 354-355
+apps/app/app/api/demo/status/route.ts
+  s_4b994ff892fde4::t_61deae899b54f8 1-17
+apps/app/app/api/demo/capture/route.ts
+  s_4b994ff892fde4::t_5e38ed93e775b0 4-7,23-24,28-32,50,55-66,68-69,87,125
+  s_4b994ff892fde4::t_33a3071cc98d9d 1-3,8-22,25-27,33-49,51-54,67,70-86,88-124,126
+apps/app/app/api/demo/capture/_internals.ts
+  s_4b994ff892fde4::t_2e555fd971c35a 15
+  s_4b994ff892fde4::t_5d1086addab78e 1-14,16-102
+apps/app/app/api/demo/capture/__tests__/route.test.ts
+  s_4b994ff892fde4::t_bebbd3f6e0bed0 1-84,100
+  s_4b994ff892fde4::t_1f1a477b9394ba 85-99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "0233932ef977a3b9ccbd9bf5bf35e08f8e0c457a",
+  "prompts": {},
+  "sessions": {
+    "s_4b994ff892fde4": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "dcd68bb4-e25d-435c-9c4d-13ae8dccf154",
+        "model": "composer-2.5"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
