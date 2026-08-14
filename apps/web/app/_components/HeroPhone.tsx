@@ -408,7 +408,7 @@ function DemoScreen({ micRef }) {
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: '#08080d' }}>
       <div style={{ padding: '10px 16px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>wingmic</span>
-        <span className="mono" style={{ fontSize: 9.5, color: phase === 'recording' ? '#FF6B6B' : 'rgba(255,255,255,0.35)' }}>
+        <span className="mono" style={{ fontSize: 9.5, color: phase === 'recording' ? '#FF6B6B' : '#86efac', animation: 'pulse-d 1.6s ease-in-out infinite' }}>
           {phase === 'recording' ? '● rec' : '● live'}
         </span>
       </div>
@@ -489,6 +489,7 @@ function DemoScreen({ micRef }) {
             background: phase === 'recording' ? '#FF6B6B' : ACCENT,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: phase === 'recording' ? '0 0 0 6px rgba(255,107,107,0.18)' : `0 6px 18px ${ACCENT}55`,
+            animation: phase === 'idle' ? 'mic-pulse 1.8s ease-in-out infinite' : undefined,
             transition: 'background 0.2s',
             opacity: phase === 'extracting' ? 0.7 : 1,
           }}>
@@ -519,6 +520,7 @@ function BigMic({ recording, disabled, onClick, size = 76 }) {
         background: recording ? '#FF6B6B' : ACCENT,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         boxShadow: recording ? '0 0 0 8px rgba(255,107,107,0.16)' : `0 8px 26px ${ACCENT}55`,
+        animation: !recording && !disabled ? 'mic-pulse 1.8s ease-in-out infinite' : undefined,
         transition: 'background 0.2s', opacity: disabled && !recording ? 0.7 : 1,
       }}>
       {recording
@@ -539,7 +541,7 @@ function DesktopDemo({ mode }) {
       <div style={{ height: 34, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         {['#ff5f56', '#ffbd2e', '#27c93f'].map((c) => <span key={c} style={{ width: 11, height: 11, borderRadius: '50%', background: c }} />)}
         <span className="mono" style={{ marginLeft: 10, fontSize: 12.5, fontWeight: 700, color: ACCENT }}>wingmic</span>
-        <span className="mono" style={{ marginLeft: 'auto', fontSize: 11, color: recording ? '#FF6B6B' : 'rgba(255,255,255,0.4)' }}>{recording ? '● rec' : '● live'}</span>
+        <span className="mono" style={{ marginLeft: 'auto', fontSize: 11, color: recording ? '#FF6B6B' : '#86efac', animation: 'pulse-d 1.6s ease-in-out infinite' }}>{recording ? '● rec' : '● live'}</span>
       </div>
 
       {/* body: hero copy | live panel — bounded row so the video can't grow it */}
