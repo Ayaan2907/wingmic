@@ -57,6 +57,8 @@ prisma/dev.db*
 # Brand assets copied at prebuild from packages/brand/src/
 apps/web/public/*
 !apps/web/public/.gitkeep
+# committed source assets (not build-copied)
+!apps/web/public/wingmic-explainer.mp4
 apps/app/public/*
 !apps/app/public/.gitkeep
 

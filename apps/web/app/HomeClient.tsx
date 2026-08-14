@@ -16,12 +16,11 @@ import {
   VoiceBars,
   StatBlock,
   Sticker,
-  MiniPhone,
   Step,
   CodeBlock,
-  MarqueeRow,
   LiveFeed,
 } from './_components/marketing-ui';
+import HeroPhone from './_components/HeroPhone';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3211';
 
@@ -53,7 +52,7 @@ function App() {
     { href: '#mcp', label: 'MCP' },
     { href: '#imports', label: 'Imports' },
     { href: '#acts', label: 'Acts' },
-    { href: '#testimonials', label: 'Voices' },
+    { href: '/contribute', label: 'Contribute' },
   ];
 
   const handleMobileLinkClick = () => setMobileMenuOpen(false);
@@ -95,15 +94,6 @@ function App() {
     }
   };
 
-  const reviews = [
-  { quote: 'I met 40 people at YC Demo Day. Wingmic remembered all of them. I remembered like 6.', who: 'Jamie Park', role: 'Founder, Stitchwork', alt: '#FF6B6B' },
-  { quote: 'Sits in my pocket, listens to my voice memos, the graph builds itself. It is the realest tool I shipped this year.', who: 'Devansh Rao', role: 'Staff Eng @ Vercel', alt: '#7DD3FC' },
-  { quote: 'I deleted my Notion CRM. I am free.', who: 'Lina Cho', role: 'PM, Anthropic', alt: '#A78BFA' },
-  { quote: 'The MCP integration is the killer feature. Claude knows my whole network now.', who: 'Marcus K', role: 'Indie hacker', alt: '#FFC452' },
-  { quote: 'Follow-through rate on warm intros went from like 20% to 90%. genuinely.', who: 'Alex Wen', role: 'Investor, Long Run', alt: '#86efac' },
-  { quote: 'Voice-first networking is the only sane interface. I can\'t go back.', who: 'Priya Shah', role: 'CTO, Layerline', alt: '#FF8FAB' }];
-
-
   return (
     <div style={{ minHeight: '100vh', position: 'relative' }}>
 
@@ -142,12 +132,16 @@ function App() {
           {navLinks.map((l) =>
             <a key={l.href} href={l.href} style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)' }}>{l.label}</a>
           )}
-          <a href="https://github.com/Ayaan2907/wingmic" target="_blank" rel="noreferrer" style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)', display: 'flex', alignItems: 'center', gap: 5 }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.6-.3-5.4-1.3-5.4-5.9 0-1.3.5-2.4 1.2-3.2-.1-.4-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 016 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.8.1 3.2.7.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0012 .3" /></svg>
-            GitHub
-          </a>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div className="wm-nav-social wm-hide-mobile" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <a href="https://github.com/Ayaan2907/wingmic" target="_blank" rel="noreferrer" aria-label="wingmic on GitHub" style={{ color: 'rgba(255,255,255,0.55)', display: 'flex' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.6-.3-5.4-1.3-5.4-5.9 0-1.3.5-2.4 1.2-3.2-.1-.4-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 016 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.8.1 3.2.7.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0012 .3" /></svg>
+            </a>
+            <a href="https://x.com/wingmicxyz" target="_blank" rel="noreferrer" aria-label="wingmic on X" style={{ color: 'rgba(255,255,255,0.55)', display: 'flex' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 6h2.3l-5 5.7L20 18h-4.6l-3.6-4.7L7.6 18H5.3l5.4-6.1L5 6h4.7l3.3 4.3L16.5 6zm-.8 10.6h1.3L8.4 7.3H7l8.7 9.3z" /></svg>
+            </a>
+          </div>
           <a href="#waitlist" className="wm-nav-cta" style={{
             padding: '8px 16px', borderRadius: 8,
             background: '#fff', color: '#000',
@@ -175,6 +169,7 @@ function App() {
             <a key={l.href} href={l.href} role="menuitem" onClick={handleMobileLinkClick}>{l.label}</a>
           )}
           <a href="https://github.com/Ayaan2907/wingmic" target="_blank" rel="noreferrer" role="menuitem" onClick={handleMobileLinkClick}>GitHub</a>
+          <a href="https://x.com/wingmicxyz" target="_blank" rel="noreferrer" role="menuitem" onClick={handleMobileLinkClick}>X</a>
         </div>
       }
 
@@ -188,18 +183,10 @@ function App() {
           <LiveGraph accent={accent} second={second} third={third} />
         </div>
 
-        {/* Floating stickers — decorative, hidden on small screens */}
-        <div className="wm-hide-mobile">
-          <Sticker color={accent} rotate={-8} x="6%" y="14%" size="lg">v0.1 BETA · LIVE</Sticker>
-          <Sticker color="#fff" rotate={5} x="88%" y="18%">VOICE FIRST</Sticker>
-          <Sticker color={second} rotate={-3} x="4%" y="78%">MCP READY</Sticker>
-          <Sticker color={third} rotate={4} x="86%" y="80%">OPEN BETA</Sticker>
-        </div>
-
         {/* Center hero */}
         <div className="wm-hero-grid" style={{
           maxWidth: 1280, margin: '0 auto', padding: '0 32px',
-          display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 40, alignItems: 'center',
+          display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 48, alignItems: 'center',
           position: 'relative'
         }}>
 
@@ -263,39 +250,14 @@ function App() {
                 )}
               </div>
               <div className="mono" style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
-                <span style={{ color: '#fff', fontWeight: 700 }}>1,247</span> devs on the waitlist
+                <span style={{ color: '#fff', fontWeight: 700 }}>45+</span> devs on the waitlist
               </div>
             </div>
           </div>
 
-          {/* Right — phone */}
-          <div style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>
-            <div className="wm-hero-phone-wrap" style={{ position: 'relative', transform: 'rotate(2deg)' }}>
-              <MiniPhone accent={accent} />
-              {/* tape strip */}
-              <div className="tape" style={{ top: -12, left: '40%', transform: 'rotate(-6deg)' }} />
-            </div>
-            {/* Floating data chips */}
-            <div className="mono wm-hide-mobile" style={{
-              position: 'absolute', top: 20, right: -30,
-              padding: '8px 12px', borderRadius: 8,
-              background: '#0a0a0a', border: `1px solid ${accent}40`,
-              fontSize: 11, color: accent,
-              transform: 'rotate(6deg)',
-              animation: 'drift-up 5s ease-in-out infinite'
-            }}>
-              + 3 nodes
-            </div>
-            <div className="mono wm-hide-mobile" style={{
-              position: 'absolute', bottom: 80, left: -40,
-              padding: '8px 12px', borderRadius: 8,
-              background: '#0a0a0a', border: `1px solid ${third}40`,
-              fontSize: 11, color: third,
-              transform: 'rotate(-4deg)',
-              animation: 'drift-up 6s ease-in-out infinite 1s'
-            }}>
-              POST /v1/capture · 200
-            </div>
+          {/* Right — interactive phone: explainer video + live demo */}
+          <div className="wm-hero-phone-wrap" style={{ display: 'flex', justifyContent: 'center' }}>
+            <HeroPhone width={420} />
           </div>
         </div>
       </section>
@@ -1194,7 +1156,7 @@ function App() {
               </h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginTop: 20 }}>
                 <div>
-                  <div style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>1,247</div>
+                  <div style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>45+</div>
                   <div className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1.5 }}>devs on waitlist</div>
                 </div>
                 <div>
@@ -1212,24 +1174,6 @@ function App() {
               <LiveFeed accent={accent} />
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* ─────────────────── TESTIMONIALS — kinetic marquee ─────────────────── */}
-      <section id="testimonials" style={{ padding: '120px 0', background: '#0a0a0a', borderTop: `2px solid ${accent}30`, overflow: 'hidden' }}>
-        <div className="wm-section" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 32px', marginBottom: 48 }}>
-          <div className="mono" style={{ fontSize: 11, color: accent, marginBottom: 16, letterSpacing: 2, textTransform: 'uppercase' }}>
-            ◆ Real users · real graphs
-          </div>
-          <h2 className="wm-section-h2" style={{
-            fontSize: 'clamp(36px, 5vw, 68px)', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1
-          }}>
-            What devs are <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: accent }}>saying.</span>
-          </h2>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <MarqueeRow items={reviews.slice(0, 3)} accent={accent} />
-          <MarqueeRow items={reviews.slice(3)} accent={accent} reverse />
         </div>
       </section>
 
@@ -1255,7 +1199,7 @@ function App() {
             fontSize: 12, color: accent, marginBottom: 28
           }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, animation: 'pulse-d 1.5s infinite' }} />
-            v0.1 beta · 1,247 devs · waves of 50
+            v0.1 beta · 45+ devs · waves of 50
           </div>
 
           <h2 style={{
@@ -1345,9 +1289,17 @@ function App() {
           map((col) =>
           <div key={col.h}>
               <div className="mono" style={{ fontSize: 11, color: accent, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1.5 }}>{col.h}</div>
-              {col.items.map((it) =>
-            <a key={it} href="#" style={{ display: 'block', fontSize: 13, color: 'rgba(255,255,255,0.6)', padding: '4px 0' }}>{it}</a>
-            )}
+              {col.items.map((it) => {
+              const external = it === 'X / Twitter' ? 'https://x.com/wingmicxyz' : null;
+              return (
+                <a
+                  key={it}
+                  href={external ?? '#'}
+                  {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
+                  style={{ display: 'block', fontSize: 13, color: 'rgba(255,255,255,0.6)', padding: '4px 0' }}
+                >{it}</a>
+              );
+            })}
             </div>
           )}
         </div>
