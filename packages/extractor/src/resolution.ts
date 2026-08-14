@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { DB } from '@wingmic/db';
 import * as schema from '@wingmic/db/schema';
 import {
@@ -25,6 +25,8 @@ interface ResolveContext {
   userId: string;
   transcript: string;
   capturedAt: Date;
+  /** Optional client-generated idempotency key (interactions.client_capture_id). */
+  clientCaptureId?: string | null;
 }
 
 /**
@@ -33,19 +35,19 @@ interface ResolveContext {
  *   1. Upsert canonical Company rows (lazy promotion: observed_count++)
  *   2. Upsert canonical Event rows (slug + date-proximity match)
  *   3. Upsert canonical Topic rows
- *   4. Resolve Person candidates against this user's entities; create new
+ *   4. Persist Interaction (needed before facts/topics for sourceInteractionId)
+ *   5. Resolve Person candidates against this user's entities; create new
  *      ones if confidence < 0.85, link if >= 0.85
- *   5. Persist Interaction with full transcript embedding
  *   6. Wire EntityCompany / EntityEvent / EntityTopic edges
- *   7. Persist any extra topics/notes as EntityFact rows
+ *   7. Persist notes/email/linkedin as EntityFact rows (stamped with interaction)
  *
- * All writes happen in a single libSQL transaction.
+ * All graph writes after embedding run inside a single libSQL transaction.
  */
 export async function commit(
   extracted: ExtractionResult,
   ctx: ResolveContext,
 ): Promise<CommitResult> {
-  const { db, userId, transcript, capturedAt } = ctx;
+  const { db, userId, transcript, capturedAt, clientCaptureId } = ctx;
 
   // ── Embeddings (parallel) ────────────────────────────────────────────
   const transcriptEmbedding = await embedText(transcript);
@@ -65,18 +67,21 @@ export async function commit(
     ? await embedTexts(personEmbedTexts)
     : [];
 
+  return db.transaction(async (tx) => {
+    const writeDb = tx as unknown as DB;
+
   // ── Canonical: Companies ─────────────────────────────────────────────
   const companyIds: Map<string, string> = new Map(); // candidateName → companyId
 
   for (const c of extracted.companies) {
-    const id = await upsertCompany(db, c);
+    const id = await upsertCompany(writeDb, c);
     companyIds.set(c.name, id);
   }
 
   // ── Canonical: Events ────────────────────────────────────────────────
   const eventIds: Map<string, string> = new Map();
   for (const e of extracted.events) {
-    const id = await upsertEvent(db, e, capturedAt);
+    const id = await upsertEvent(writeDb, e, capturedAt);
     eventIds.set(e.name, id);
   }
 
@@ -85,14 +90,50 @@ export async function commit(
   for (const p of extracted.persons) for (const t of p.topics) allTopics.add(t);
   const topicIds: Map<string, string> = new Map();
   for (const t of allTopics) {
-    const id = await upsertTopic(db, t);
+    const id = await upsertTopic(writeDb, t);
     topicIds.set(t, id);
   }
 
+  // ── Interaction first ────────────────────────────────────────────────
+  // Facts/topics reference source_interaction_id so person detail can list
+  // the captures that created them. Insert before edge/fact writes.
+  const insertedInteraction = await writeDb
+    .insert(schema.interactions)
+    .values({
+      userId,
+      transcript,
+      capturedAt,
+      embedding: transcriptEmbedding,
+      ...(clientCaptureId ? { clientCaptureId } : {}),
+    })
+    .returning({ id: schema.interactions.id });
+  const interactionId = insertedInteraction[0].id;
+
   // ── Persons (private, ownerUserId-scoped) ────────────────────────────
-  const userEntities = await db.query.entities.findMany({
-    where: eq(schema.entities.ownerUserId, userId),
+  const userEntities = await writeDb.query.entities.findMany({
+    where: and(
+      eq(schema.entities.ownerUserId, userId),
+      isNull(schema.entities.deletedAt),
+    ),
   });
+
+  const ownedIds = userEntities.map((e) => e.id);
+  const emailFacts =
+    ownedIds.length > 0
+      ? await writeDb.query.entityFacts.findMany({
+          where: and(
+            inArray(schema.entityFacts.entityId, ownedIds),
+            eq(schema.entityFacts.key, 'email'),
+          ),
+          columns: { entityId: true, value: true },
+        })
+      : [];
+  const emailsByEntity = new Map<string, string[]>();
+  for (const f of emailFacts) {
+    const list = emailsByEntity.get(f.entityId) ?? [];
+    list.push(f.value.trim().toLowerCase());
+    emailsByEntity.set(f.entityId, list);
+  }
 
   const entityIds: string[] = [];
   let newEntities = 0;
@@ -102,19 +143,26 @@ export async function commit(
     const cand = extracted.persons[i];
     const candEmbedding = personEmbeddings[i];
 
-    const match = resolvePerson(cand, userEntities, candEmbedding, companyIds, topicIds);
+    const match = resolvePerson(
+      cand,
+      userEntities,
+      candEmbedding,
+      companyIds,
+      topicIds,
+      emailsByEntity,
+    );
 
     let entityId: string;
     if (match && match.score >= 0.85) {
       entityId = match.entityId;
       matchedEntities++;
       // Refresh the cached entity's embedding when we have a stronger signal
-      await db
+      await writeDb
         .update(schema.entities)
         .set({ updatedAt: new Date(), embedding: candEmbedding })
         .where(eq(schema.entities.id, entityId));
     } else {
-      const inserted = await db
+      const inserted = await writeDb
         .insert(schema.entities)
         .values({
           ownerUserId: userId,
@@ -133,20 +181,20 @@ export async function commit(
     // Wire edges
     if (cand.companyHint && companyIds.has(cand.companyHint)) {
       const companyId = companyIds.get(cand.companyHint)!;
-      const existing = await db.query.entityCompanies.findFirst({
+      const existing = await writeDb.query.entityCompanies.findFirst({
         where: and(
           eq(schema.entityCompanies.entityId, entityId),
           eq(schema.entityCompanies.companyId, companyId),
         ),
       });
       if (!existing) {
-        await db.insert(schema.entityCompanies).values({
+        await writeDb.insert(schema.entityCompanies).values({
           entityId,
           companyId,
           role: cand.role ?? null,
         });
       } else if (cand.role && !existing.role) {
-        await db
+        await writeDb
           .update(schema.entityCompanies)
           .set({ role: cand.role })
           .where(eq(schema.entityCompanies.id, existing.id));
@@ -155,64 +203,57 @@ export async function commit(
 
     for (const eventName of eventIds.keys()) {
       const eventId = eventIds.get(eventName)!;
-      const existing = await db.query.entityEvents.findFirst({
+      const existing = await writeDb.query.entityEvents.findFirst({
         where: and(
           eq(schema.entityEvents.entityId, entityId),
           eq(schema.entityEvents.eventId, eventId),
         ),
       });
       if (!existing) {
-        await db.insert(schema.entityEvents).values({ entityId, eventId, role: null });
+        await writeDb.insert(schema.entityEvents).values({ entityId, eventId, role: null });
       }
     }
 
     for (const topicName of cand.topics) {
       const topicId = topicIds.get(topicName);
       if (!topicId) continue;
-      await db
-        .insert(schema.entityTopics)
-        .values({ entityId, topicId, weight: 70 })
-        .onConflictDoNothing();
+      await writeDb.insert(schema.entityTopics).values({
+        entityId,
+        topicId,
+        weight: 70,
+        sourceInteractionId: interactionId,
+      });
     }
 
     // EntityFact for free-form notes
     if (cand.notes) {
-      await db.insert(schema.entityFacts).values({
+      await writeDb.insert(schema.entityFacts).values({
         entityId,
         key: 'note',
         value: cand.notes,
         confidence: 80,
+        sourceInteractionId: interactionId,
       });
     }
     if (cand.email) {
-      await db.insert(schema.entityFacts).values({
+      await writeDb.insert(schema.entityFacts).values({
         entityId,
         key: 'email',
         value: cand.email,
         confidence: 95,
+        sourceInteractionId: interactionId,
       });
     }
     if (cand.linkedin) {
-      await db.insert(schema.entityFacts).values({
+      await writeDb.insert(schema.entityFacts).values({
         entityId,
         key: 'linkedin',
         value: cand.linkedin,
         confidence: 95,
+        sourceInteractionId: interactionId,
       });
     }
   }
-
-  // ── Interaction ──────────────────────────────────────────────────────
-  const inserted = await db
-    .insert(schema.interactions)
-    .values({
-      userId,
-      transcript,
-      capturedAt,
-      embedding: transcriptEmbedding,
-    })
-    .returning({ id: schema.interactions.id });
-  const interactionId = inserted[0].id;
 
   return {
     interactionId,
@@ -223,6 +264,7 @@ export async function commit(
     newEntities,
     matchedEntities,
   };
+  });
 }
 
 // ── Canonical upserts ──────────────────────────────────────────────────
@@ -345,6 +387,7 @@ function resolvePerson(
   candEmbedding: number[],
   companyIds: Map<string, string>,
   _topicIds: Map<string, string>,
+  emailsByEntity: Map<string, string[]> = new Map(),
 ): ResolvedMatch | null {
   if (userEntities.length === 0) return null;
 
@@ -369,7 +412,19 @@ function resolvePerson(
       embeddingScore = cosine(entity.embedding, candEmbedding);
     }
 
-    const score = 0.55 * nameMax + 0.25 * embeddingScore + 0.2 * companyBoost;
+    let emailBoost = 0;
+    const candEmail = cand.email?.trim().toLowerCase();
+    if (candEmail) {
+      const emails = emailsByEntity.get(entity.id) ?? [];
+      if (emails.includes(candEmail)) emailBoost = 1;
+    }
+
+    // Prefer imported contacts on near-ties so cold-start LinkedIn/vCard wins.
+    const importBoost =
+      entity.importSource && entity.importSource !== 'voice-capture' ? 0.05 : 0;
+
+    const score =
+      0.5 * nameMax + 0.2 * embeddingScore + 0.15 * companyBoost + 0.3 * emailBoost + importBoost;
     if (!best || score > best.score) {
       best = { entityId: entity.id, score };
     }

@@ -11,7 +11,7 @@
 
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
-import { and, count, desc, eq, gte, inArray, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNull, lte, or } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { requireOnboarded } from '@/lib/onboarding-guard';
 import { db, schema } from '@wingmic/db';
@@ -57,8 +57,8 @@ async function loadHomeData(userId: string): Promise<HomeInitialData> {
     isNull(schema.interactions.deletedAt),
   );
 
-  // Two count queries + one list query. Run in parallel — they share no state.
-  const [todayRow, weekRow, recentRows] = await Promise.all([
+  // Counts + recent list + pending acts. Run in parallel — they share no state.
+  const [todayRow, weekRow, recentRows, pendingActsRow] = await Promise.all([
     db
       .select({ n: count() })
       .from(schema.interactions)
@@ -77,6 +77,21 @@ async function loadHomeData(userId: string): Promise<HomeInitialData> {
       .where(baseWhere)
       .orderBy(desc(schema.interactions.capturedAt))
       .limit(RECENT_LIMIT),
+    db
+      .select({ n: count() })
+      .from(schema.acts)
+      .where(
+        and(
+          eq(schema.acts.userId, userId),
+          or(
+            eq(schema.acts.status, 'drafted'),
+            and(
+              eq(schema.acts.status, 'snoozed'),
+              or(isNull(schema.acts.runAt), lte(schema.acts.runAt, new Date())),
+            ),
+          ),
+        ),
+      ),
   ]);
 
   // Entity count per interaction — single grouped query keyed on
@@ -97,7 +112,7 @@ async function loadHomeData(userId: string): Promise<HomeInitialData> {
   return {
     todayCount: todayRow[0]?.n ?? 0,
     weekCount: weekRow[0]?.n ?? 0,
-    pendingActs: 0, // v0.3 — acts table doesn't exist yet.
+    pendingActs: pendingActsRow[0]?.n ?? 0,
     recent,
   };
 }

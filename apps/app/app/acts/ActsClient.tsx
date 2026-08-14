@@ -1,77 +1,89 @@
 'use client';
 
 /**
- * ActsClient — /acts inbox (visual mock, PR ζ-acts).
+ * ActsClient — /acts inbox.
  *
- * The acts agent ships v0.3 (epic #11). Until then /acts is a pure preview:
- * a "coming soon · v0.3" banner + seeded draft cards rendered through the
- * shared ActCard (same markup as Home's 3-card preview). Every send CTA is
- * disabled — no backend, no tRPC, no draft generation here.
- *
- * Bottom-nav / desktop rail is owned by the shared AppShell (PR λ-shell);
- * this screen renders no nav of its own.
+ * Lists drafted follow-ups from capture extraction + entity CTAs.
+ * Send is permission-first (mailto / .ics / mark done); edit / snooze / dismiss
+ * update status through acts.* mutations.
  */
 
 import * as React from 'react';
-import { ActCard, type PendingAct } from '@/app/_components/ActCard';
+import { trpc } from '@/lib/trpc/client';
+import { ActCard } from '@/app/_components/ActCard';
 
-// Accent palette mirror (matches HomeClient / capture / entity tokens).
 const accent = '#FFC452';
-const blue = '#7DD3FC';
-const violet = '#A78BFA';
-
-// Seeded preview drafts. Fictional demo contacts, consistent with the home
-// seeds (Sarah Chen / Marcus Rivera / Priya → Deepak) plus a couple more,
-// spanning check-in / reminder / intro kinds. Real acts wire in v0.3 (#11).
-const DRAFT_ACTS: PendingAct[] = [
-  {
-    kind: 'check-in',
-    glyph: '↗',
-    name: 'Sarah Chen',
-    why: '7d since devconnect · you owe her a repo',
-    conf: 92,
-    accent: 'amber',
-    color: accent,
-  },
-  {
-    kind: 'reminder',
-    glyph: '◷',
-    name: 'Marcus Rivera',
-    why: 'coffee mon · no invite sent',
-    conf: 88,
-    accent: 'blue',
-    color: blue,
-  },
-  {
-    kind: 'intro',
-    glyph: '⇌',
-    name: 'Priya → Deepak',
-    why: 'both work on voice + mcp',
-    conf: 74,
-    accent: 'violet',
-    color: violet,
-  },
-  {
-    kind: 'check-in',
-    glyph: '↗',
-    name: 'Lena Okafor',
-    why: '3w quiet · she shipped the rust crate',
-    conf: 81,
-    accent: 'amber',
-    color: accent,
-  },
-  {
-    kind: 'reminder',
-    glyph: '◷',
-    name: 'Tomas Vega',
-    why: 'promised feedback on his demo · overdue',
-    conf: 69,
-    accent: 'blue',
-    color: blue,
-  },
-];
 
 export function ActsClient() {
+  const utils = trpc.useUtils();
+  const [filter, setFilter] = React.useState<'pending' | 'sent' | 'all'>('pending');
+  const [markErrors, setMarkErrors] = React.useState<Record<string, string>>({});
+  const { data, isLoading, isError, refetch } = trpc.acts.list.useQuery({
+    limit: 50,
+    filter,
+  });
+
+  const invalidate = () => {
+    void utils.acts.list.invalidate();
+  };
+
+  const markSent = trpc.acts.markSent.useMutation({
+    onSuccess: (_data, vars) => {
+      setMarkErrors((prev) => {
+        if (!prev[vars.id]) return prev;
+        const next = { ...prev };
+        delete next[vars.id];
+        return next;
+      });
+      invalidate();
+    },
+    onError: (_err, vars) => {
+      setMarkErrors((prev) => ({
+        ...prev,
+        [vars.id]: 'could not mark done — tap send again',
+      }));
+    },
+  });
+  const snooze = trpc.acts.snooze.useMutation({
+    onSuccess: (_data, vars) => {
+      setMarkErrors((prev) => {
+        if (!prev[vars.id]) return prev;
+        const next = { ...prev };
+        delete next[vars.id];
+        return next;
+      });
+      invalidate();
+    },
+    onError: (_err, vars) => {
+      setMarkErrors((prev) => ({
+        ...prev,
+        [vars.id]: 'could not snooze — try again',
+      }));
+    },
+  });
+  const dismiss = trpc.acts.dismiss.useMutation({
+    onSuccess: (_data, vars) => {
+      setMarkErrors((prev) => {
+        if (!prev[vars.id]) return prev;
+        const next = { ...prev };
+        delete next[vars.id];
+        return next;
+      });
+      invalidate();
+    },
+    onError: (_err, vars) => {
+      setMarkErrors((prev) => ({
+        ...prev,
+        [vars.id]: 'could not dismiss — try again',
+      }));
+    },
+  });
+  const update = trpc.acts.update.useMutation({ onSuccess: invalidate });
+
+  const acts = data?.acts ?? [];
+  const countLabel =
+    filter === 'sent' ? 'sent' : filter === 'all' ? 'shown' : acts.length === 1 ? 'draft' : 'drafts';
+
   return (
     <main
       style={{
@@ -113,7 +125,7 @@ export function ActsClient() {
             textTransform: 'uppercase',
           }}
         >
-          preview
+          {isLoading ? '…' : `${acts.length} ${countLabel}`}
         </span>
       </header>
 
@@ -126,6 +138,44 @@ export function ActsClient() {
           boxSizing: 'border-box',
         }}
       >
+        <div
+          data-testid="acts-filters"
+          style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}
+        >
+          {(
+            [
+              ['pending', 'pending'],
+              ['sent', 'sent'],
+              ['all', 'all'],
+            ] as const
+          ).map(([key, label]) => {
+            const active = filter === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                data-testid={`acts-filter-${key}`}
+                aria-pressed={active}
+                onClick={() => setFilter(key)}
+                className="mono"
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 999,
+                  border: active ? `1.5px solid ${accent}` : '1px solid var(--border-soft)',
+                  background: active ? `${accent}22` : 'var(--surface-1)',
+                  color: active ? accent : 'var(--text-55)',
+                  fontSize: 11,
+                  letterSpacing: 1,
+                  textTransform: 'uppercase',
+                  cursor: 'pointer',
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
         <div
           data-testid="acts-banner"
           className="mono"
@@ -154,16 +204,83 @@ export function ActsClient() {
             }}
           />
           <span>
-            <span style={{ color: accent, fontWeight: 700 }}>acts</span> arrives v0.3 — these are
-            previews of what wingmic will draft from your graph. nothing sends yet.
+            <span style={{ color: accent, fontWeight: 700 }}>acts</span> drafts from your
+            captures — review, edit, snooze, then send yourself (mailto / calendar). nothing
+            auto-sends.
           </span>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} data-testid="acts-list">
-          {DRAFT_ACTS.map((a) => (
-            <ActCard key={a.name} act={a} />
-          ))}
-        </div>
+        {isLoading ? (
+          <p className="mono" style={{ fontSize: 12, color: 'var(--text-40)' }}>
+            loading drafts…
+          </p>
+        ) : isError ? (
+          <div
+            data-testid="acts-error"
+            style={{
+              padding: 16,
+              borderRadius: 14,
+              border: '1px solid var(--border-soft)',
+              background: 'var(--surface-1)',
+            }}
+          >
+            <p className="mono" style={{ fontSize: 12, color: 'var(--text-55)', margin: 0 }}>
+              could not load drafts.
+            </p>
+            <button
+              type="button"
+              className="mono"
+              onClick={() => void refetch()}
+              style={{
+                marginTop: 8,
+                fontSize: 11,
+                color: accent,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            >
+              retry →
+            </button>
+          </div>
+        ) : acts.length === 0 ? (
+          <div
+            data-testid="acts-empty"
+            style={{
+              padding: 16,
+              borderRadius: 14,
+              background: 'var(--surface-1, rgba(255,255,255,0.02))',
+              border: '1px dashed var(--border-soft, rgba(255,255,255,0.06))',
+              color: 'var(--text-55)',
+              fontSize: 13.5,
+              lineHeight: 1.55,
+            }}
+          >
+            no drafts yet — capture a memo that mentions a follow-up, intro, or meeting.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} data-testid="acts-list">
+            {acts.map((a) => (
+              <ActCard
+                key={a.id}
+                act={a}
+                sendError={markErrors[a.id ?? ''] ?? null}
+                onSent={(id) => markSent.mutate({ id })}
+                onSnooze={(id) => snooze.mutate({ id, hours: 24 })}
+                onDismiss={(id) => dismiss.mutate({ id })}
+                onSaveEdit={async (id, patch) => {
+                  try {
+                    const res = await update.mutateAsync({ id, ...patch });
+                    return res.ok;
+                  } catch {
+                    return false;
+                  }
+                }}
+              />
+            ))}
+          </div>
+        )}
       </section>
     </main>
   );

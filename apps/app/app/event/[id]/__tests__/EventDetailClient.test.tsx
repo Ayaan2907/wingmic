@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, describe, it, expect, vi } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { cleanup, render, fireEvent, screen } from '@testing-library/react';
 
 afterEach(() => cleanup());
 
@@ -11,6 +11,31 @@ vi.mock('next/link', () => ({
     </a>
   ),
 }));
+
+const routerPush = vi.fn();
+const createDraftMutate = vi.fn();
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerPush, replace: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => '/event/ev_dc',
+}));
+
+vi.mock('@/lib/trpc/client', () => ({
+  trpc: {
+    acts: {
+      createDraft: {
+        useMutation: (opts?: { onSuccess?: (r: { ok: boolean }) => void }) => ({
+          mutate: (input: unknown) => {
+            createDraftMutate(input);
+            opts?.onSuccess?.({ ok: true });
+          },
+          isPending: false,
+        }),
+      },
+    },
+  },
+}));
+
 // PR λ-shell: EntityDetailScaffold no longer renders BottomTabBar (nav + orb
 // live in AppShell, asserted in AppShell.test.tsx). No mock needed.
 
@@ -46,6 +71,11 @@ const detail = {
 };
 
 describe('EventDetailClient', () => {
+  beforeEach(() => {
+    routerPush.mockClear();
+    createDraftMutate.mockClear();
+  });
+
   it('renders the event diamond, stats, captures, related row', () => {
     const { getByTestId, getAllByTestId, getByRole } = render(
       <EventDetailClient detail={detail} />,
@@ -57,5 +87,28 @@ describe('EventDetailClient', () => {
     expect(getAllByTestId('entity-capture').length).toBeGreaterThan(0);
     const rows = getAllByTestId('entity-related-row');
     expect(rows[0]!.getAttribute('data-related-href')).toBe('/person/en_sarah');
+  });
+
+  it('generate recap creates an act and routes to /acts', () => {
+    render(<EventDetailClient detail={detail} />);
+    fireEvent.click(screen.getByRole('button', { name: /generate recap/i }));
+    expect(createDraftMutate).toHaveBeenCalledWith({
+      kind: 'todo',
+      intent: 'recap',
+      contextName: 'DevConnect 26',
+    });
+    expect(routerPush).toHaveBeenCalledWith('/acts');
+  });
+
+  it('check-ins CTA creates a reminder draft without person targetEntityId', () => {
+    render(<EventDetailClient detail={detail} />);
+    fireEvent.click(screen.getByRole('button', { name: /check-ins/i }));
+    expect(createDraftMutate).toHaveBeenCalledWith({
+      kind: 'reminder',
+      intent: 'reminder',
+      contextName: 'DevConnect 26',
+      seedBody: 'send check-ins after DevConnect 26',
+    });
+    expect(routerPush).toHaveBeenCalledWith('/acts');
   });
 });

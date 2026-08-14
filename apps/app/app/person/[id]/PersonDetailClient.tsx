@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import {
   EntityDetailScaffold,
   type EntityCapture,
@@ -10,11 +11,14 @@ import {
 } from '@/app/_components/entity/EntityDetailScaffold';
 import { PersonAvatar } from '@/app/_components/entity/EntityAvatar';
 import { PersonListRail } from './_components/PersonListRail';
+import { trpc } from '@/lib/trpc/client';
+import { parseImportSource } from '@/lib/imports';
 
 export interface PersonDetail {
   kind: 'person';
   id: string;
   name: string;
+  importSource?: string | null;
   sub: {
     role: string | null;
     companyId: string | null;
@@ -29,8 +33,27 @@ export interface PersonDetail {
 }
 
 export default function PersonDetailClient({ detail }: { detail: PersonDetail }) {
+  const router = useRouter();
+  const createDraft = trpc.acts.createDraft.useMutation({
+    onSuccess: (res) => {
+      if (res.ok) router.push('/acts');
+    },
+  });
+
   const subText =
     [detail.sub.role, detail.sub.companyName].filter(Boolean).join(' · ') || 'no role yet';
+
+  const parsed = parseImportSource(detail.importSource);
+  const tags =
+    parsed?.kind === 'linkedin'
+      ? ['linkedin']
+      : parsed?.kind === 'vcard'
+        ? ['vcard']
+        : parsed?.kind === 'device'
+          ? ['device']
+          : detail.importSource && detail.importSource !== 'voice-capture'
+            ? ['imported']
+            : undefined;
 
   return (
     // Desktop (≥1120px) splits into [people list | detail]; on mobile the
@@ -44,8 +67,23 @@ export default function PersonDetailClient({ detail }: { detail: PersonDetail })
           eyebrow="◉ person"
           name={detail.name}
           sub={subText}
-          primaryCta={{ label: 'draft check-in →' }}
-          ghostCta={{ label: 'edit' }}
+          tags={tags}
+          primaryCta={{
+            label: 'draft check-in →',
+            pending: createDraft.isPending,
+            onClick: () =>
+              createDraft.mutate({
+                kind: 'email',
+                intent: 'check-in',
+                targetEntityId: detail.id,
+                contextName: detail.sub.companyName ?? undefined,
+              }),
+          }}
+          ghostCta={{
+            label: 'edit',
+            title: 'edit person — coming later',
+            disabled: true,
+          }}
           stats={detail.stats}
           captures={detail.captures}
           followups={detail.followups}

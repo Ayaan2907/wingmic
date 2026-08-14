@@ -91,7 +91,6 @@ export function useAudioRecorder(): UseAudioRecorder {
   const supportedRef = useRef<boolean>(isMediaRecorderSupported());
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
   const startedAtRef = useRef<number>(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -102,6 +101,8 @@ export function useAudioRecorder(): UseAudioRecorder {
   const hardCapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Set true when discard()/reset() is called mid-arming; checked after getUserMedia resolves. */
   const armingAbortedRef = useRef<boolean>(false);
+  /** Monotonic id so stale MediaRecorder onstop cannot clobber a newer take. */
+  const sessionIdRef = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -199,15 +200,23 @@ export function useAudioRecorder(): UseAudioRecorder {
       setStatus('error');
       return;
     }
-    if (status !== 'idle' && status !== 'ready' && status !== 'error') return;
+    if (status !== 'idle' && status !== 'ready' && status !== 'error' && status !== 'encoding') {
+      return;
+    }
+    if (status === 'encoding') {
+      const rec = recorderRef.current;
+      if (rec && rec.state !== 'inactive') return;
+    }
 
-    setError(null);
+    const sessionId = ++sessionIdRef.current;
     setAudioBlob(null);
-    chunksRef.current = [];
     discardedRef.current = false;
     armingAbortedRef.current = false;
     setDuration(0);
     setStatus('arming');
+
+    // Per-session chunks — never share a ref across overlapping MediaRecorders.
+    const chunks: Blob[] = [];
 
     let stream: MediaStream;
     try {
@@ -227,6 +236,11 @@ export function useAudioRecorder(): UseAudioRecorder {
     }
     // discard()/reset() may have fired while getUserMedia was in flight.
     // If so, kill the freshly-granted stream before it goes hot.
+    // Stale session: stop tracks only — do not touch status (a newer take may be live).
+    if (sessionIdRef.current !== sessionId) {
+      stream.getTracks().forEach((t) => t.stop());
+      return;
+    }
     if (armingAbortedRef.current) {
       stream.getTracks().forEach((t) => t.stop());
       armingAbortedRef.current = false;
@@ -249,7 +263,8 @@ export function useAudioRecorder(): UseAudioRecorder {
     recorderRef.current = recorder;
 
     recorder.ondataavailable = (ev) => {
-      if (ev.data && ev.data.size > 0) chunksRef.current.push(ev.data);
+      if (sessionIdRef.current !== sessionId) return;
+      if (ev.data && ev.data.size > 0) chunks.push(ev.data);
     };
     recorder.onerror = () => {
       setError({ code: 'recorder_error', message: 'recorder crashed mid-take.' });
@@ -257,6 +272,12 @@ export function useAudioRecorder(): UseAudioRecorder {
       cleanup();
     };
     recorder.onstop = () => {
+      // Stale session: release THIS stream's tracks only — do not call cleanup(),
+      // which would tear down the newer session's mic/meter/timers.
+      if (sessionIdRef.current !== sessionId) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       if (discardedRef.current) {
         setAudioBlob(null);
         setStatus('idle');
@@ -265,8 +286,7 @@ export function useAudioRecorder(): UseAudioRecorder {
         return;
       }
       const type = recorder.mimeType || 'audio/webm';
-      const blob = new Blob(chunksRef.current, { type });
-      chunksRef.current = [];
+      const blob = new Blob(chunks, { type });
       setAudioBlob(blob);
       setStatus('ready');
       setLevel(FLAT_LEVEL);
@@ -348,9 +368,8 @@ export function useAudioRecorder(): UseAudioRecorder {
   }, []);
 
   const lock = useCallback(() => {
-    if (status !== 'recording' && status !== 'lock_armed') return;
-    setStatus('locked');
-  }, [status]);
+    setStatus((s) => (s === 'recording' || s === 'lock_armed' ? 'locked' : s));
+  }, []);
 
   const setCancelArmed = useCallback(
     (armed: boolean) => {
@@ -376,9 +395,10 @@ export function useAudioRecorder(): UseAudioRecorder {
 
   const reset = useCallback(() => {
     // Same race as discard(): reset may fire mid-arming.
+    // Bump session so any in-flight MediaRecorder callbacks become stale.
+    sessionIdRef.current += 1;
     armingAbortedRef.current = true;
     cleanup();
-    chunksRef.current = [];
     discardedRef.current = false;
     setStatus('idle');
     setDuration(0);

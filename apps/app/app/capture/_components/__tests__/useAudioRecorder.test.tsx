@@ -146,6 +146,127 @@ describe('useAudioRecorder', () => {
     expect(result.current.status).toBe('locked');
   });
 
+  it('lock() is a no-op when not recording (functional setStatus)', async () => {
+    const { result } = renderHook(() => useAudioRecorder());
+    act(() => {
+      result.current.lock();
+    });
+    expect(result.current.status).toBe('idle');
+  });
+
+  it('stale onstop releases old stream tracks without clobbering a new session', async () => {
+    // Capture each MediaRecorder so we can fire a stale onstop after restart.
+    const recorders: FakeMediaRecorder[] = [];
+    class TrackingMediaRecorder extends FakeMediaRecorder {
+      constructor(stream: MediaStream, options?: MediaRecorderOptions) {
+        super(stream, options);
+        recorders.push(this);
+      }
+    }
+    (globalThis as unknown as { MediaRecorder: typeof TrackingMediaRecorder }).MediaRecorder =
+      TrackingMediaRecorder;
+    (window as unknown as { MediaRecorder: typeof TrackingMediaRecorder }).MediaRecorder =
+      TrackingMediaRecorder;
+
+    const trackStop1 = vi.fn();
+    const trackStop2 = vi.fn();
+    let gumCalls = 0;
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn(async () => {
+          gumCalls += 1;
+          const stop = gumCalls === 1 ? trackStop1 : trackStop2;
+          return { getTracks: () => [{ stop }] };
+        }),
+      },
+    });
+
+    const { result } = renderHook(() => useAudioRecorder());
+    await act(async () => {
+      await result.current.start();
+    });
+    expect(recorders).toHaveLength(1);
+
+    // Begin a second take while the first is still "recording" conceptually —
+    // reset bumps sessionId; then start a fresh session.
+    act(() => {
+      result.current.reset();
+    });
+    await act(async () => {
+      await result.current.start();
+    });
+    expect(recorders).toHaveLength(2);
+    expect(result.current.status).toBe('recording');
+
+    // Fire the FIRST recorder's onstop as if it finalized late.
+    await act(async () => {
+      recorders[0]!.onstop?.();
+      await Promise.resolve();
+    });
+
+    // Stale onstop must stop the old stream's tracks, not tear down the new take.
+    expect(trackStop1).toHaveBeenCalled();
+    expect(result.current.status).toBe('recording');
+    expect(result.current.audioBlob).toBeNull();
+  });
+
+  it('stale ondataavailable does not mix chunks into a newer take', async () => {
+    const recorders: FakeMediaRecorder[] = [];
+    class TrackingMediaRecorder extends FakeMediaRecorder {
+      constructor(stream: MediaStream, options?: MediaRecorderOptions) {
+        super(stream, options);
+        recorders.push(this);
+      }
+      start(_ms?: number) {
+        this.state = 'recording';
+        // no auto-chunk — tests push data manually
+      }
+    }
+    (globalThis as unknown as { MediaRecorder: typeof TrackingMediaRecorder }).MediaRecorder =
+      TrackingMediaRecorder;
+    (window as unknown as { MediaRecorder: typeof TrackingMediaRecorder }).MediaRecorder =
+      TrackingMediaRecorder;
+
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn(async () => ({
+          getTracks: () => [{ stop: vi.fn() }],
+        })),
+      },
+    });
+
+    const { result } = renderHook(() => useAudioRecorder());
+    await act(async () => {
+      await result.current.start();
+    });
+
+    act(() => {
+      result.current.reset();
+    });
+    await act(async () => {
+      await result.current.start();
+    });
+
+    // Stale chunk from session 1, then a real chunk from session 2.
+    await act(async () => {
+      recorders[0]!.ondataavailable?.({
+        data: new Blob(['STALE'], { type: 'audio/webm' }),
+      });
+      recorders[1]!.ondataavailable?.({
+        data: new Blob(['FRESH'], { type: 'audio/webm' }),
+      });
+      recorders[1]!.stop();
+      await Promise.resolve();
+    });
+
+    expect(result.current.status).toBe('ready');
+    const text = await result.current.audioBlob!.text();
+    expect(text).toBe('FRESH');
+    expect(text).not.toContain('STALE');
+  });
+
   it('auto-stops at 90 000 ms hard cap', async () => {
     const { result } = renderHook(() => useAudioRecorder());
     await act(async () => {

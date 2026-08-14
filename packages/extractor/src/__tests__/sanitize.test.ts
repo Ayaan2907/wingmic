@@ -62,15 +62,89 @@ describe('sanitizeExtraction', () => {
     expect(r.persons.map((p) => p.name)).toEqual(['Guy Fieri']);
   });
 
-  it('does not touch topics or actions', () => {
+  it('does not touch actions but filters junk topics', () => {
     const r = sanitizeExtraction({
       ...empty(),
-      topics: ['rust'],
+      topics: ['rust', 'discussed', 'Lucas'],
       actions: [{ kind: 'email', body: 'send the deck', whenHint: null, targetPersonName: null }],
-      persons: [{ name: 'Met', role: null, companyHint: null, topics: [], notes: null, email: null, linkedin: null, aliases: [] }],
+      persons: [
+        { name: 'Met', role: null, companyHint: null, topics: [], notes: null, email: null, linkedin: null, aliases: [] },
+        { name: 'Lucas', role: null, companyHint: null, topics: [], notes: null, email: null, linkedin: null, aliases: [] },
+      ],
     });
     expect(r.topics).toEqual(['rust']);
     expect(r.actions).toHaveLength(1);
-    expect(r.persons).toHaveLength(0);
+    expect(r.persons.map((p) => p.name)).toEqual(['Lucas']);
+  });
+
+  it('drops verb topics and entity-name echoes', () => {
+    const r = sanitizeExtraction({
+      ...empty(),
+      topics: ['discussed', 'relocation', 'francisco', 'San Francisco', 'lucas', 'co-working'],
+      persons: [
+        {
+          name: 'Lucas',
+          role: null,
+          companyHint: 'Trillers',
+          topics: [],
+          notes: null,
+          email: null,
+          linkedin: null,
+          aliases: [],
+        },
+      ],
+      companies: [{ name: 'Trillers', domainHint: null, industry: [] }],
+    });
+    expect(r.topics).toEqual(['relocation', 'San Francisco', 'co-working']);
+  });
+
+  it('sanitizes person-scoped topics the same way as canonical topics', () => {
+    const r = sanitizeExtraction({
+      ...empty(),
+      persons: [
+        {
+          name: 'Lucas',
+          role: null,
+          companyHint: null,
+          topics: ['discussed', 'rust', 'lucas', 'AI'],
+          notes: null,
+          email: null,
+          linkedin: null,
+          aliases: [],
+        },
+      ],
+      topics: ['discussed'],
+    });
+    expect(r.persons[0]!.topics).toEqual(['rust', 'AI']);
+    expect(r.topics).toEqual([]);
+  });
+
+  it('keeps short subjects like AI and Go', () => {
+    const r = sanitizeExtraction({
+      ...empty(),
+      topics: ['AI', 'Go', 'a', 'rust'],
+    });
+    expect(r.topics).toEqual(['AI', 'Go', 'rust']);
+  });
+
+  it('does not erase one-word topics that share a token with a multi-word entity', () => {
+    const r = sanitizeExtraction({
+      ...empty(),
+      topics: ['research', 'rust'],
+      companies: [{ name: 'Research Labs', domainHint: null, industry: [] }],
+      persons: [
+        {
+          name: 'Lucas',
+          role: null,
+          companyHint: null,
+          topics: [],
+          notes: null,
+          email: null,
+          linkedin: null,
+          aliases: [],
+        },
+      ],
+    });
+    expect(r.topics).toEqual(['research', 'rust']);
   });
 });

@@ -1,114 +1,276 @@
 'use client';
 
-// ChatEntityRail — desktop-only "in this thread" rail (proto-desktop.jsx
-// ScreenDesktopChat, lines 176–206). Static mock at prototype fidelity;
-// ponytail: wire to the live thread's extracted entities in v0.1.3.
+/**
+ * ChatEntityRail — desktop "in this thread" column.
+ * Built from committed messages' graphResult (live only — no fixtures).
+ */
 
-import { PersonAvatar } from '@/app/_components/entity/EntityAvatar';
-import { accent, blue, violet } from './tokens';
+import * as React from 'react';
+import Link from 'next/link';
+import type { Route } from 'next';
+import { useCapture } from '@/app/_components/CaptureProvider';
+import { accent } from '@/app/chat/_components/tokens';
+import type { ThreadMessage } from '@/app/chat/_components/types';
 
-const label: React.CSSProperties = {
-  fontSize: 10,
-  letterSpacing: 2,
-  textTransform: 'uppercase',
-  color: 'rgba(255,255,255,0.3)',
-  marginBottom: 12,
+type RailPerson = {
+  id: string;
+  name: string;
+  role: string | null;
+  company: string | null;
+  topics: string[];
+  followUp: boolean;
 };
 
-const EXTRACTED: Array<{ kind: string; name: string; color: string }> = [
-  { kind: 'person', name: 'sarah chen', color: accent },
-  { kind: 'company', name: 'acme corp', color: blue },
-  { kind: 'event', name: 'DevConnect', color: 'rgba(255,255,255,0.5)' },
-  { kind: 'concept', name: 'edge config', color: violet },
-];
+type RailExtracted = {
+  person: string[];
+  company: string[];
+  event: string[];
+  concept: string[];
+};
 
-const SOURCES = ['↪ voice note · 14:32', '↪ commit · oct 14', '↪ follow-up · open'];
+function collectFromMessages(messages: ThreadMessage[]): {
+  people: RailPerson[];
+  extracted: RailExtracted;
+} {
+  const people: RailPerson[] = [];
+  const seenPerson = new Set<string>();
+  const extracted: RailExtracted = {
+    person: [],
+    company: [],
+    event: [],
+    concept: [],
+  };
+  const pushUnique = (list: string[], value: string) => {
+    const key = value.trim().toLowerCase();
+    if (!key || list.some((v) => v.toLowerCase() === key)) return;
+    list.push(value);
+  };
 
-export function ChatEntityRail() {
-  return (
-    <aside
-      className="desktop-pane entity-rail mono"
-      style={{ padding: '20px 16px', background: 'rgba(255,255,255,0.01)' }}
-      aria-label="entities in this thread"
-    >
-      <div style={label}>◆ in this thread</div>
+  for (const m of messages) {
+    if (m.status !== 'committed' || !m.graphResult) continue;
+    const g = m.graphResult;
+    const { extracted: ex } = g;
+    for (let i = 0; i < ex.persons.length; i++) {
+      const p = ex.persons[i]!;
+      const id = g.entityIds?.[i] ?? `name:${p.name.toLowerCase()}`;
+      if (!seenPerson.has(id)) {
+        seenPerson.add(id);
+        people.push({
+          id,
+          name: p.name,
+          role: p.role,
+          company: p.companyHint,
+          topics: p.topics,
+          followUp: ex.actions.length > 0,
+        });
+      }
+      pushUnique(extracted.person, p.name);
+    }
+    for (const c of ex.companies) pushUnique(extracted.company, c.name);
+    for (const e of ex.events) pushUnique(extracted.event, e.name);
+    for (const t of ex.topics) pushUnique(extracted.concept, t);
+  }
 
-      {/* Active person card */}
-      <div
-        style={{
-          padding: 14,
-          borderRadius: 12,
-          background: `${accent}0a`,
-          border: `1px solid ${accent}30`,
-          marginBottom: 16,
-        }}
-      >
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
-          <PersonAvatar size={42} name="Sarah Chen" seed="sarah-chen" />
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)', fontFamily: 'inherit' }}>
-              Sarah Chen
-            </div>
-            <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.55)' }}>Rust Lead · Acme Corp</div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-          <span style={pill('rgba(255,255,255,0.5)')}>#rust</span>
-          <span style={pill(accent)}>follow-up</span>
-        </div>
-      </div>
-
-      {/* Extracted entities */}
-      <div style={{ ...label, letterSpacing: 1.5 }}>extracted</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-        {EXTRACTED.map((e) => (
-          <span
-            key={e.name}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 10px',
-              borderRadius: 8,
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              fontSize: 12,
-              color: e.color,
-            }}
-          >
-            <span style={{ opacity: 0.7 }}>{e.kind}</span>
-            <span style={{ color: 'var(--ink)' }}>{e.name}</span>
-          </span>
-        ))}
-      </div>
-
-      {/* Sources */}
-      <div style={{ ...label, letterSpacing: 1.5 }}>sources</div>
-      {SOURCES.map((s) => (
-        <div
-          key={s}
-          style={{
-            fontSize: 11,
-            color: 'rgba(255,255,255,0.4)',
-            padding: '7px 0',
-            borderBottom: '1px solid rgba(255,255,255,0.04)',
-            letterSpacing: 0.3,
-          }}
-        >
-          {s}
-        </div>
-      ))}
-    </aside>
-  );
+  return { people, extracted };
 }
 
-function pill(color: string): React.CSSProperties {
-  return {
-    padding: '3px 9px',
-    borderRadius: 999,
-    background: `${color}1a`,
-    border: `1px solid ${color}40`,
-    fontSize: 10,
-    color,
-  };
+export function ChatEntityRail() {
+  const { messages } = useCapture();
+  const { people, extracted } = React.useMemo(
+    () => collectFromMessages(messages),
+    [messages],
+  );
+
+  const hasAnything =
+    people.length > 0 ||
+    extracted.person.length > 0 ||
+    extracted.company.length > 0 ||
+    extracted.event.length > 0 ||
+    extracted.concept.length > 0;
+
+  if (!hasAnything) {
+    return (
+      <aside
+        className="surface-secondary"
+        data-testid="chat-entity-rail"
+        data-empty="true"
+        style={{
+          padding: 20,
+          borderLeft: '1px solid var(--border-soft)',
+          color: 'var(--text-40)',
+          fontSize: 13,
+        }}
+      >
+        <div
+          className="mono"
+          style={{
+            fontSize: 10,
+            letterSpacing: 1.5,
+            textTransform: 'uppercase',
+            marginBottom: 12,
+            color: 'var(--text-40)',
+          }}
+        >
+          in this thread
+        </div>
+        <p style={{ margin: 0, lineHeight: 1.5 }}>
+          commit a memo — people and tags land here.
+        </p>
+      </aside>
+    );
+  }
+
+  return (
+    <aside
+      className="surface-secondary"
+      data-testid="chat-entity-rail"
+      style={{
+        padding: 20,
+        borderLeft: '1px solid var(--border-soft)',
+        overflowY: 'auto',
+        maxHeight: '100dvh',
+      }}
+    >
+      <div
+        className="mono"
+        style={{
+          fontSize: 10,
+          letterSpacing: 1.5,
+          textTransform: 'uppercase',
+          marginBottom: 16,
+          color: 'var(--text-40)',
+        }}
+      >
+        in this thread
+      </div>
+
+      {people.map((p) => {
+        const href = p.id.startsWith('name:') ? null : (`/person/${p.id}` as Route);
+        const sub = [p.role, p.company].filter(Boolean).join(' · ');
+        const body = (
+          <>
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                background: accent,
+                color: '#000',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 800,
+                fontSize: 14,
+                flexShrink: 0,
+              }}
+            >
+              {p.name.charAt(0).toUpperCase()}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700 }}>{p.name}</div>
+              {sub ? (
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--text-55)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {sub}
+                </div>
+              ) : null}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                {p.topics.slice(0, 3).map((t) => (
+                  <span
+                    key={t}
+                    className="mono"
+                    style={{
+                      fontSize: 9,
+                      padding: '2px 6px',
+                      borderRadius: 4,
+                      background: 'var(--surface-1)',
+                      color: 'var(--text-55)',
+                    }}
+                  >
+                    #{t}
+                  </span>
+                ))}
+                {p.followUp ? (
+                  <span
+                    className="mono"
+                    style={{
+                      fontSize: 9,
+                      padding: '2px 6px',
+                      borderRadius: 4,
+                      background: accent,
+                      color: '#000',
+                      fontWeight: 700,
+                    }}
+                  >
+                    follow-up
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </>
+        );
+        return href ? (
+          <Link
+            key={p.id}
+            href={href}
+            data-testid={`chat-rail-person-${p.id}`}
+            style={{
+              display: 'flex',
+              gap: 10,
+              marginBottom: 16,
+              textDecoration: 'none',
+              color: 'inherit',
+            }}
+          >
+            {body}
+          </Link>
+        ) : (
+          <div
+            key={p.id}
+            data-testid={`chat-rail-person-${p.id}`}
+            style={{ display: 'flex', gap: 10, marginBottom: 16 }}
+          >
+            {body}
+          </div>
+        );
+      })}
+
+      <div
+        className="mono"
+        style={{
+          fontSize: 10,
+          letterSpacing: 1.5,
+          textTransform: 'uppercase',
+          color: 'var(--text-40)',
+          margin: '8px 0 10px',
+        }}
+      >
+        extracted
+      </div>
+      {(
+        [
+          ['person', extracted.person],
+          ['company', extracted.company],
+          ['event', extracted.event],
+          ['concept', extracted.concept],
+        ] as const
+      ).map(([label, values]) =>
+        values.length === 0 ? null : (
+          <div key={label} style={{ marginBottom: 8, fontSize: 12.5 }}>
+            <span className="mono" style={{ color: 'var(--text-40)', fontSize: 10 }}>
+              {label}:{' '}
+            </span>
+            {values.join(', ')}
+          </div>
+        ),
+      )}
+    </aside>
+  );
 }

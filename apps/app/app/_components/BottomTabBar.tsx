@@ -26,6 +26,42 @@ import { micOrbStateFor, type MicOrbState } from '@/app/capture/micOrbState';
 const accent = '#FFC452';
 const coral = '#FF6B6B';
 
+/** localStorage key — first-run teaching beat for the capture orb (U5). */
+export const ORB_HINT_STORAGE_KEY = 'wingmic.orb-hint-seen';
+
+/** Session fallback when localStorage is blocked (private browsing). */
+let orbHintSessionSeen = false;
+
+/** @internal Vitest-only — module session flag survives across cases. */
+export function resetOrbHintSessionState() {
+  orbHintSessionSeen = false;
+}
+
+function useOrbHint() {
+  const [show, setShow] = React.useState(false);
+
+  React.useEffect(() => {
+    if (orbHintSessionSeen) return;
+    try {
+      if (localStorage.getItem(ORB_HINT_STORAGE_KEY) !== '1') setShow(true);
+    } catch {
+      if (!orbHintSessionSeen) setShow(true);
+    }
+  }, []);
+
+  const dismiss = React.useCallback(() => {
+    orbHintSessionSeen = true;
+    setShow(false);
+    try {
+      localStorage.setItem(ORB_HINT_STORAGE_KEY, '1');
+    } catch {
+      // session flag covers private browsing
+    }
+  }, []);
+
+  return { show, dismiss };
+}
+
 /** Bottom-nav height — kept in sync with chat/_components/tokens.ts. */
 export const TAB_BAR_HEIGHT_PX = 56;
 
@@ -41,14 +77,14 @@ function vibrate(pattern: number | number[]) {
   }
 }
 
-// Tab arrangement (2026-08-04): search on the fifth slot — recall had no mobile
-// entry (⌘K is desktop-only). Acts stays reachable from home pending section.
+// Tab arrangement (PDF + design/v2): acts on the fifth slot. Search stays
+// reachable via ⌘K / header affordances — not a bottom-nav verb.
 export const NAV_TABS: Array<{ key: BottomTabKey; glyph: string; label: string; href: string; big?: boolean }> = [
   { key: 'home', glyph: '⌂', label: 'home', href: '/' },
   { key: 'chat', glyph: '≡', label: 'chat', href: '/chat' },
   { key: 'capture', glyph: '◉', label: 'capture', href: '/chat', big: true },
   { key: 'graph', glyph: '◈', label: 'graph', href: '/graph' },
-  { key: 'search', glyph: '⌕', label: 'search', href: '/search' },
+  { key: 'acts', glyph: '☑', label: 'acts', href: '/acts' },
 ];
 
 export function NavLink({ tab, active }: { tab: (typeof NAV_TABS)[number]; active: boolean }) {
@@ -89,11 +125,11 @@ interface CaptureOrbProps {
 
 export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureOrbProps) {
   const [isHovered, setIsHovered] = React.useState(false);
+  const { show: showHint, dismiss: dismissHint } = useOrbHint();
 
   const status = recorder.status;
   const orbState: MicOrbState = micOrbStateFor(status, isHovered);
   const isActiveRec = orbState === 'recording';
-  const isSending = orbState === 'sending';
 
   // Tap-to-dictate: one tap starts recording, the next tap stops + sends.
   // Replaces the old press-and-hold gesture — its release relied on a
@@ -101,8 +137,9 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
   // stale closure), leaving the recorder running with no way to stop. A plain
   // toggle reads the live status on each tap, so it can't get stuck.
   function onOrbClick() {
+    dismissHint();
     const s = recorder.status;
-    if (s === 'idle' || s === 'ready' || s === 'error') {
+    if (s === 'idle' || s === 'ready' || s === 'error' || s === 'encoding') {
       vibrate(8);
       void beginCapture();
       return;
@@ -120,16 +157,41 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
         alignItems: 'flex-start',
         justifyContent: 'center',
         fontFamily: 'JetBrains Mono, monospace',
+        position: 'relative',
       }}
     >
+      {showHint && !isActiveRec ? (
+        <div
+          role="status"
+          data-testid="orb-hint"
+          className="mono"
+          style={{
+            position: 'absolute',
+            top: -52,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '6px 10px',
+            borderRadius: 8,
+            background: accent,
+            color: '#000',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: 0.4,
+            textTransform: 'lowercase',
+            border: '1.5px solid #000',
+            boxShadow: '2px 2px 0 #000',
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+            zIndex: 2,
+          }}
+        >
+          tap to talk
+        </div>
+      ) : null}
       <button
         type="button"
         aria-label={
-          isActiveRec
-            ? 'recording — tap to stop and send'
-            : isSending
-              ? 'sending recording'
-              : 'tap to record voice memo'
+          isActiveRec ? 'recording — tap to stop and send' : 'tap to record voice memo'
         }
         aria-keyshortcuts="Space"
         aria-pressed={isActiveRec}
@@ -146,7 +208,7 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
           width: 52,
           height: 52,
           borderRadius: '50%',
-          background: isSending ? 'rgba(255,255,255,0.06)' : accent,
+          background: accent,
           color: isActiveRec ? '#fff' : '#000',
           fontSize: 22,
           fontWeight: 800,
@@ -178,22 +240,6 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
               fill="#fff"
             />
             <path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
-          </svg>
-        ) : isSending ? (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"
-              stroke="var(--text-70)"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M5 11a7 7 0 0 0 14 0M12 18v3"
-              stroke="var(--text-70)"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            />
           </svg>
         ) : (
           <>

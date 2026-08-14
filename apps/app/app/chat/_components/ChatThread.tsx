@@ -9,6 +9,8 @@
 // "stays full opacity" carve-out.
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import type { Route } from 'next';
 import { useCapture } from '@/app/_components/CaptureProvider';
 import { AgentBubble, AskExchange, WingmicAvatar as AskAvatar } from './AskPrimitives';
 import type {
@@ -17,6 +19,7 @@ import type {
   FailureCode,
 } from './types';
 import { accent, coral, third, violet, blue } from './tokens';
+import { trpc } from '@/lib/trpc/client';
 
 function fmtMs(ms: number | null): string {
   if (ms == null) return '—';
@@ -246,11 +249,11 @@ function MessageBubble(props: MessageBubbleProps) {
   const showSkeleton = m.status === 'uploading' || m.status === 'transcribing';
   const showLinkSweep = m.status === 'linking';
   const isCommitted = m.status === 'committed';
-  // Agent reply renders only for freshly-committed memos that found something.
-  // Prefetched-history bubbles (graphResult === null) and empty extractions
-  // skip it — the user bubble's "no entities found" footer carries those.
+  // Agent reply renders for every committed memo with a graphResult
+  // (including sparse ones — soft "noted" copy). Prefetch hydrates
+  // graphResult from DB so refresh keeps the two-sided thread.
   const g = m.graphResult;
-  const showAgentReply = isCommitted && g != null && !isEmptyExtraction(g.extracted);
+  const showAgentReply = isCommitted && g != null;
 
   return (
     <>
@@ -308,13 +311,16 @@ function MessageBubble(props: MessageBubbleProps) {
 }
 
 // AgentReply — the templated "wingmic" reply that lands under a committed
-// memo (PR ε, per proto-screens-b.jsx ScreenChatResponse). A short
-// acknowledgement line built from the extracted counts, the extraction
-// detail card, and a suggested-action row. The action buttons are disabled
-// "coming soon · v0.3" chrome (the acts agent ships v0.3, epic #11) —
-// matching the entity-detail CTA pattern from PR β₂.
+// memo. Acknowledgement + extraction card + draft follow-up CTA (A6).
 function AgentReply({ message, result }: { message: ThreadMessage; result: GraphResult }) {
+  const router = useRouter();
+  const createDraft = trpc.acts.createDraft.useMutation({
+    onSuccess: (res) => {
+      if (res.ok) router.push('/acts');
+    },
+  });
   const { extracted } = result;
+  const sparse = isEmptyExtraction(extracted);
   const counts: string[] = [];
   if (extracted.persons.length) {
     counts.push(`${extracted.persons.length} ${extracted.persons.length === 1 ? 'person' : 'people'}`);
@@ -327,8 +333,13 @@ function AgentReply({ message, result }: { message: ThreadMessage; result: Graph
   if (extracted.events.length) {
     counts.push(`${extracted.events.length} ${extracted.events.length === 1 ? 'event' : 'events'}`);
   }
-  const summary = counts.length ? `captured ${counts.join(', ')}. tap to open.` : 'captured your memo.';
+  const summary = sparse
+    ? 'noted — nothing solid to tag yet.'
+    : `acknowledged. ${counts.length ? `captured ${counts.join(', ')}. tap to open.` : 'captured your memo.'}`;
   const time = message.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const firstPersonId = result.entityIds?.[0];
+  const firstPersonName = extracted.persons[0]?.name;
+  const openHref = firstPersonId ? (`/person/${firstPersonId}` as Route) : null;
 
   return (
     <div
@@ -356,6 +367,7 @@ function AgentReply({ message, result }: { message: ThreadMessage; result: Graph
           </span>
         </div>
         <div
+          data-testid={sparse ? 'agent-reply-soft' : 'agent-reply-ack'}
           style={{
             padding: '12px 14px',
             borderRadius: '4px 14px 14px 14px',
@@ -366,13 +378,66 @@ function AgentReply({ message, result }: { message: ThreadMessage; result: Graph
             lineHeight: 1.55,
           }}
         >
-          acknowledged. {summary}
+          {summary}
         </div>
-        <GraphCard message={message} result={result} />
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <DisabledAction label="draft follow-up →" />
-          <DisabledAction label="open card" ghost />
-        </div>
+        {!sparse ? <GraphCard message={message} result={result} /> : null}
+        {!sparse ? (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              data-testid="draft-follow-up"
+              disabled={!firstPersonId || createDraft.isPending}
+              title={firstPersonId ? 'draft a follow-up' : 'no person extracted yet'}
+              aria-label={
+                firstPersonId
+                  ? `draft follow-up for ${firstPersonName ?? 'person'}`
+                  : 'draft follow-up unavailable'
+              }
+              onClick={() => {
+                if (!firstPersonId) return;
+                createDraft.mutate({
+                  kind: 'email',
+                  intent: 'follow-up',
+                  targetEntityId: firstPersonId,
+                  sourceInteractionId: result.interactionId || undefined,
+                });
+              }}
+              style={{
+                padding: '8px 13px',
+                borderRadius: 999,
+                background: accent,
+                color: '#000',
+                border: '1.5px solid #000',
+                boxShadow: '3px 3px 0 #000',
+                font: '700 12px Inter, system-ui, sans-serif',
+                cursor: !firstPersonId || createDraft.isPending ? 'not-allowed' : 'pointer',
+                opacity: !firstPersonId || createDraft.isPending ? 0.85 : 1,
+              }}
+            >
+              {createDraft.isPending ? 'drafting…' : 'draft follow-up →'}
+            </button>
+            {openHref ? (
+              <Link
+                href={openHref}
+                data-testid="open-card"
+                aria-label={`open card for ${firstPersonName ?? 'person'}`}
+                style={{
+                  padding: '8px 13px',
+                  borderRadius: 999,
+                  background: 'transparent',
+                  color: 'var(--text-70)',
+                  border: '1px solid var(--border-mid)',
+                  font: '700 12px Inter, system-ui, sans-serif',
+                  textDecoration: 'none',
+                }}
+              >
+                open card
+              </Link>
+            ) : (
+              <DisabledAction label="open card" ghost />
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -476,9 +541,10 @@ function BubbleFooter({ m }: { m: ThreadMessage }) {
       g.extracted.events.length === 0 &&
       g.extracted.actions.length === 0;
     if (isEmpty) {
+      // Soft agent reply carries the "nothing solid" copy; footer stays timing-only.
       return (
         <div className="mono" style={{ fontSize: 10, color: meta }}>
-          no entities found · {fmtMs(m.transcribeMs)} transcribe · {fmtMs(m.commitMs)} commit
+          {fmtMs(m.transcribeMs)} transcribe · {fmtMs(m.commitMs)} commit
         </div>
       );
     }

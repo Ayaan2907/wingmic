@@ -16,10 +16,14 @@ vi.mock('next/navigation', () => ({
 }));
 
 // ── Mock tRPC client ────────────────────────────────────────────────────
-const { mutateAsyncMock, recallFetchMock } = vi.hoisted(() => ({
-  mutateAsyncMock: vi.fn(),
-  recallFetchMock: vi.fn(),
-}));
+const { mutateAsyncMock, deleteMutateMock, restoreMutateMock, recallFetchMock, createDraftMutate } =
+  vi.hoisted(() => ({
+    mutateAsyncMock: vi.fn(),
+    deleteMutateMock: vi.fn(),
+    restoreMutateMock: vi.fn(),
+    recallFetchMock: vi.fn(),
+    createDraftMutate: vi.fn(),
+  }));
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
@@ -27,6 +31,28 @@ vi.mock('@/lib/trpc/client', () => ({
       commit: {
         useMutation: () => ({
           mutateAsync: mutateAsyncMock,
+          isPending: false,
+        }),
+      },
+      delete: {
+        useMutation: () => ({
+          mutate: deleteMutateMock,
+          mutateAsync: deleteMutateMock,
+          isPending: false,
+        }),
+      },
+      restore: {
+        useMutation: () => ({
+          mutate: restoreMutateMock,
+          mutateAsync: restoreMutateMock,
+          isPending: false,
+        }),
+      },
+    },
+    acts: {
+      createDraft: {
+        useMutation: () => ({
+          mutate: createDraftMutate,
           isPending: false,
         }),
       },
@@ -70,7 +96,11 @@ const fakeRecorder = {
   lock: vi.fn(),
   setCancelArmed: vi.fn(),
   setLockArmed: vi.fn(),
-  reset: vi.fn(),
+        reset: vi.fn(() => {
+          fakeRecorder.status = 'idle';
+          fakeRecorder.audioBlob = null;
+          setStatusHook?.('idle');
+        }),
   supported: true,
 };
 
@@ -86,6 +116,7 @@ vi.mock('@/app/capture/_components/useAudioRecorder', () => {
         fakeRecorder.status = s;
         setStatus(s);
         if (s === 'ready') setAudioBlob(fakeRecorder.audioBlob);
+        if (s === 'idle') setAudioBlob(null);
       };
       return {
         ...fakeRecorder,
@@ -142,6 +173,10 @@ describe('ChatClient', () => {
   beforeEach(() => {
     resetFakeRecorder();
     mutateAsyncMock.mockReset();
+    deleteMutateMock.mockReset();
+    deleteMutateMock.mockResolvedValue({ ok: true });
+    restoreMutateMock.mockReset();
+    restoreMutateMock.mockResolvedValue({ ok: true });
     recallFetchMock.mockReset();
     recallFetchMock.mockResolvedValue({
       entities: [{ id: 'e1', name: 'Alice', score: 0.9, companies: [], events: [], topics: [], aliases: [], facts: [] }],
@@ -169,7 +204,7 @@ describe('ChatClient', () => {
     expect(nav.textContent).toContain('chat');
     expect(nav.textContent).toContain('capture');
     expect(nav.textContent).toContain('graph');
-    expect(nav.textContent).toContain('search');
+    expect(nav.textContent).toContain('acts');
     // Regression guard: v1 label `recall` must not coexist with the v2 `chat` label.
     expect(nav.textContent).not.toContain('recall');
     // Removed in v8 — these slots no longer exist in the 5-slot bar.
@@ -202,6 +237,7 @@ describe('ChatClient', () => {
       newEntities: 1,
       matchedEntities: 0,
       interactionId: 'int-1',
+      entityIds: ['en_sarah'],
     });
 
     renderChat({ userName: "ada" });
@@ -228,28 +264,38 @@ describe('ChatClient', () => {
 
     await waitFor(() => {
       expect(mutateAsyncMock).toHaveBeenCalled();
-      // First call positional arg = the tRPC input
-      expect(mutateAsyncMock.mock.calls[0]?.[0]).toEqual({ transcript: 'met sarah at acme' });
+      // First call positional arg = the tRPC input (stable bubble id for idempotency)
+      expect(mutateAsyncMock.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({
+          transcript: 'met sarah at acme',
+          clientCaptureId: expect.any(String),
+        }),
+      );
     });
     await waitFor(() => {
       expect(screen.getByText('met sarah at acme')).toBeTruthy();
     });
     // graph card: shows the person name
     await waitFor(() => {
-      expect(screen.getByText('sarah')).toBeTruthy();
+      expect(screen.getAllByText('sarah').length).toBeGreaterThanOrEqual(1);
     });
-    // PR ε: a templated agent reply lands under the committed memo, with a
-    // count summary built from the extraction (1 person + 1 company) and a
-    // disabled "coming soon · v0.3" action row.
+    // PR ε / A6: agent reply with live draft follow-up when a person was extracted.
     const reply = await waitFor(() => screen.getByTestId('agent-reply'));
     expect(reply.textContent).toMatch(/acknowledged/i);
     expect(reply.textContent).toMatch(/1 person/);
     expect(reply.textContent).toMatch(/1 company/);
     const draftBtn = screen.getByRole('button', { name: /draft follow-up/i });
-    expect((draftBtn as HTMLButtonElement).disabled).toBe(true);
+    expect((draftBtn as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(draftBtn);
+    expect(createDraftMutate).toHaveBeenCalledWith({
+      kind: 'email',
+      intent: 'follow-up',
+      targetEntityId: 'en_sarah',
+      sourceInteractionId: 'int-1',
+    });
   });
 
-  it('renders an empty graph card footer when extracted entities are all empty', async () => {
+  it('renders a soft agent reply when extracted entities are all empty', async () => {
     const audioBlob = new Blob(['x'], { type: 'audio/webm' });
     fakeRecorder.audioBlob = audioBlob;
     (globalThis as { fetch: typeof fetch }).fetch = vi.fn(async () =>
@@ -280,9 +326,9 @@ describe('ChatClient', () => {
       await Promise.resolve();
     });
 
-    await waitFor(() => {
-      expect(screen.getByText(/no entities found/i)).toBeTruthy();
-    });
+    const soft = await waitFor(() => screen.getByTestId('agent-reply-soft'));
+    expect(soft.textContent).toMatch(/noted — nothing solid to tag yet/i);
+    expect(screen.queryByText(/no entities found/i)).toBeNull();
   });
 
   it('renders a failed bubble with retry/paste/discard actions on transcribe 502', async () => {
@@ -433,12 +479,53 @@ describe('ChatClient', () => {
     await act(async () => {
       fireEvent.click(deleteBtn);
     });
+    expect(deleteMutateMock).toHaveBeenCalledWith({ id: 'k' });
     const clearedBefore = clearTimeoutSpy.mock.calls.length;
     // Unmount should clear the pending 30s undo timer
     unmount();
     expect(clearTimeoutSpy.mock.calls.length).toBeGreaterThan(clearedBefore);
 
     clearTimeoutSpy.mockRestore();
+  });
+
+  it('undo after soft-delete calls capture.restore', async () => {
+    fakeRecorder.audioBlob = new Blob(['x'], { type: 'audio/webm' });
+    (globalThis as { fetch: typeof fetch }).fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ transcript: 'hi', durationMs: 100 }), { status: 200 }),
+    ) as unknown as typeof fetch;
+    mutateAsyncMock.mockResolvedValue({
+      extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+      newEntities: 0,
+      matchedEntities: 0,
+      interactionId: 'int_undo',
+    });
+    restoreMutateMock.mockResolvedValue({ ok: true });
+
+    renderChat({ userName: 'ada' });
+    const btn = screen.getByRole('button', { name: /record voice memo/i });
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    await act(async () => {
+      setStatusHook?.('ready');
+      await Promise.resolve();
+    });
+
+    const deleteBtn = await waitFor(() => screen.getByLabelText(/delete memo/i));
+    await act(async () => {
+      fireEvent.click(deleteBtn);
+    });
+    expect(deleteMutateMock).toHaveBeenCalled();
+
+    const undoBtn = await waitFor(() => screen.getByRole('button', { name: /undo/i }));
+    await act(async () => {
+      fireEvent.click(undoBtn);
+    });
+
+    await waitFor(() => {
+      expect(restoreMutateMock).toHaveBeenCalledWith({ id: 'int_undo' });
+    });
+    expect(screen.getByText('hi')).toBeTruthy();
   });
 
   it('tap toggles recording: first tap starts, second tap stops (never double-starts)', async () => {
@@ -529,6 +616,42 @@ describe('ChatClient', () => {
     expect(order2 & 4).toBeTruthy();
   });
 
+  it('hydrated prefetch with graphResult shows agent reply after cold mount', () => {
+    renderChat({
+      userName: 'ada',
+      initialThread: [
+        {
+          id: 'ix_hydrated',
+          transcript: 'met Ada Lovelace, rust lead',
+          capturedAt: '2026-06-01T14:00:00Z',
+          graphResult: {
+            extracted: {
+              persons: [
+                {
+                  name: 'Ada Lovelace',
+                  role: 'rust lead',
+                  companyHint: null,
+                  topics: ['rust'],
+                },
+              ],
+              companies: [],
+              events: [],
+              topics: ['rust'],
+              actions: [],
+            },
+            newEntities: 1,
+            matchedEntities: 0,
+            interactionId: 'ix_hydrated',
+            entityIds: ['en_ada'],
+          },
+        },
+      ],
+    });
+    expect(screen.getByText('met Ada Lovelace, rust lead')).toBeTruthy();
+    expect(screen.getByText(/captured 1 person/i)).toBeTruthy();
+    expect(screen.getAllByText(/Ada Lovelace/i).length).toBeGreaterThanOrEqual(1);
+  });
+
   it('thread dims (opacity 0.4, pointer-events none) when recorder transitions to recording', async () => {
     renderChat({
       userName: 'ada',
@@ -557,6 +680,67 @@ describe('ChatClient', () => {
     expect(dimWrapperAfter).toBeTruthy();
     expect(dimWrapperAfter!.style.opacity).toBe('0.4');
     expect(dimWrapperAfter!.style.pointerEvents).toBe('none');
+  });
+
+  it('can start a second recording while the first bubble is still linking', async () => {
+    fakeRecorder.audioBlob = new Blob(['first'], { type: 'audio/webm' });
+
+    let resolveCommit!: (value: unknown) => void;
+    const commitPending = new Promise((res) => {
+      resolveCommit = res;
+    });
+    mutateAsyncMock.mockReturnValue(commitPending);
+
+    (globalThis as { fetch: typeof fetch }).fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ transcript: 'first memo', durationMs: 400 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as unknown as typeof fetch;
+
+    renderChat({ userName: 'ada' });
+    const btn = screen.getByRole('button', { name: /record voice memo/i });
+
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    await act(async () => {
+      setStatusHook?.('encoding');
+      await Promise.resolve();
+    });
+
+    fakeRecorder.audioBlob = new Blob(['second'], { type: 'audio/webm' });
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+    expect(fakeRecorder.start).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      setStatusHook?.('ready');
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/linking/i)).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(fakeRecorder.start).toHaveBeenCalledTimes(2);
+    });
+
+    await act(async () => {
+      resolveCommit({
+        extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+        newEntities: 0,
+        matchedEntities: 0,
+        interactionId: 'int-1',
+      });
+      await commitPending;
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('first memo')).toBeTruthy();
+    });
   });
 
   // PR β₁-D rolled back the armRecord URL-param approach: recording now

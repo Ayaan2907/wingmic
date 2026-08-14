@@ -373,6 +373,58 @@ export const entityMerges = sqliteTable(
   ],
 );
 
+// ─── Acts (agent drafts — email / meeting / reminder / intro / todo) ───
+// Persisted follow-ups from capture extraction. UI: home ActCards + /acts.
+// Permission-first: status stays drafted until the user sends/dismisses.
+
+export const acts = sqliteTable(
+  'act',
+  {
+    id: id(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    kind: text('kind', {
+      enum: ['reminder', 'email', 'meeting', 'todo', 'intro'],
+    }).notNull(),
+    status: text('status', {
+      enum: ['drafted', 'snoozed', 'sent', 'dismissed'],
+    })
+      .notNull()
+      .default('drafted'),
+    /** Draft body shown in ActCard / mailto / .ics. */
+    body: text('body').notNull(),
+    /** Optional subject line for email/intro drafts. */
+    subject: text('subject'),
+    /** Natural-language or ISO whenHint from extraction. */
+    whenHint: text('when_hint'),
+    /** Parsed/scheduled fire time (nullable until scheduler WP). */
+    runAt: integer('run_at', { mode: 'timestamp' }),
+    targetEntityId: text('target_entity_id').references(() => entities.id, {
+      onDelete: 'set null',
+    }),
+    /** Secondary person for intros (Priya → Deepak). */
+    secondaryEntityId: text('secondary_entity_id').references(() => entities.id, {
+      onDelete: 'set null',
+    }),
+    /** Owning interaction — writers must verify interaction.userId === act.userId. */
+    sourceInteractionId: text('source_interaction_id').references(() => interactions.id, {
+      onDelete: 'set null',
+    }),
+    /** Agent confidence 0–100 for UI % badge. */
+    confidence: integer('confidence').notNull().default(80),
+    createdAt: ts('created_at'),
+    updatedAt: ts('updated_at'),
+  },
+  (t) => [
+    index('act_user_status_idx').on(t.userId, t.status),
+    index('act_user_created_idx').on(t.userId, t.createdAt),
+    index('act_target_entity_idx').on(t.targetEntityId),
+    index('act_secondary_entity_idx').on(t.secondaryEntityId),
+    index('act_source_interaction_idx').on(t.sourceInteractionId),
+  ],
+);
+
 // ─── Connection requests (opt-in linking, exposed in v0.2+) ────────────
 
 export const connectionRequests = sqliteTable('connection_request', {
@@ -412,3 +464,5 @@ export type NewInteraction = typeof interactions.$inferInsert;
 export type EntityFact = typeof entityFacts.$inferSelect;
 export type EntityNote = typeof entityNotes.$inferSelect;
 export type EntityMerge = typeof entityMerges.$inferSelect;
+export type Act = typeof acts.$inferSelect;
+export type NewAct = typeof acts.$inferInsert;

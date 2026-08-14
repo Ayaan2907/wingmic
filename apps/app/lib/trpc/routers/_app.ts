@@ -5,10 +5,12 @@ import { entityRouter } from './entity';
 import { graphRouter } from './graph';
 import { settingsRouter } from './settings';
 import { onboardingRouter } from './onboarding';
+import { actsRouter } from './acts';
+import { importsRouter } from './imports';
 
 /**
  * Root tRPC router. Capture + recall wedges plus the `ping` / `me`
- * health-checks. Imports + Acts routers will land in v0.2 / v0.3.
+ * health-checks. Imports router lands in v0.2.
  */
 export const appRouter = router({
   ping: publicProcedure.query(() => ({ ok: true, ts: new Date().toISOString() })),
@@ -23,6 +25,8 @@ export const appRouter = router({
   graph: graphRouter,
   settings: settingsRouter,
   onboarding: onboardingRouter,
+  acts: actsRouter,
+  imports: importsRouter,
 });
 
 export type AppRouter = typeof appRouter;

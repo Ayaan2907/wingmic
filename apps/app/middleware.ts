@@ -1,6 +1,16 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PROTECTED_PATHS = ['/capture', '/recall', '/search', '/dashboard', '/graph', '/acts', '/settings', '/onboarding'];
+const PROTECTED_PATHS = [
+  '/capture',
+  '/recall',
+  '/search',
+  '/dashboard',
+  '/graph',
+  '/acts',
+  '/settings',
+  '/onboarding',
+  '/imports',
+];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -33,5 +43,6 @@ export const config = {
     '/acts/:path*',
     '/settings/:path*',
     '/onboarding/:path*',
+    '/imports/:path*',
   ],
 };

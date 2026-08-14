@@ -51,6 +51,22 @@ describe('entity.detail', () => {
         status TEXT DEFAULT 'committed' NOT NULL,
         deleted_at INTEGER
       );
+      CREATE TABLE act (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        status TEXT DEFAULT 'drafted' NOT NULL,
+        body TEXT NOT NULL,
+        subject TEXT,
+        when_hint TEXT,
+        run_at INTEGER,
+        target_entity_id TEXT,
+        secondary_entity_id TEXT,
+        source_interaction_id TEXT,
+        confidence INTEGER DEFAULT 80 NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
     `);
 
     const now = Date.now();

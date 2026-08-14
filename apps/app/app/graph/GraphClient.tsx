@@ -10,7 +10,9 @@
 
 import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { accent, blue, violet } from '@/app/chat/_components/tokens';
+import { trpc } from '@/lib/trpc/client';
 
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), { ssr: false });
 
@@ -38,6 +40,12 @@ const FILTERS: Array<{ kind: NodeKind; label: string }> = [
 ];
 
 export function GraphClient({ data }: { data: GraphData }) {
+  const router = useRouter();
+  const createDraft = trpc.acts.createDraft.useMutation({
+    onSuccess: (res) => {
+      if (res.ok) router.push('/acts');
+    },
+  });
   const [active, setActive] = useState<Set<NodeKind>>(
     () => new Set<NodeKind>(['person', 'company', 'event', 'topic']),
   );
@@ -297,9 +305,46 @@ export function GraphClient({ data }: { data: GraphData }) {
             <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
               <button
                 type="button"
-                disabled
-                title="coming soon · v0.3"
+                disabled={
+                  createDraft.isPending ||
+                  selected.kind === 'topic' ||
+                  (selected.kind !== 'person' &&
+                    selected.kind !== 'company' &&
+                    selected.kind !== 'event')
+                }
+                title={
+                  selected.kind === 'topic'
+                    ? 'topics have no check-in draft'
+                    : `draft from ${selected.kind}`
+                }
                 className="serif"
+                onClick={() => {
+                  if (selected.kind === 'person') {
+                    createDraft.mutate({
+                      kind: 'email',
+                      intent: 'check-in',
+                      targetEntityId: selected.id,
+                    });
+                    return;
+                  }
+                  if (selected.kind === 'company') {
+                    createDraft.mutate({
+                      kind: 'todo',
+                      intent: 'warm-path',
+                      contextName: selected.label,
+                    });
+                    return;
+                  }
+                  if (selected.kind === 'event') {
+                    createDraft.mutate({
+                      kind: 'reminder',
+                      intent: 'reminder',
+                      contextName: selected.label,
+                      seedBody: `send check-ins after ${selected.label}`,
+                    });
+                    return;
+                  }
+                }}
                 style={{
                   flex: 1,
                   padding: 10,
@@ -310,22 +355,47 @@ export function GraphClient({ data }: { data: GraphData }) {
                   fontWeight: 700,
                   border: '1.5px solid #000',
                   boxShadow: '3px 3px 0 #000',
-                  opacity: 0.55,
-                  cursor: 'not-allowed',
+                  opacity: selected.kind === 'topic' || createDraft.isPending ? 0.55 : 1,
+                  cursor:
+                    selected.kind === 'topic' || createDraft.isPending ? 'not-allowed' : 'pointer',
                 }}
               >
-                draft check-in →
+                {createDraft.isPending
+                  ? 'drafting…'
+                  : selected.kind === 'company'
+                    ? 'warm path →'
+                    : selected.kind === 'event'
+                      ? 'check-in →'
+                      : 'draft check-in →'}
               </button>
               <a
-                href={'/' + selected.kind + '/' + selected.id}
+                href={
+                  selected.kind === 'topic'
+                    ? undefined
+                    : '/' + selected.kind + '/' + selected.id
+                }
+                aria-disabled={selected.kind === 'topic' || undefined}
+                onClick={(e) => {
+                  if (selected.kind === 'topic') e.preventDefault();
+                }}
+                title={
+                  selected.kind === 'topic'
+                    ? 'topics have no detail page yet'
+                    : `open ${selected.kind}`
+                }
                 className="mono"
                 style={{
                   padding: '10px 14px',
                   borderRadius: 10,
-                  color: 'rgba(255,255,255,0.55)',
+                  color:
+                    selected.kind === 'topic'
+                      ? 'rgba(255,255,255,0.25)'
+                      : 'rgba(255,255,255,0.55)',
                   fontSize: 12,
                   textDecoration: 'none',
                   border: '1px solid var(--hair)',
+                  cursor: selected.kind === 'topic' ? 'not-allowed' : 'pointer',
+                  pointerEvents: selected.kind === 'topic' ? 'none' : 'auto',
                 }}
               >
                 open

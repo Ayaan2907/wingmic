@@ -5,14 +5,16 @@
 // commit pipeline routes here after the recorder ends so the bubble +
 // extraction land in the thread.
 //
-// Server-prefetches the last 20 committed memos so the thread isn't
-// empty on load. Same Drizzle-direct pattern Home uses (apps/app/app/page.tsx).
+// Server-prefetches the last 20 committed memos with hydrated GraphResult
+// so agent replies survive refresh (Stream A).
 
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
+import { requireOnboarded } from '@/lib/onboarding-guard';
 import { db, schema } from '@wingmic/db';
+import { hydrateThreadItems } from '@/lib/chat/hydrateThread';
 import ChatClient from './ChatClient';
 import type { ChatInitialItem } from './_components/types';
 
@@ -28,6 +30,8 @@ const INITIAL_LIMIT = 20;
 export default async function Page() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) redirect('/signin?next=/chat');
+
+  await requireOnboarded(session.user.id);
 
   const initialThread = await loadInitialThread(session.user.id);
   return <ChatClient userName={session.user.name ?? null} initialThread={initialThread} />;
@@ -51,17 +55,7 @@ async function loadInitialThread(userId: string): Promise<ChatInitialItem[]> {
     .orderBy(desc(schema.interactions.capturedAt))
     .limit(INITIAL_LIMIT);
 
-  // libSQL HTTP driver may return integer instead of Date; defensive cast
-  // matches HomeClient's prefetch path. Reverse to oldest-first so the
-  // thread renders top-down chronologically.
-  const items: ChatInitialItem[] = rows.map((r) => ({
-    id: r.id,
-    transcript: r.transcript ?? '',
-    capturedAt: (r.capturedAt instanceof Date
-      ? r.capturedAt
-      : new Date(r.capturedAt as unknown as number)
-    ).toISOString(),
-  }));
-  items.reverse();
-  return items;
+  // Reverse to oldest-first so the thread renders top-down chronologically.
+  const chronological = [...rows].reverse();
+  return hydrateThreadItems(db, userId, chronological);
 }
