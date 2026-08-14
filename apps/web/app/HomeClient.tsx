@@ -17,7 +17,6 @@ import {
   StatBlock,
   Sticker,
   Step,
-  CodeBlock,
   LiveFeed,
 } from './_components/marketing-ui';
 import HeroStage from './_components/HeroPhone';
@@ -41,7 +40,6 @@ function App() {
 
   const navLinks = [
     { href: '#how', label: 'How' },
-    { href: '#api', label: 'API' },
     { href: '#mcp', label: 'MCP' },
     { href: '#imports', label: 'Imports' },
     { href: '#acts', label: 'Acts' },
@@ -415,108 +413,6 @@ function App() {
         </div>
       </section>
 
-      {/* ─────────────────── API — developer first ─────────────────── */}
-      <section id="api" className="wm-section" style={{ padding: '120px 32px', background: '#06060a', borderTop: `2px solid ${accent}30`, position: 'relative' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 64, flexWrap: 'wrap', gap: 24 }}>
-            <div>
-              <div className="mono" style={{ fontSize: 11, color: third, marginBottom: 16, letterSpacing: 2, textTransform: 'uppercase' }}>
-                ◆ API · SDK · Webhooks
-              </div>
-              <h2 className="wm-section-h2" style={{
-                fontSize: 'clamp(36px, 5vw, 68px)', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 16, maxWidth: 800
-              }}>
-                Your network is <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: third }}>queryable</span>.
-              </h2>
-              <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.5)', maxWidth: 600, lineHeight: 1.55 }}>
-                Every node, edge, and follow-up is exposed through a typed REST API and a TypeScript SDK. Build agents, slack bots, scripts — do whatever you want with it.
-              </p>
-            </div>
-            <a href="#" className="mono" style={{
-              padding: '12px 18px', borderRadius: 8,
-              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.15)',
-              fontSize: 12.5, color: '#fff', display: 'inline-flex', alignItems: 'center', gap: 8
-            }}>
-              docs · OpenAPI 3.1 →
-            </a>
-          </div>
-
-          <div className="wm-stack" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 24 }}>
-            {/* Code */}
-            <CodeBlock
-              accent={accent}
-              filename="agent.ts"
-              lines={[
-              { kind: 'keyword', text: 'import' },
-              { kind: 'comment', text: '  { Wingmic } from "@wingmic/sdk";' },
-              { kind: 'comment', text: '' },
-              { kind: 'comment', text: '// connect once' },
-              { kind: 'text', text: 'const wm = new Wingmic({ apiKey: env.WM_KEY });' },
-              { kind: 'comment', text: '' },
-              { kind: 'comment', text: '// natural language → graph query' },
-              { kind: 'text', text: 'const matches = await wm.query({' },
-              { kind: 'string', text: '  text: "who knows about edge config?",' },
-              { kind: 'text', text: '  limit: 5,' },
-              { kind: 'text', text: '});' },
-              { kind: 'comment', text: '' },
-              { kind: 'comment', text: '// → [{ person, score, lastContext, edges }, …]' },
-              { kind: 'comment', text: '' },
-              { kind: 'comment', text: '// or stream a voice memo straight in' },
-              { kind: 'text', text: 'await wm.capture.stream(audioStream);' }]
-              } />
-            
-
-            {/* Endpoints */}
-            <div style={{
-              borderRadius: 14, padding: 22,
-              background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.08)'
-            }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>REST endpoints</span>
-                <span className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>v1.api.wingmic.xyz</span>
-              </div>
-              {[
-              { m: 'POST', p: '/v1/capture', d: 'Voice or text → entities' },
-              { m: 'GET', p: '/v1/nodes', d: 'List people, orgs, events' },
-              { m: 'GET', p: '/v1/edges', d: 'Filter by node, type, recency' },
-              { m: 'POST', p: '/v1/query', d: 'Natural-language search' },
-              { m: 'GET', p: '/v1/followups', d: 'Pending action items' },
-              { m: 'POST', p: '/v1/webhooks', d: 'Pipe to Slack, Discord, Linear' }].
-              map((e) =>
-              <div key={e.p} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.04)'
-              }}>
-                  <span className="mono" style={{ fontSize: 10, fontWeight: 800, color: e.m === 'POST' ? '#86efac' : third, minWidth: 38, padding: '2px 6px', background: e.m === 'POST' ? 'rgba(134,239,172,0.1)' : 'rgba(125,211,252,0.1)', borderRadius: 4, textAlign: 'center' }}>{e.m}</span>
-                  <span className="mono" style={{ fontSize: 12.5, color: '#fff', fontWeight: 600, flex: 1 }}>{e.p}</span>
-                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{e.d}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Feature row */}
-          <div className="wm-stack-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginTop: 32 }}>
-            {[
-            { k: 'TypeScript SDK', v: 'Fully typed, zero deps' },
-            { k: 'Webhooks', v: 'Real-time, retries built-in' },
-            { k: 'OpenAPI 3.1', v: 'Generate any-language clients' },
-            { k: 'Streaming', v: 'WS + SSE for live captures' }].
-            map((x) =>
-            <div key={x.k} style={{
-              padding: 18, borderRadius: 12,
-              background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)'
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l3.5 3.5L12 4" stroke={accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{x.k}</div>
-                </div>
-                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>{x.v}</div>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
 
       {/* ─────────────────── MCP SHOWCASE ─────────────────── */}
       <section id="mcp" className="wm-section" style={{ padding: '120px 32px', background: '#0a0a0a', borderTop: `2px solid ${accent}30`, position: 'relative', overflow: 'hidden' }}>
@@ -774,7 +670,7 @@ function App() {
                 <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>
                   Wingmic ships an open import spec — write a 30-line adapter and we'll merge it.
                 </span>
-                <a href="#api" style={{ marginLeft: 'auto', fontSize: 13, color: accent, fontWeight: 600 }}>
+                <a href="/contribute" style={{ marginLeft: 'auto', fontSize: 13, color: accent, fontWeight: 600 }}>
                   See spec →
                 </a>
               </div>
