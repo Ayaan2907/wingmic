@@ -536,8 +536,8 @@ export default function HeroPhone({ width = 300 }) {
   const nextTour = () => (tourStep < 2 ? setTourStep((s) => s + 1) : endTour());
 
   return (
-    <div style={{ width: '100%', maxWidth: width }}>
-      <div style={{ position: 'relative', width: '100%', aspectRatio: IPHONE_ASPECT, filter: 'drop-shadow(0 26px 50px rgba(0,0,0,0.55))' }}>
+    <div className="wm-heroPhone" style={{ width: '100%', maxWidth: width }}>
+      <div className="wm-phoneBox" style={{ position: 'relative', width: '100%', aspectRatio: IPHONE_ASPECT, filter: 'drop-shadow(0 26px 50px rgba(0,0,0,0.55))' }}>
         <IphoneFrame style={{ zIndex: 0 }} />
         <div style={{ position: 'absolute', overflow: 'hidden', zIndex: 1, background: '#050509', ...screenBox }}>
           {mode === 'video' ? (

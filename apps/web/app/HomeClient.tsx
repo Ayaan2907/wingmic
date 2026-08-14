@@ -256,8 +256,18 @@ function App() {
           </div>
 
           {/* Right — interactive phone: explainer video + live demo */}
-          <div className="wm-hero-phone-wrap" style={{ display: 'flex', justifyContent: 'center' }}>
+          <div className="wm-hero-phone-wrap" style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>
             <HeroPhone width={420} />
+            {/* mobile-only: scroll cue at the bottom of the first screen */}
+            <a href="#how" className="wm-scroll-cue mono" aria-label="scroll for more" style={{
+              alignItems: 'center', gap: 4, color: 'rgba(255,255,255,0.5)', fontSize: 11,
+              letterSpacing: 1, textTransform: 'uppercase',
+            }}>
+              scroll
+              <span style={{ display: 'inline-flex', animation: 'drift-down 1.6s ease-in-out infinite' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </span>
+            </a>
           </div>
         </div>
       </section>
