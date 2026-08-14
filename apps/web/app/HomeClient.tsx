@@ -20,7 +20,8 @@ import {
   CodeBlock,
   LiveFeed,
 } from './_components/marketing-ui';
-import HeroPhone from './_components/HeroPhone';
+import HeroStage from './_components/HeroPhone';
+import WaitlistForm from './_components/WaitlistForm';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3211';
 
@@ -30,17 +31,9 @@ const TWEAK_DEFAULTS = {
   "thirdColor": "#FF8FAB"
 } ;
 
-// Waitlist endpoint — Formspree. Public by design (endpoint IDs are not secret).
-// If you fork wingmic, swap this for your own Formspree / equivalent endpoint.
-const WAITLIST_ENDPOINT = 'https://formspree.io/f/meenaaqb';
-
 function App() {
   const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
   const [tweaksOpen, setTweaksOpen] = useState(false);
-  const [email, setEmail] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const accent = tweaks.accentColor;
   const second = tweaks.secondColor;
@@ -70,28 +63,6 @@ function App() {
   const applyTweak = (key, val) => {
     setTweaks((t) => ({ ...t, [key]: val }));
     window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [key]: val } }, '*');
-  };
-
-  const submitWaitlist = async () => {
-    if (!email.includes('@')) {
-      setErrorMsg('that does not look like a real email.');
-      return;
-    }
-    setPending(true);
-    setErrorMsg('');
-    try {
-      const res = await fetch(WAITLIST_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ email, source: 'wingmic.xyz/waitlist' })
-      });
-      if (!res.ok) throw new Error(`formspree returned ${res.status}`);
-      setSubmitted(true);
-    } catch (err) {
-      setErrorMsg('could not reach the waitlist. try again in a moment.');
-    } finally {
-      setPending(false);
-    }
   };
 
   return (
@@ -257,7 +228,7 @@ function App() {
 
           {/* Right — interactive phone: explainer video + live demo */}
           <div className="wm-hero-phone-wrap" style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>
-            <HeroPhone width={420} />
+            <HeroStage />
             {/* mobile-only: scroll cue at the bottom of the first screen */}
             <a href="#how" className="wm-scroll-cue mono" aria-label="scroll for more" style={{
               alignItems: 'center', gap: 4, color: 'rgba(255,255,255,0.5)', fontSize: 11,
@@ -1223,53 +1194,7 @@ function App() {
             Get early access to v0.1. We let people in waves of 50. Bring your own Claude key, MIT-licensed when GA.
           </p>
 
-          {!submitted ?
-          <form onSubmit={(e) => {e.preventDefault();submitWaitlist();}} className="wm-waitlist-form" style={{
-            display: 'flex', gap: 8, padding: 6, borderRadius: 12,
-            background: '#0a0a0a', border: `1.5px solid ${accent}50`,
-            maxWidth: 500, margin: '0 auto',
-            boxShadow: `4px 4px 0 ${accent}30`
-          }}>
-              <input
-              type="email" placeholder="you@dev.shop" value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              style={{
-                flex: 1, padding: '14px 16px', background: 'transparent', border: 'none',
-                color: '#fff', fontSize: 15, outline: 'none', fontFamily: 'inherit'
-              }} />
-            
-              <button type="submit" disabled={pending} style={{
-              padding: '14px 26px', borderRadius: 8, background: accent, color: '#000',
-              fontSize: 14, fontWeight: 700, border: 'none',
-              cursor: pending ? 'wait' : 'pointer',
-              opacity: pending ? 0.6 : 1,
-              fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6
-            }}>
-                {pending ? 'Sending…' : 'Request access'}
-                {!pending && <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7h12m0 0L8 2m5 5l-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>}
-              </button>
-            </form> :
-
-          <div style={{
-            padding: 24, borderRadius: 12, maxWidth: 500, margin: '0 auto',
-            background: `${accent}10`, border: `1px solid ${accent}40`
-          }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l3.5 3.5L11 4" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                </div>
-                <div style={{ fontSize: 16, color: '#fff' }}>You're on the list. We'll email you within a week.</div>
-              </div>
-            </div>
-          }
-
-          {errorMsg &&
-          <div className="mono" style={{
-            fontSize: 12, color: '#FF6B6B', marginTop: 14, letterSpacing: 0.5,
-            maxWidth: 500, marginLeft: 'auto', marginRight: 'auto', textAlign: 'center'
-          }}>
-              {errorMsg}
-            </div>}
+          <WaitlistForm accent={accent} source="wingmic.xyz/waitlist" />
 
           <div className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 24, letterSpacing: 1, textTransform: 'uppercase' }}>
             no spam · unsubscribe in one click · MIT-licensed @ GA
