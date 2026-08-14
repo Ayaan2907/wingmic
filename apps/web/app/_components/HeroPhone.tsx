@@ -17,7 +17,6 @@ const THIRD = '#FF8FAB';
 const BLUE = '#7DD3FC';
 const VIOLET = '#A78BFA';
 
-const TOUR_KEY = 'wm.demo.tourSeen';
 
 const STOP = new Set(['I', 'Met', 'The', 'A', 'She', 'He', 'They', 'We', 'My', 'Their']);
 
@@ -285,7 +284,7 @@ function Chip({ c, label, children }) {
   );
 }
 
-function DemoScreen({ micRef, onMicHint }) {
+function DemoScreen({ micRef }) {
   const { asr, ready: asrReady } = useAsrMode();
   const recorder = useDemoRecorder();
   const speech = useSpeechCapture();
@@ -360,7 +359,6 @@ function DemoScreen({ micRef, onMicHint }) {
   };
 
   const start = async () => {
-    onMicHint?.();
     setHint('');
     setData(null);
     setText('');
@@ -497,56 +495,12 @@ function TabIcon({ label }) {
   return <span className="mono" style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</span>;
 }
 
-const TOUR_STEPS = [
-  { t: 'tap the mic', d: 'say who you just met — out loud, like a voice note.' },
-  { t: 'we transcribe it', d: 'your clip ships to wingmic — same pipeline as the app.' },
-  { t: 'card + graph, instantly', d: 'people, companies and follow-ups — nothing saved on the demo.' },
-];
-
-function Tour({ step, onNext, onSkip }) {
-  const s = TOUR_STEPS[step];
-  return (
-    <div style={{ position: 'absolute', inset: 0, zIndex: 4, background: 'rgba(0,0,0,0.55)', borderRadius: 'inherit' }}>
-      <div style={{ position: 'absolute', left: '50%', bottom: 30, transform: 'translateX(-50%)', width: 74, height: 74, borderRadius: '50%', border: `2px solid ${ACCENT}`, animation: 'pulse-d 1.3s ease-in-out infinite', pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', left: 14, right: 14, bottom: 118, padding: 14, borderRadius: 12, background: '#14141b', border: `1px solid ${ACCENT}40`, boxShadow: '0 12px 30px rgba(0,0,0,0.5)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span className="mono" style={{ fontSize: 10, color: ACCENT, letterSpacing: 1 }}>{step + 1} / 3</span>
-          <button type="button" onClick={onSkip} className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', background: 'none', border: 'none', cursor: 'pointer' }}>skip</button>
-        </div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 4 }}>{s.t}</div>
-        <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.6)', lineHeight: 1.45, marginBottom: 12 }}>{s.d}</div>
-        <button type="button" onClick={onNext} style={{ width: '100%', padding: '9px 0', borderRadius: 8, background: ACCENT, color: '#000', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-          {step < 2 ? 'next →' : 'got it'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function HeroPhone({ width = 300 }) {
   const [mode, setMode] = useState('video');
-  const [tourStep, setTourStep] = useState(-1);
   const videoRef = useRef(null);
   const micRef = useRef(null);
 
   useEffect(() => { videoRef.current?.play?.().catch(() => {}); }, [mode]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    let seen = null;
-    try { seen = window.localStorage.getItem(TOUR_KEY); } catch {}
-    if (seen) return;
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-    if (reduce) return;
-    const id = setTimeout(() => { setMode('demo'); setTourStep(0); }, 1400);
-    return () => clearTimeout(id);
-  }, []);
-
-  const endTour = () => {
-    setTourStep(-1);
-    try { window.localStorage.setItem(TOUR_KEY, '1'); } catch {}
-  };
-  const nextTour = () => (tourStep < 2 ? setTourStep((s) => s + 1) : endTour());
 
   return (
     <div className="wm-heroPhone" style={{ width: '100%', maxWidth: width }}>
@@ -562,9 +516,8 @@ export default function HeroPhone({ width = 300 }) {
               style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
             />
           ) : (
-            <DemoScreen micRef={micRef} onMicHint={() => tourStep === 0 && nextTour()} />
+            <DemoScreen micRef={micRef} />
           )}
-          {mode === 'demo' && tourStep >= 0 && <Tour step={tourStep} onNext={nextTour} onSkip={endTour} />}
         </div>
         <div aria-hidden style={{ position: 'absolute', zIndex: 2, top: '3.5%', left: '50%', transform: 'translateX(-50%)', width: '28.5%', height: '4.1%', background: '#08080c', borderRadius: 999, pointerEvents: 'none' }} />
       </div>
