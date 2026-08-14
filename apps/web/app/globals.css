@@ -297,10 +297,11 @@ a {
     max-width: none !important;
   }
   .wm-phoneBox {
-    width: auto !important;
-    height: calc(100vh - 166px);
-    height: calc(100dvh - 166px);
-    max-width: 94vw;
+    /* width-driven so the frame keeps its exact aspect (no cut corners) */
+    width: min(94vw, calc((100vh - 166px) * 0.49)) !important;
+    width: min(94vw, calc((100dvh - 166px) * 0.49)) !important;
+    height: auto !important;
+    max-width: none;
   }
   .wm-scroll-cue {
     display: flex !important;
@@ -412,7 +413,7 @@ a {
     position: relative;
   }
   .wm-macBook {
-    width: min(88vw, calc((100dvh - 200px) * 1.6));
+    width: min(88vw, calc((100dvh - 260px) * 1.6));
   }
   .wm-scroll-cue {
     display: flex !important;

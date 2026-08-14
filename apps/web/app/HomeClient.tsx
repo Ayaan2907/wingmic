@@ -161,32 +161,8 @@ function App() {
           position: 'relative'
         }}>
 
-          {/* Left — type-driven hero */}
+          {/* Left — hero actions (the headline + copy now live inside the frame) */}
           <div>
-            <div className="mono" style={{ fontSize: 11, color: accent, marginBottom: 20, letterSpacing: 2, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, animation: 'pulse-d 1.5s infinite' }} />
-              persistent storage for your social RAM
-            </div>
-
-            <h1 style={{
-              fontSize: 'clamp(48px, 8vw, 110px)',
-              fontWeight: 900, lineHeight: 0.92,
-              letterSpacing: '-0.045em', marginBottom: 32
-            }}>
-              <span style={{ display: 'block' }}>You met</span>
-              <span style={{ display: 'block', position: 'relative' }}>
-                <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: accent }}>twelve</span> people
-              </span>
-              <span style={{ display: 'block' }}>this week.</span>
-              <span style={{ display: 'block', color: 'rgba(255,255,255,0.4)', fontSize: '0.55em', fontWeight: 600, marginTop: 16, fontFamily: "system-ui" }}>
-                <span style={{ color: 'rgb(224, 165, 47)' }}>Wingmic remembers</span> <span className="scribble" style={{ color: 'rgb(255, 255, 255)' }}>everyone</span>.
-              </span>
-            </h1>
-
-            <p style={{ fontSize: 18, color: 'rgba(255,255,255,0.55)', lineHeight: 1.55, maxWidth: 480, marginBottom: 32 }}>
-              Voice-first networking memory graph for developers. You speak after a conversation, Wingmic does the rest, your agent gets the API.
-            </p>
-
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 32 }}>
               <a href="#waitlist" style={{
                 padding: '15px 26px', borderRadius: 10,

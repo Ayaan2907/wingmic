@@ -529,7 +529,7 @@ function BigMic({ recording, disabled, onClick, size = 76 }) {
 }
 
 // ─────────────────── MacBook (landscape) demo layout ───────────────────
-function DesktopDemo() {
+function DesktopDemo({ mode }) {
   const { phase, text, data, hint, asr, asrReady, live, onMicClick, reset } = useDemoCapture();
   const recording = phase === 'recording';
 
@@ -559,8 +559,17 @@ function DesktopDemo() {
           </p>
         </div>
 
-        {/* right — live capture panel */}
+        {/* right — explainer video, or the live capture panel */}
         <div style={{ height: '100%', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, textAlign: 'center' }}>
+          {mode === 'video' ? (
+            <video
+              src="/wingmic-explainer.mp4"
+              autoPlay muted loop playsInline controls preload="auto"
+              aria-label="wingmic product explainer"
+              style={{ maxHeight: '100%', maxWidth: '100%', width: 'auto', borderRadius: 14, objectFit: 'contain', background: '#000' }}
+            />
+          ) : (
+          <>
           {phase === 'idle' && (
             <>
               <div className="serif" style={{ fontStyle: 'italic', fontSize: 'clamp(20px, 2.3vw, 30px)', color: '#fff' }}>who did you just meet?</div>
@@ -603,6 +612,8 @@ function DesktopDemo() {
               <button type="button" onClick={reset} className="mono" style={{ alignSelf: 'center', fontSize: 11, color: 'rgba(255,255,255,0.55)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>↺ try again</button>
             </div>
           )}
+          </>
+          )}
         </div>
       </div>
     </div>
@@ -610,20 +621,36 @@ function DesktopDemo() {
 }
 
 function MacBook() {
+  const [mode, setMode] = useState('demo'); // demo | video
   return (
-    <div className="wm-macBook" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      {/* lid */}
-      <div style={{ width: '100%', position: 'relative', background: '#0b0b0e', border: '2px solid #c8c8cf', borderRadius: '16px 16px 6px 6px', padding: 10, boxShadow: '0 34px 70px rgba(0,0,0,0.55)' }}>
-        <div aria-hidden style={{ position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)', width: 5, height: 5, borderRadius: '50%', background: '#2a2a30' }} />
-        <div style={{ position: 'relative', aspectRatio: '16 / 10', borderRadius: 3, overflow: 'hidden', background: '#08080d' }}>
-          <DesktopDemo />
+    <>
+      <div className="wm-macBook" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        {/* lid */}
+        <div style={{ width: '100%', position: 'relative', background: '#0b0b0e', border: '2px solid #c8c8cf', borderRadius: '16px 16px 6px 6px', padding: 10, boxShadow: '0 34px 70px rgba(0,0,0,0.55)' }}>
+          <div aria-hidden style={{ position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)', width: 5, height: 5, borderRadius: '50%', background: '#2a2a30' }} />
+          <div style={{ position: 'relative', aspectRatio: '16 / 10', borderRadius: 3, overflow: 'hidden', background: '#08080d' }}>
+            <DesktopDemo mode={mode} />
+          </div>
+        </div>
+        {/* base / deck */}
+        <div style={{ position: 'relative', width: '106%', height: 14, background: 'linear-gradient(#cfcfd6, #a6a6af)', borderRadius: '0 0 12px 12px', boxShadow: '0 12px 22px rgba(0,0,0,0.45)' }}>
+          <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '15%', height: 6, borderRadius: '0 0 8px 8px', background: '#95959d' }} />
         </div>
       </div>
-      {/* base / deck */}
-      <div style={{ position: 'relative', width: '106%', height: 14, background: 'linear-gradient(#cfcfd6, #a6a6af)', borderRadius: '0 0 12px 12px', boxShadow: '0 12px 22px rgba(0,0,0,0.45)' }}>
-        <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '15%', height: 6, borderRadius: '0 0 8px 8px', background: '#95959d' }} />
+      {/* mode toggle */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: 18 }}>
+        <div style={{ display: 'inline-flex', padding: 4, borderRadius: 999, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+          {[['video', '▶ explainer'], ['demo', '✨ try it live']].map(([m, label]) => (
+            <button key={m} type="button" onClick={() => setMode(m)} style={{
+              padding: '7px 16px', borderRadius: 999, border: 'none', cursor: 'pointer',
+              fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit',
+              background: mode === m ? ACCENT : 'transparent',
+              color: mode === m ? '#000' : 'rgba(255,255,255,0.6)',
+            }}>{label}</button>
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
