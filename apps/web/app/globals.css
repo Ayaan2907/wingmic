@@ -264,6 +264,10 @@ a {
     font-size: clamp(32px, 8vw, 44px) !important;
     margin-bottom: 32px !important;
   }
+  /* hero headline: keep it inside the viewport on narrow screens */
+  .wm-hero h1 {
+    font-size: clamp(38px, 10vw, 80px) !important;
+  }
 
   /* Hero — mobile: the phone fills the first screen, text lives below the fold */
   .wm-hero {

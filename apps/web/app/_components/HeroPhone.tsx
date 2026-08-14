@@ -408,10 +408,32 @@ function DemoScreen({ micRef, onMicHint }) {
 
       <div style={{ flex: 1, overflow: 'hidden', padding: '4px 14px 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {phase === 'idle' && (
-          <div style={{ margin: 'auto', textAlign: 'center', padding: '0 6px' }}>
-            <div className="serif" style={{ fontStyle: 'italic', fontSize: 22, color: '#fff', lineHeight: 1.15, marginBottom: 10 }}>who did you just meet?</div>
-            <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>tap the mic and say it out loud — like <span style={{ color: 'rgba(255,255,255,0.75)' }}>"met Sarah from Acme, she leads Rust…"</span></div>
-            {hint && <div className="mono" style={{ marginTop: 12, fontSize: 11, color: THIRD }}>{hint}</div>}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textAlign: 'center', padding: '2px 2px 0' }}>
+            {/* value prop */}
+            <div>
+              <div className="serif" style={{ fontStyle: 'italic', fontSize: 21, color: '#fff', lineHeight: 1.15, marginBottom: 8 }}>
+                your social RAM, <span style={{ color: ACCENT }}>on disk</span>.
+              </div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', lineHeight: 1.5, padding: '0 6px' }}>
+                speak after you meet someone — wingmic pulls the people, companies and follow-ups into a graph you can ask about later.
+              </div>
+            </div>
+
+            {/* mini flow */}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
+              {['speak', 'extract', 'recall'].map((s, i) => (
+                <span key={s} className="mono" style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.6)', padding: '4px 9px', borderRadius: 999, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  {i + 1} · {s}
+                </span>
+              ))}
+            </div>
+
+            {/* prompt, sitting just above the mic */}
+            <div style={{ paddingBottom: 2 }}>
+              <div className="serif" style={{ fontStyle: 'italic', fontSize: 18, color: '#fff', lineHeight: 1.15, marginBottom: 6 }}>who did you just meet?</div>
+              <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.45)', lineHeight: 1.45 }}>tap the mic and say it out loud — like <span style={{ color: 'rgba(255,255,255,0.7)' }}>"met Sarah from Acme, she leads Rust…"</span></div>
+              {hint && <div className="mono" style={{ marginTop: 8, fontSize: 11, color: THIRD }}>{hint}</div>}
+            </div>
           </div>
         )}
 
