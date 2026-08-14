@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { IphoneFrame, screenBox, IPHONE_ASPECT } from './Iphone';
+import WaitlistForm from './WaitlistForm';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3211';
 const IS_LOCAL_APP = APP_URL.includes('localhost') || APP_URL.includes('127.0.0.1');
@@ -17,7 +18,6 @@ const THIRD = '#FF8FAB';
 const BLUE = '#7DD3FC';
 const VIOLET = '#A78BFA';
 
-const TOUR_KEY = 'wm.demo.tourSeen';
 
 const STOP = new Set(['I', 'Met', 'The', 'A', 'She', 'He', 'They', 'We', 'My', 'Their']);
 
@@ -285,7 +285,8 @@ function Chip({ c, label, children }) {
   );
 }
 
-function DemoScreen({ micRef, onMicHint }) {
+// Shared capture state machine — one implementation, two layouts (phone + mac).
+function useDemoCapture() {
   const { asr, ready: asrReady } = useAsrMode();
   const recorder = useDemoRecorder();
   const speech = useSpeechCapture();
@@ -360,7 +361,6 @@ function DemoScreen({ micRef, onMicHint }) {
   };
 
   const start = async () => {
-    onMicHint?.();
     setHint('');
     setData(null);
     setText('');
@@ -397,21 +397,41 @@ function DemoScreen({ micRef, onMicHint }) {
     else if (phase === 'idle' || phase === 'result') start();
   };
 
+  return { phase, text, data, hint, asr, asrReady, live: speech.live, onMicClick, reset };
+}
+
+// ─────────────────── phone (portrait) demo layout ───────────────────
+function DemoScreen({ micRef }) {
+  const { phase, text, data, hint, asr, asrReady, live, onMicClick, reset } = useDemoCapture();
+
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: '#08080d' }}>
       <div style={{ padding: '10px 16px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>wingmic</span>
-        <span className="mono" style={{ fontSize: 9.5, color: phase === 'recording' ? '#FF6B6B' : 'rgba(255,255,255,0.35)' }}>
+        <span className="mono" style={{ fontSize: 9.5, color: phase === 'recording' ? '#FF6B6B' : '#86efac', animation: 'pulse-d 1.6s ease-in-out infinite' }}>
           {phase === 'recording' ? '● rec' : '● live'}
         </span>
       </div>
 
       <div style={{ flex: 1, overflow: 'hidden', padding: '4px 14px 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {phase === 'idle' && (
-          <div style={{ margin: 'auto', textAlign: 'center', padding: '0 6px' }}>
-            <div className="serif" style={{ fontStyle: 'italic', fontSize: 22, color: '#fff', lineHeight: 1.15, marginBottom: 10 }}>who did you just meet?</div>
-            <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>tap the mic and say it out loud — like <span style={{ color: 'rgba(255,255,255,0.75)' }}>"met Sarah from Acme, she leads Rust…"</span></div>
-            {hint && <div className="mono" style={{ marginTop: 12, fontSize: 11, color: THIRD }}>{hint}</div>}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14, padding: '4px 10px' }}>
+            {/* hero copy, verbatim + same styling, scaled to the frame */}
+            <h2 style={{ fontSize: 27, fontWeight: 900, lineHeight: 0.92, letterSpacing: '-0.045em', margin: 0 }}>
+              <span style={{ display: 'block' }}>You met</span>
+              <span style={{ display: 'block' }}>
+                <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: ACCENT }}>twelve</span> people
+              </span>
+              <span style={{ display: 'block' }}>this week.</span>
+              <span style={{ display: 'block', color: 'rgba(255,255,255,0.4)', fontSize: '0.55em', fontWeight: 600, marginTop: 10, fontFamily: 'system-ui' }}>
+                <span style={{ color: 'rgb(224, 165, 47)' }}>Wingmic remembers</span> <span className="scribble" style={{ color: 'rgb(255, 255, 255)' }}>everyone</span>.
+              </span>
+            </h2>
+            <p style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5, margin: 0 }}>
+              Voice-first networking memory. Speak for a few seconds after you meet someone — Wingmic remembers the people, companies, and follow-ups for you.
+            </p>
+            <div className="mono" style={{ fontSize: 10.5, color: ACCENT, letterSpacing: 0.5 }}>tap the mic to try it ↓</div>
+            {hint && <div className="mono" style={{ fontSize: 11, color: THIRD }}>{hint}</div>}
           </div>
         )}
 
@@ -425,7 +445,7 @@ function DemoScreen({ micRef, onMicHint }) {
             <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', lineHeight: 1.5, fontFamily: 'Instrument Serif, serif', fontStyle: 'italic', minHeight: 44 }}>
               {phase === 'extracting'
                 ? (text || <span style={{ color: 'rgba(255,255,255,0.35)' }}>sending to wingmic…</span>)
-                : (speech.live || <span style={{ color: 'rgba(255,255,255,0.35)' }}>{asr ? 'speak now — tap mic when done' : 'listening… say who you met'}</span>)}
+                : (live || <span style={{ color: 'rgba(255,255,255,0.35)' }}>{asr ? 'speak now — tap mic when done' : 'listening… say who you met'}</span>)}
               {phase === 'recording' && <span style={{ display: 'inline-block', width: 2, height: 14, background: ACCENT, marginLeft: 2, verticalAlign: 'middle', animation: 'blink 0.7s infinite' }} />}
             </div>
             {phase === 'extracting' && (
@@ -447,6 +467,7 @@ function DemoScreen({ micRef, onMicHint }) {
             <ContactCard data={data} />
             <div className="mono" style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', letterSpacing: 1, textTransform: 'uppercase' }}>graph</div>
             <MiniGraph data={data} />
+            <WaitlistForm compact accent={ACCENT} source="wingmic.xyz/demo" />
             <button type="button" onClick={reset} className="mono" style={{ alignSelf: 'center', fontSize: 11, color: 'rgba(255,255,255,0.55)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>↺ try again</button>
           </div>
         )}
@@ -468,6 +489,7 @@ function DemoScreen({ micRef, onMicHint }) {
             background: phase === 'recording' ? '#FF6B6B' : ACCENT,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: phase === 'recording' ? '0 0 0 6px rgba(255,107,107,0.18)' : `0 6px 18px ${ACCENT}55`,
+            animation: phase === 'idle' ? 'mic-pulse 1.8s ease-in-out infinite' : undefined,
             transition: 'background 0.2s',
             opacity: phase === 'extracting' ? 0.7 : 1,
           }}>
@@ -484,60 +506,180 @@ function TabIcon({ label }) {
   return <span className="mono" style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</span>;
 }
 
-const TOUR_STEPS = [
-  { t: 'tap the mic', d: 'say who you just met — out loud, like a voice note.' },
-  { t: 'we transcribe it', d: 'your clip ships to wingmic — same pipeline as the app.' },
-  { t: 'card + graph, instantly', d: 'people, companies and follow-ups — nothing saved on the demo.' },
-];
-
-function Tour({ step, onNext, onSkip }) {
-  const s = TOUR_STEPS[step];
+// ─────────────────── shared record button ───────────────────
+function BigMic({ recording, disabled, onClick, size = 76 }) {
   return (
-    <div style={{ position: 'absolute', inset: 0, zIndex: 4, background: 'rgba(0,0,0,0.55)', borderRadius: 'inherit' }}>
-      <div style={{ position: 'absolute', left: '50%', bottom: 30, transform: 'translateX(-50%)', width: 74, height: 74, borderRadius: '50%', border: `2px solid ${ACCENT}`, animation: 'pulse-d 1.3s ease-in-out infinite', pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', left: 14, right: 14, bottom: 118, padding: 14, borderRadius: 12, background: '#14141b', border: `1px solid ${ACCENT}40`, boxShadow: '0 12px 30px rgba(0,0,0,0.5)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span className="mono" style={{ fontSize: 10, color: ACCENT, letterSpacing: 1 }}>{step + 1} / 3</span>
-          <button type="button" onClick={onSkip} className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', background: 'none', border: 'none', cursor: 'pointer' }}>skip</button>
+    <button
+      type="button"
+      aria-label={recording ? 'Stop recording' : 'Start recording'}
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        width: size, height: size, borderRadius: '50%', border: 'none', flexShrink: 0,
+        cursor: disabled ? 'wait' : 'pointer',
+        background: recording ? '#FF6B6B' : ACCENT,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: recording ? '0 0 0 8px rgba(255,107,107,0.16)' : `0 8px 26px ${ACCENT}55`,
+        animation: !recording && !disabled ? 'mic-pulse 1.8s ease-in-out infinite' : undefined,
+        transition: 'background 0.2s', opacity: disabled && !recording ? 0.7 : 1,
+      }}>
+      {recording
+        ? <svg width={size * 0.3} height={size * 0.3} viewBox="0 0 24 24" fill="#fff"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+        : <svg width={size * 0.36} height={size * 0.36} viewBox="0 0 24 24" fill="none"><rect x="9" y="2" width="6" height="12" rx="3" fill="#000" /><path d="M5 11a7 7 0 0014 0" stroke="#000" strokeWidth="2" strokeLinecap="round" /><path d="M12 18v3" stroke="#000" strokeWidth="2" strokeLinecap="round" /></svg>}
+    </button>
+  );
+}
+
+// ─────────────────── MacBook (landscape) demo layout ───────────────────
+function DesktopDemo({ mode }) {
+  const { phase, text, data, hint, asr, asrReady, live, onMicClick, reset } = useDemoCapture();
+  const recording = phase === 'recording';
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: '#08080d' }}>
+      {/* window bar */}
+      <div style={{ height: 34, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        {['#ff5f56', '#ffbd2e', '#27c93f'].map((c) => <span key={c} style={{ width: 11, height: 11, borderRadius: '50%', background: c }} />)}
+        <span className="mono" style={{ marginLeft: 10, fontSize: 12.5, fontWeight: 700, color: ACCENT }}>wingmic</span>
+        <span className="mono" style={{ marginLeft: 'auto', fontSize: 11, color: recording ? '#FF6B6B' : '#86efac', animation: 'pulse-d 1.6s ease-in-out infinite' }}>{recording ? '● rec' : '● live'}</span>
+      </div>
+
+      {/* body: hero copy | live panel — bounded row so the video can't grow it */}
+      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1.05fr 0.95fr', gridTemplateRows: 'minmax(0, 1fr)', gap: 'clamp(24px, 4%, 60px)', alignItems: 'center', padding: 'clamp(22px, 4.5%, 56px)', overflow: 'hidden' }}>
+        {/* left — verbatim hero copy */}
+        <div>
+          <h2 style={{ fontSize: 'clamp(34px, 4.6vw, 64px)', fontWeight: 900, lineHeight: 0.92, letterSpacing: '-0.045em', margin: 0 }}>
+            <span style={{ display: 'block' }}>You met</span>
+            <span style={{ display: 'block' }}><span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: ACCENT }}>twelve</span> people</span>
+            <span style={{ display: 'block' }}>this week.</span>
+            <span style={{ display: 'block', color: 'rgba(255,255,255,0.4)', fontSize: '0.5em', fontWeight: 600, marginTop: 14, fontFamily: 'system-ui' }}>
+              <span style={{ color: 'rgb(224, 165, 47)' }}>Wingmic remembers</span> <span className="scribble" style={{ color: 'rgb(255, 255, 255)' }}>everyone</span>.
+            </span>
+          </h2>
+          <p style={{ fontSize: 'clamp(13px, 1.15vw, 16px)', color: 'rgba(255,255,255,0.55)', lineHeight: 1.55, margin: '18px 0 0', maxWidth: 440 }}>
+            Voice-first networking memory. Speak for a few seconds after you meet someone — Wingmic remembers the people, companies, and follow-ups for you.
+          </p>
         </div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 4 }}>{s.t}</div>
-        <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.6)', lineHeight: 1.45, marginBottom: 12 }}>{s.d}</div>
-        <button type="button" onClick={onNext} style={{ width: '100%', padding: '9px 0', borderRadius: 8, background: ACCENT, color: '#000', border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-          {step < 2 ? 'next →' : 'got it'}
-        </button>
+
+        {/* right — explainer video, or the live capture panel */}
+        <div style={{ height: '100%', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, textAlign: 'center' }}>
+          {mode === 'video' ? (
+            <video
+              src="/wingmic-explainer.mp4"
+              autoPlay muted loop playsInline controls preload="auto"
+              aria-label="wingmic product explainer"
+              style={{ maxHeight: '100%', maxWidth: '100%', width: 'auto', borderRadius: 14, objectFit: 'contain', background: '#000' }}
+            />
+          ) : (
+          <>
+          {phase === 'idle' && (
+            <>
+              <div className="serif" style={{ fontStyle: 'italic', fontSize: 'clamp(20px, 2.3vw, 30px)', color: '#fff' }}>who did you just meet?</div>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', maxWidth: 320, lineHeight: 1.5 }}>tap the mic and say it out loud — like <span style={{ color: 'rgba(255,255,255,0.75)' }}>"met Sarah from Acme, she leads Rust…"</span></div>
+              <BigMic recording={false} disabled={!asrReady} onClick={onMicClick} />
+              {hint && <div className="mono" style={{ fontSize: 11.5, color: THIRD }}>{hint}</div>}
+              <div style={{ display: 'flex', gap: 8 }}>
+                {['speak', 'extract', 'recall'].map((s, i) => (
+                  <span key={s} className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', padding: '4px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>{i + 1} · {s}</span>
+                ))}
+              </div>
+            </>
+          )}
+
+          {(phase === 'recording' || phase === 'extracting') && (
+            <>
+              {recording && <Bars active />}
+              <div className="mono" style={{ fontSize: 10, color: ACCENT, letterSpacing: 1, textTransform: 'uppercase' }}>{phase === 'extracting' ? 'transcribing' : 'recording'}</div>
+              <div style={{ fontSize: 17, color: 'rgba(255,255,255,0.9)', lineHeight: 1.5, fontFamily: 'Instrument Serif, serif', fontStyle: 'italic', maxWidth: 360, minHeight: 52 }}>
+                {phase === 'extracting'
+                  ? (text || <span style={{ color: 'rgba(255,255,255,0.35)' }}>sending to wingmic…</span>)
+                  : (live || <span style={{ color: 'rgba(255,255,255,0.35)' }}>{asr ? 'speak now — tap the mic when done' : 'listening… say who you met'}</span>)}
+              </div>
+              {recording && <BigMic recording onClick={onMicClick} />}
+              {phase === 'extracting' && (
+                <div className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: ACCENT, animation: 'pulse-d 0.9s infinite' }} />building your graph…
+                </div>
+              )}
+            </>
+          )}
+
+          {phase === 'result' && data && (
+            <div style={{ width: '100%', maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 10, textAlign: 'left', overflow: 'auto' }}>
+              {text && <div className="mono" style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.45)', lineHeight: 1.45 }}>"{text.length > 130 ? `${text.slice(0, 127)}…` : text}"</div>}
+              <ContactCard data={data} />
+              <div className="mono" style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', letterSpacing: 1, textTransform: 'uppercase' }}>graph</div>
+              <MiniGraph data={data} />
+              <WaitlistForm compact accent={ACCENT} source="wingmic.xyz/demo" />
+              <button type="button" onClick={reset} className="mono" style={{ alignSelf: 'center', fontSize: 11, color: 'rgba(255,255,255,0.55)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>↺ try again</button>
+            </div>
+          )}
+          </>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-export default function HeroPhone({ width = 300 }) {
+function MacBook() {
+  const [mode, setMode] = useState('demo'); // demo | video
+  return (
+    <>
+      <div className="wm-macBook" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        {/* lid */}
+        <div style={{ width: '100%', position: 'relative', background: '#0b0b0e', border: '2px solid #c8c8cf', borderRadius: '16px 16px 6px 6px', padding: 10, boxShadow: '0 34px 70px rgba(0,0,0,0.55)' }}>
+          <div aria-hidden style={{ position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)', width: 5, height: 5, borderRadius: '50%', background: '#2a2a30' }} />
+          <div style={{ position: 'relative', aspectRatio: '16 / 10', borderRadius: 3, overflow: 'hidden', background: '#08080d' }}>
+            <DesktopDemo mode={mode} />
+          </div>
+        </div>
+        {/* base / deck */}
+        <div style={{ position: 'relative', width: '106%', height: 14, background: 'linear-gradient(#cfcfd6, #a6a6af)', borderRadius: '0 0 12px 12px', boxShadow: '0 12px 22px rgba(0,0,0,0.45)' }}>
+          <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '15%', height: 6, borderRadius: '0 0 8px 8px', background: '#95959d' }} />
+        </div>
+      </div>
+      {/* mode toggle */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: 18 }}>
+        <div style={{ display: 'inline-flex', padding: 4, borderRadius: 999, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+          {[['video', '▶ explainer'], ['demo', '✨ try it live']].map(([m, label]) => (
+            <button key={m} type="button" onClick={() => setMode(m)} style={{
+              padding: '7px 16px', borderRadius: 999, border: 'none', cursor: 'pointer',
+              fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit',
+              background: mode === m ? ACCENT : 'transparent',
+              color: mode === m ? '#000' : 'rgba(255,255,255,0.6)',
+            }}>{label}</button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─────────────────── responsive stage: iPhone on mobile, MacBook on desktop ───────────────────
+export default function HeroStage() {
+  const [desktop, setDesktop] = useState(null);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 769px)');
+    const update = () => setDesktop(mq.matches);
+    update();
+    mq.addEventListener?.('change', update);
+    return () => mq.removeEventListener?.('change', update);
+  }, []);
+  if (desktop === null) return <div className="wm-stage-skeleton" aria-hidden />;
+  return desktop ? <MacBook /> : <HeroPhone width={420} />;
+}
+
+function HeroPhone({ width = 300 }) {
   const [mode, setMode] = useState('video');
-  const [tourStep, setTourStep] = useState(-1);
   const videoRef = useRef(null);
   const micRef = useRef(null);
 
   useEffect(() => { videoRef.current?.play?.().catch(() => {}); }, [mode]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    let seen = null;
-    try { seen = window.localStorage.getItem(TOUR_KEY); } catch {}
-    if (seen) return;
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-    if (reduce) return;
-    const id = setTimeout(() => { setMode('demo'); setTourStep(0); }, 1400);
-    return () => clearTimeout(id);
-  }, []);
-
-  const endTour = () => {
-    setTourStep(-1);
-    try { window.localStorage.setItem(TOUR_KEY, '1'); } catch {}
-  };
-  const nextTour = () => (tourStep < 2 ? setTourStep((s) => s + 1) : endTour());
-
   return (
-    <div style={{ width: '100%', maxWidth: width }}>
-      <div style={{ position: 'relative', width: '100%', aspectRatio: IPHONE_ASPECT, filter: 'drop-shadow(0 26px 50px rgba(0,0,0,0.55))' }}>
+    <div className="wm-heroPhone" style={{ width: '100%', maxWidth: width }}>
+      <div className="wm-phoneBox" style={{ position: 'relative', width: '100%', aspectRatio: IPHONE_ASPECT, filter: 'drop-shadow(0 26px 50px rgba(0,0,0,0.55))' }}>
         <IphoneFrame style={{ zIndex: 0 }} />
         <div style={{ position: 'absolute', overflow: 'hidden', zIndex: 1, background: '#050509', ...screenBox }}>
           {mode === 'video' ? (
@@ -549,9 +691,8 @@ export default function HeroPhone({ width = 300 }) {
               style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
             />
           ) : (
-            <DemoScreen micRef={micRef} onMicHint={() => tourStep === 0 && nextTour()} />
+            <DemoScreen micRef={micRef} />
           )}
-          {mode === 'demo' && tourStep >= 0 && <Tour step={tourStep} onNext={nextTour} onSkip={endTour} />}
         </div>
         <div aria-hidden style={{ position: 'absolute', zIndex: 2, top: '3.5%', left: '50%', transform: 'translateX(-50%)', width: '28.5%', height: '4.1%', background: '#08080c', borderRadius: 999, pointerEvents: 'none' }} />
       </div>

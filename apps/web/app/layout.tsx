@@ -33,29 +33,29 @@ export const metadata: Metadata = {
   description:
     'Voice-first networking memory. Speak after you meet someone. Wingmic extracts the people, companies, events, and follow-ups, and builds a graph you can actually query.',
   keywords: [
-    'networking tool for developers',
+    'networking memory app',
     'voice-first CRM',
     'networking memory graph',
     'AI networking assistant',
-    'CRM alternative for developers',
+    'personal CRM',
     'conference networking app',
     'voice memo CRM',
-    'MCP server networking',
-    'relationship graph API',
+    'remember who you meet',
+    'relationship manager',
     'open source CRM',
-    'developer networking tool',
+    'networking assistant',
     'remember people you meet',
   ],
   authors: [{ name: 'wingmic contributors' }],
   creator: 'wingmic',
   publisher: 'wingmic',
-  category: 'developer tools',
+  category: 'productivity',
   openGraph: {
     type: 'website',
     siteName: 'wingmic',
-    title: 'wingmic — voice-first networking memory for developers',
+    title: 'wingmic — voice-first networking memory',
     description:
-      'Stop losing connections. Speak after you meet someone — Wingmic extracts people, companies, events, and follow-ups into a queryable knowledge graph. REST API, MCP server, MIT-licensed.',
+      'Stop losing connections. Speak after you meet someone — Wingmic remembers the people, companies, events, and follow-ups, so you can recall anyone later. Open beta, MIT-licensed.',
     url: 'https://wingmic.xyz',
     locale: 'en_US',
     images: [
@@ -73,7 +73,7 @@ export const metadata: Metadata = {
     creator: '@ayaan2907',
     title: 'wingmic — your social RAM, on disk',
     description:
-      'Voice-first networking memory for developers. Speak. Extract. Query. Open beta.',
+      'Voice-first networking memory. Speak. Extract. Recall. Open beta.',
     images: ['/og-image.png'],
   },
   alternates: {
