@@ -3,26 +3,22 @@
 'use client';
 
 // Interactive hero demo inside the iPhone frame.
-//   video  → the explainer plays
-//   demo   → tab-bar + mic; real browser speech-to-text (Web Speech API,
-//            scripted fallback where unsupported) → client-side heuristic
-//            extraction → contact card + mini graph.
-// The real capture pipeline lives in apps/app (server + keys); on the static
-// landing this is a faithful demo replica built from the same design language.
+//   video → explainer plays
+//   demo  → mic → POST /api/demo/capture (audio, or transcript fallback)
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { IphoneFrame, screenBox, IPHONE_ASPECT } from './Iphone';
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3211';
+const IS_LOCAL_APP = APP_URL.includes('localhost') || APP_URL.includes('127.0.0.1');
 const ACCENT = '#FFC452';
 const SECOND = '#86efac';
 const THIRD = '#FF8FAB';
 const BLUE = '#7DD3FC';
 const VIOLET = '#A78BFA';
 
-const SAMPLE = 'Met Sarah Chen from Acme, she leads their Rust team. I should send her my repo tomorrow.';
 const TOUR_KEY = 'wm.demo.tourSeen';
 
-// ─────────────────── heuristic entity extraction (client-side) ───────────────────
 const STOP = new Set(['I', 'Met', 'The', 'A', 'She', 'He', 'They', 'We', 'My', 'Their']);
 
 function parseEntities(raw) {
@@ -34,7 +30,6 @@ function parseEntities(raw) {
     (text.match(/\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b/) || [])[1] ||
     (text.match(/\b([A-Z][a-z]{2,})\b/g) || []).find((w) => !STOP.has(w)) ||
     'New contact';
-  // strip a leading trigger word the fallback may have grabbed (e.g. "Met Sarah")
   const parts = name.split(/\s+/);
   if (parts.length > 1 && STOP.has(parts[0])) name = parts.slice(1).join(' ');
 
@@ -51,84 +46,160 @@ function parseEntities(raw) {
   return { name, company, topic, followup };
 }
 
-// ─────────────────── Web Speech hook ───────────────────
-// Keeps listening until the user taps stop: browsers (Chrome) auto-end
-// recognition on a pause, so we restart on `onend` instead of treating it as
-// finished. The scripted fallback fires ONLY on genuine failures — no Web
-// Speech at all, or a permission/device error — never on normal speech.
-function useSpeech() {
-  const recRef = useRef(null);
-  const stoppedRef = useRef(true);
-  const onFailRef = useRef(null);
-  const finalRef = useRef('');
-  const [supported, setSupported] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [transcript, setTranscript] = useState('');
-
-  useEffect(() => {
-    const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
-    setSupported(!!SR);
-    return () => { stoppedRef.current = true; try { recRef.current?.abort?.(); } catch {} };
-  }, []);
-
-  const build = () => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const rec = new SR();
-    rec.lang = 'en-US';
-    rec.interimResults = true;
-    rec.continuous = true;
-    rec.onresult = (e) => {
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const chunk = e.results[i][0].transcript;
-        if (e.results[i].isFinal) finalRef.current += chunk + ' ';
-        else interim += chunk;
-      }
-      setTranscript((finalRef.current + interim).trim());
-    };
-    rec.onerror = (ev) => {
-      // Fatal (no mic / denied) → fall back. Transient (no-speech/aborted/network) → let onend restart.
-      if (ev?.error === 'not-allowed' || ev?.error === 'service-not-allowed' || ev?.error === 'audio-capture') {
-        stoppedRef.current = true;
-        setListening(false);
-        onFailRef.current?.();
-      }
-    };
-    rec.onend = () => {
-      if (stoppedRef.current) { setListening(false); return; }
-      // user hasn't stopped → keep listening
-      setTimeout(() => { if (!stoppedRef.current) { try { recRef.current?.start(); } catch {} } }, 120);
-    };
-    return rec;
+function fromExtraction(extracted, transcript) {
+  const person = extracted?.persons?.[0];
+  const fallback = parseEntities(transcript);
+  return {
+    name: person?.name || fallback?.name || 'New contact',
+    company: person?.companyHint || extracted?.companies?.[0]?.name || fallback?.company || '',
+    topic: person?.topics?.[0] || extracted?.topics?.[0] || fallback?.topic || '',
+    followup: extracted?.actions?.[0]?.body || fallback?.followup || '',
   };
-
-  const start = (onFail) => {
-    const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
-    if (!SR) return false;
-    onFailRef.current = onFail;
-    stoppedRef.current = false;
-    finalRef.current = '';
-    setTranscript('');
-    try {
-      const rec = build();
-      recRef.current = rec;
-      rec.start();
-      setListening(true);
-      return true;
-    } catch { stoppedRef.current = true; return false; }
-  };
-
-  const stop = () => {
-    stoppedRef.current = true;
-    try { recRef.current?.stop(); } catch {}
-    setListening(false);
-  };
-  const reset = () => { finalRef.current = ''; setTranscript(''); };
-
-  return { supported, listening, transcript, start, stop, reset };
 }
 
-// ─────────────────── voice bars ───────────────────
+function pickMimeType() {
+  if (typeof MediaRecorder === 'undefined') return undefined;
+  for (const c of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']) {
+    if (MediaRecorder.isTypeSupported(c)) return c;
+  }
+  return undefined;
+}
+
+/** Browser STT when server-side ASR is unavailable. Do not run alongside MediaRecorder — mic conflict. */
+function useSpeechCapture() {
+  const recRef = useRef(null);
+  const stoppedRef = useRef(true);
+  const textRef = useRef('');
+  const [live, setLive] = useState('');
+
+  useEffect(() => () => {
+    stoppedRef.current = true;
+    try { recRef.current?.abort?.(); } catch {}
+  }, []);
+
+  const start = useCallback(() => {
+    const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
+    if (!SR) return false;
+    stoppedRef.current = false;
+    textRef.current = '';
+    setLive('');
+
+    const listen = () => {
+      if (stoppedRef.current) return;
+      const rec = new SR();
+      rec.lang = 'en-US';
+      rec.interimResults = true;
+      rec.continuous = true;
+      rec.onresult = (e) => {
+        let chunk = '';
+        for (let i = 0; i < e.results.length; i++) chunk += e.results[i][0].transcript;
+        textRef.current = chunk.trim();
+        setLive(textRef.current);
+      };
+      rec.onerror = (ev) => {
+        if (ev?.error === 'not-allowed' || ev?.error === 'audio-capture') stoppedRef.current = true;
+      };
+      rec.onend = () => {
+        if (!stoppedRef.current) setTimeout(listen, 120);
+      };
+      recRef.current = rec;
+      try { rec.start(); } catch {}
+    };
+    listen();
+    return true;
+  }, []);
+
+  const stop = useCallback(() => {
+    stoppedRef.current = true;
+    try { recRef.current?.stop(); } catch {}
+    return textRef.current.trim();
+  }, []);
+
+  return { live, start, stop };
+}
+
+function useAsrMode() {
+  const [ready, setReady] = useState(false);
+  const [asr, setAsr] = useState(false);
+  useEffect(() => {
+    fetch(`${APP_URL}/api/demo/status`)
+      .then((r) => r.json())
+      .then((d) => setAsr(!!d.asr))
+      .catch(() => setAsr(false))
+      .finally(() => setReady(true));
+  }, []);
+  return { asr, ready };
+}
+
+async function postDemo({ blob, transcript } = {}) {
+  const form = new FormData();
+  if (blob) form.append('audio', blob, 'demo.webm');
+  if (transcript) form.append('transcript', transcript);
+  const res = await fetch(`${APP_URL}/api/demo/capture`, { method: 'POST', body: form });
+  const body = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, body };
+}
+
+function useDemoRecorder() {
+  const streamRef = useRef(null);
+  const recorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const [recording, setRecording] = useState(false);
+
+  const cleanup = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    recorderRef.current = null;
+    chunksRef.current = [];
+  }, []);
+
+  useEffect(() => () => cleanup(), [cleanup]);
+
+  const start = useCallback(async () => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      throw new Error('mic unavailable in this browser.');
+    }
+    cleanup();
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    streamRef.current = stream;
+    const mimeType = pickMimeType();
+    const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    recorderRef.current = rec;
+    rec.ondataavailable = (e) => {
+      if (e.data?.size) chunksRef.current.push(e.data);
+    };
+    rec.start(250);
+    setRecording(true);
+  }, [cleanup]);
+
+  const stop = useCallback((): Promise<Blob | null> => {
+    return new Promise((resolve) => {
+      const rec = recorderRef.current;
+      if (!rec || rec.state === 'inactive') {
+        cleanup();
+        setRecording(false);
+        resolve(null);
+        return;
+      }
+      rec.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' });
+        cleanup();
+        setRecording(false);
+        resolve(blob.size > 0 ? blob : null);
+      };
+      try {
+        rec.stop();
+      } catch {
+        cleanup();
+        setRecording(false);
+        resolve(null);
+      }
+    });
+  }, [cleanup]);
+
+  return { recording, start, stop };
+}
+
 function Bars({ active }) {
   const [t, setT] = useState(0);
   useEffect(() => {
@@ -146,7 +217,6 @@ function Bars({ active }) {
   );
 }
 
-// ─────────────────── mini relationship graph ───────────────────
 function MiniGraph({ data }) {
   const nodes = [
     { id: 'you', label: 'You', x: 50, y: 30, c: '#fff' },
@@ -180,7 +250,6 @@ function MiniGraph({ data }) {
   );
 }
 
-// ─────────────────── contact card ───────────────────
 function ContactCard({ data }) {
   const initial = (data.name || '?').trim()[0]?.toUpperCase() || '?';
   return (
@@ -206,6 +275,7 @@ function ContactCard({ data }) {
     </div>
   );
 }
+
 function Chip({ c, label, children }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 999, background: `${c}18`, border: `1px solid ${c}40` }}>
@@ -215,70 +285,120 @@ function Chip({ c, label, children }) {
   );
 }
 
-// ─────────────────── the in-phone demo app ───────────────────
 function DemoScreen({ micRef, onMicHint }) {
-  const speech = useSpeech();
-  const [phase, setPhase] = useState('idle'); // idle | recording | extracting | result
+  const { asr, ready: asrReady } = useAsrMode();
+  const recorder = useDemoRecorder();
+  const speech = useSpeechCapture();
+  const [phase, setPhase] = useState('idle');
   const [text, setText] = useState('');
   const [data, setData] = useState(null);
   const [hint, setHint] = useState('');
-  const scriptTimer = useRef(null);
   const maxTimer = useRef(null);
-  const scriptedRef = useRef(false);
+  const busyRef = useRef(false);
+  const startedAtRef = useRef(0);
 
-  useEffect(() => () => { clearTimeout(scriptTimer.current); clearTimeout(maxTimer.current); }, []);
-  // mirror the live transcript into the recording view (real speech path)
-  useEffect(() => { if (speech.listening && !scriptedRef.current) setText(speech.transcript); }, [speech.transcript, speech.listening]);
+  useEffect(() => () => clearTimeout(maxTimer.current), []);
 
-  const extract = (src) => {
+  const showResult = (result, transcript) => {
+    setText(result?.transcript ?? transcript);
+    setData(fromExtraction(result?.extracted, result?.transcript ?? transcript));
+    setPhase('result');
+  };
+
+  const finish = async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
     clearTimeout(maxTimer.current);
     setPhase('extracting');
-    setTimeout(() => { setData(parseEntities(src) || parseEntities(SAMPLE)); setPhase('result'); }, 850);
+    try {
+      if (asr) {
+        const elapsed = performance.now() - startedAtRef.current;
+        if (elapsed < 1200) {
+          await recorder.stop();
+          setPhase('idle');
+          setHint('speak for at least 2 seconds, then tap stop');
+          return;
+        }
+        const blob = await recorder.stop();
+        if (!blob) {
+          setPhase('idle');
+          setHint("didn't catch that — tap and try again");
+          return;
+        }
+        const first = await postDemo({ blob });
+        if (first.ok) {
+          showResult(first.body, first.body.transcript);
+          return;
+        }
+        setPhase('idle');
+        setHint(first.body?.error?.message ?? "couldn't run the demo — try again");
+        return;
+      }
+
+      const transcript = speech.stop();
+      if (!transcript) {
+        setPhase('idle');
+        setHint("didn't catch speech — try Chrome and speak clearly");
+        return;
+      }
+      const second = await postDemo({ transcript });
+      if (second.ok) {
+        showResult(second.body, transcript);
+        return;
+      }
+      setText(transcript);
+      setData(fromExtraction(null, transcript));
+      setPhase('result');
+    } catch {
+      setPhase('idle');
+      setHint(IS_LOCAL_APP
+        ? `couldn't reach demo server — is ${APP_URL} running?`
+        : 'demo unavailable — try again in a moment');
+    } finally {
+      busyRef.current = false;
+    }
   };
 
-  // User tapped stop — use whatever real speech we captured.
-  const finish = () => {
-    clearTimeout(maxTimer.current);
-    speech.stop();
-    const src = (speech.transcript || text || '').trim();
-    if (!src) { setPhase('idle'); setHint("didn't catch that — tap and try again"); return; }
-    extract(src);
-  };
-
-  // Fallback ONLY: no Web Speech, or the user denied mic access. Types the sample.
-  const runScript = () => {
-    if (scriptedRef.current) return;
-    scriptedRef.current = true;
-    let i = 0;
-    const tick = () => {
-      i += 2;
-      setText(SAMPLE.slice(0, i));
-      if (i < SAMPLE.length) scriptTimer.current = setTimeout(tick, 45);
-      else extract(SAMPLE);
-    };
-    tick();
-  };
-
-  const start = () => {
+  const start = async () => {
     onMicHint?.();
-    scriptedRef.current = false;
     setHint('');
     setData(null);
     setText('');
-    setPhase('recording');
-    // safety: auto-finish after 30s so it never runs forever
-    maxTimer.current = setTimeout(() => finish(), 30000);
-    if (!speech.start(() => runScript())) runScript();
+    startedAtRef.current = performance.now();
+    try {
+      if (asr) {
+        await recorder.start();
+      } else if (!speech.start()) {
+        setPhase('idle');
+        setHint('browser speech unavailable — try Chrome');
+        return;
+      }
+      setPhase('recording');
+      maxTimer.current = setTimeout(() => finish(), 30000);
+    } catch (err) {
+      setPhase('idle');
+      setHint(err instanceof Error && err.name === 'NotAllowedError'
+        ? 'mic blocked — allow access in your browser settings'
+        : 'mic unavailable — try Chrome or Safari');
+    }
   };
 
   const reset = () => {
-    clearTimeout(scriptTimer.current); clearTimeout(maxTimer.current);
-    speech.reset(); scriptedRef.current = false; setText(''); setData(null); setHint(''); setPhase('idle');
+    clearTimeout(maxTimer.current);
+    setText('');
+    setData(null);
+    setHint('');
+    setPhase('idle');
+  };
+
+  const onMicClick = () => {
+    if (!asrReady || phase === 'extracting') return;
+    if (phase === 'recording') finish();
+    else if (phase === 'idle' || phase === 'result') start();
   };
 
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: '#08080d' }}>
-      {/* app header */}
       <div style={{ padding: '10px 16px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: ACCENT }}>wingmic</span>
         <span className="mono" style={{ fontSize: 9.5, color: phase === 'recording' ? '#FF6B6B' : 'rgba(255,255,255,0.35)' }}>
@@ -286,7 +406,6 @@ function DemoScreen({ micRef, onMicHint }) {
         </span>
       </div>
 
-      {/* canvas */}
       <div style={{ flex: 1, overflow: 'hidden', padding: '4px 14px 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {phase === 'idle' && (
           <div style={{ margin: 'auto', textAlign: 'center', padding: '0 6px' }}>
@@ -300,11 +419,13 @@ function DemoScreen({ micRef, onMicHint }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 6 }}>
             {phase === 'recording' && <div style={{ display: 'flex', justifyContent: 'center' }}><Bars active /></div>}
             <div className="mono" style={{ fontSize: 9, color: ACCENT, letterSpacing: 1, textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
-              <span>transcript</span>
+              <span>{phase === 'extracting' ? 'transcribing' : 'recording'}</span>
               {phase === 'recording' && <span style={{ color: 'rgba(255,255,255,0.4)' }}>tap mic to stop ■</span>}
             </div>
             <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.9)', lineHeight: 1.5, fontFamily: 'Instrument Serif, serif', fontStyle: 'italic', minHeight: 44 }}>
-              {text || <span style={{ color: 'rgba(255,255,255,0.35)' }}>listening…</span>}
+              {phase === 'extracting'
+                ? (text || <span style={{ color: 'rgba(255,255,255,0.35)' }}>sending to wingmic…</span>)
+                : (speech.live || <span style={{ color: 'rgba(255,255,255,0.35)' }}>{asr ? 'speak now — tap mic when done' : 'listening… say who you met'}</span>)}
               {phase === 'recording' && <span style={{ display: 'inline-block', width: 2, height: 14, background: ACCENT, marginLeft: 2, verticalAlign: 'middle', animation: 'blink 0.7s infinite' }} />}
             </div>
             {phase === 'extracting' && (
@@ -318,6 +439,11 @@ function DemoScreen({ micRef, onMicHint }) {
 
         {phase === 'result' && data && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflow: 'auto' }}>
+            {text && (
+              <div className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', lineHeight: 1.45, fontStyle: 'normal' }}>
+                "{text.length > 120 ? `${text.slice(0, 117)}…` : text}"
+              </div>
+            )}
             <ContactCard data={data} />
             <div className="mono" style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', letterSpacing: 1, textTransform: 'uppercase' }}>graph</div>
             <MiniGraph data={data} />
@@ -326,24 +452,24 @@ function DemoScreen({ micRef, onMicHint }) {
         )}
       </div>
 
-      {/* tab bar with mic */}
       <div style={{ flexShrink: 0, height: 66, borderTop: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '0 24px', position: 'relative' }}>
         <TabIcon label="home" />
         <div style={{ width: 56 }} />
         <TabIcon label="recall" />
-        {/* center mic */}
         <button
           ref={micRef}
           type="button"
           aria-label={phase === 'recording' ? 'Stop recording' : 'Start recording'}
-          onClick={() => (phase === 'recording' ? finish() : start())}
+          onClick={onMicClick}
+          disabled={!asrReady || phase === 'extracting'}
           style={{
             position: 'absolute', left: '50%', top: -18, transform: 'translateX(-50%)',
-            width: 58, height: 58, borderRadius: '50%', border: '3px solid #08080d', cursor: 'pointer',
+            width: 58, height: 58, borderRadius: '50%', border: '3px solid #08080d', cursor: !asrReady || phase === 'extracting' ? 'wait' : 'pointer',
             background: phase === 'recording' ? '#FF6B6B' : ACCENT,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: phase === 'recording' ? '0 0 0 6px rgba(255,107,107,0.18)' : `0 6px 18px ${ACCENT}55`,
             transition: 'background 0.2s',
+            opacity: phase === 'extracting' ? 0.7 : 1,
           }}>
           {phase === 'recording'
             ? <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
@@ -353,24 +479,22 @@ function DemoScreen({ micRef, onMicHint }) {
     </div>
   );
 }
+
 function TabIcon({ label }) {
   return <span className="mono" style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</span>;
 }
 
-// ─────────────────── 3-step first-visit tour ───────────────────
 const TOUR_STEPS = [
   { t: 'tap the mic', d: 'say who you just met — out loud, like a voice note.' },
-  { t: 'we transcribe live', d: 'your voice becomes text as you talk. no typing.' },
-  { t: 'card + graph, instantly', d: 'people, companies and follow-ups — queryable later.' },
+  { t: 'we transcribe it', d: 'your clip ships to wingmic — same pipeline as the app.' },
+  { t: 'card + graph, instantly', d: 'people, companies and follow-ups — nothing saved on the demo.' },
 ];
 
 function Tour({ step, onNext, onSkip }) {
   const s = TOUR_STEPS[step];
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 4, background: 'rgba(0,0,0,0.55)', borderRadius: 'inherit' }}>
-      {/* highlight ring on the mic (bottom center) */}
       <div style={{ position: 'absolute', left: '50%', bottom: 30, transform: 'translateX(-50%)', width: 74, height: 74, borderRadius: '50%', border: `2px solid ${ACCENT}`, animation: 'pulse-d 1.3s ease-in-out infinite', pointerEvents: 'none' }} />
-      {/* caption */}
       <div style={{ position: 'absolute', left: 14, right: 14, bottom: 118, padding: 14, borderRadius: 12, background: '#14141b', border: `1px solid ${ACCENT}40`, boxShadow: '0 12px 30px rgba(0,0,0,0.5)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <span className="mono" style={{ fontSize: 10, color: ACCENT, letterSpacing: 1 }}>{step + 1} / 3</span>
@@ -386,16 +510,14 @@ function Tour({ step, onNext, onSkip }) {
   );
 }
 
-// ─────────────────── the hero phone (frame + mode switch + tour) ───────────────────
 export default function HeroPhone({ width = 300 }) {
-  const [mode, setMode] = useState('video'); // video | demo
-  const [tourStep, setTourStep] = useState(-1); // -1 = inactive
+  const [mode, setMode] = useState('video');
+  const [tourStep, setTourStep] = useState(-1);
   const videoRef = useRef(null);
   const micRef = useRef(null);
 
   useEffect(() => { videoRef.current?.play?.().catch(() => {}); }, [mode]);
 
-  // First-visit tour: flips into demo mode and walks 3 steps.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     let seen = null;
@@ -416,10 +538,7 @@ export default function HeroPhone({ width = 300 }) {
   return (
     <div style={{ width: '100%', maxWidth: width }}>
       <div style={{ position: 'relative', width: '100%', aspectRatio: IPHONE_ASPECT, filter: 'drop-shadow(0 26px 50px rgba(0,0,0,0.55))' }}>
-        {/* frame behind */}
         <IphoneFrame style={{ zIndex: 0 }} />
-
-        {/* screen */}
         <div style={{ position: 'absolute', overflow: 'hidden', zIndex: 1, background: '#050509', ...screenBox }}>
           {mode === 'video' ? (
             <video
@@ -432,16 +551,10 @@ export default function HeroPhone({ width = 300 }) {
           ) : (
             <DemoScreen micRef={micRef} onMicHint={() => tourStep === 0 && nextTour()} />
           )}
-
-          {/* tour lives inside the screen so the spotlight aligns with the mic */}
           {mode === 'demo' && tourStep >= 0 && <Tour step={tourStep} onNext={nextTour} onSkip={endTour} />}
         </div>
-
-        {/* Dynamic Island */}
         <div aria-hidden style={{ position: 'absolute', zIndex: 2, top: '3.5%', left: '50%', transform: 'translateX(-50%)', width: '28.5%', height: '4.1%', background: '#08080c', borderRadius: 999, pointerEvents: 'none' }} />
       </div>
-
-      {/* mode toggle */}
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: 18 }}>
         <div style={{ display: 'inline-flex', padding: 4, borderRadius: 999, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
           {[['video', '▶ explainer'], ['demo', '✨ try it live']].map(([m, label]) => (
