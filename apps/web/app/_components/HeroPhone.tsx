@@ -542,8 +542,8 @@ function DesktopDemo({ mode }) {
         <span className="mono" style={{ marginLeft: 'auto', fontSize: 11, color: recording ? '#FF6B6B' : 'rgba(255,255,255,0.4)' }}>{recording ? '● rec' : '● live'}</span>
       </div>
 
-      {/* body: hero copy | live panel */}
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1.05fr 0.95fr', gap: 'clamp(24px, 4%, 60px)', alignItems: 'center', padding: 'clamp(22px, 4.5%, 56px)', overflow: 'hidden' }}>
+      {/* body: hero copy | live panel — bounded row so the video can't grow it */}
+      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1.05fr 0.95fr', gridTemplateRows: 'minmax(0, 1fr)', gap: 'clamp(24px, 4%, 60px)', alignItems: 'center', padding: 'clamp(22px, 4.5%, 56px)', overflow: 'hidden' }}>
         {/* left — verbatim hero copy */}
         <div>
           <h2 style={{ fontSize: 'clamp(34px, 4.6vw, 64px)', fontWeight: 900, lineHeight: 0.92, letterSpacing: '-0.045em', margin: 0 }}>

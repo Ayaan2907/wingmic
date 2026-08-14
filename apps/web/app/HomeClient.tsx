@@ -161,48 +161,7 @@ function App() {
           position: 'relative'
         }}>
 
-          {/* Left — hero actions (the headline + copy now live inside the frame) */}
-          <div>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 32 }}>
-              <a href="#waitlist" style={{
-                padding: '15px 26px', borderRadius: 10,
-                background: accent, color: '#000',
-                fontSize: 15, fontWeight: 700,
-                display: 'inline-flex', alignItems: 'center', gap: 8,
-                boxShadow: `4px 4px 0 #000`,
-                border: '1.5px solid #000'
-              }}>
-                Join the beta
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7h12m0 0L8 2m5 5l-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-              </a>
-              <a href="#how" style={{
-                padding: '15px 26px', borderRadius: 10,
-                background: 'transparent', color: '#fff',
-                fontSize: 15, fontWeight: 600,
-                border: '1.5px solid rgba(255,255,255,0.25)'
-              }}>How it works ↓</a>
-            </div>
-
-            {/* social proof row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ display: 'flex' }}>
-                {['#FFC452', '#FF6B6B', '#7DD3FC', '#A78BFA', '#86efac'].map((c, i) =>
-                <div key={i} style={{
-                  width: 30, height: 30, borderRadius: '50%',
-                  background: c, marginLeft: i ? -10 : 0,
-                  border: '2.5px solid #0a0a0a',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 11, fontWeight: 800, color: '#000'
-                }}>{['J', 'D', 'L', 'M', 'A'][i]}</div>
-                )}
-              </div>
-              <div className="mono" style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
-                <span style={{ color: '#fff', fontWeight: 700 }}>45+</span> devs on the waitlist
-              </div>
-            </div>
-          </div>
-
-          {/* Right — interactive phone: explainer video + live demo */}
+          {/* Interactive stage — iPhone on mobile, MacBook on desktop */}
           <div className="wm-hero-phone-wrap" style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>
             <HeroStage />
             {/* mobile-only: scroll cue at the bottom of the first screen */}

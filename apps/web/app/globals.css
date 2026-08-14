@@ -298,18 +298,15 @@ a {
   }
   .wm-phoneBox {
     /* width-driven so the frame keeps its exact aspect (no cut corners) */
-    width: min(94vw, calc((100vh - 166px) * 0.49)) !important;
-    width: min(94vw, calc((100dvh - 166px) * 0.49)) !important;
+    width: min(94vw, calc((100vh - 182px) * 0.49)) !important;
+    width: min(94vw, calc((100dvh - 182px) * 0.49)) !important;
     height: auto !important;
     max-width: none;
   }
   .wm-scroll-cue {
     display: flex !important;
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 8px;
     justify-content: center;
+    margin-top: 12px;
   }
 
   /* Generic stackers */
@@ -417,10 +414,7 @@ a {
   }
   .wm-scroll-cue {
     display: flex !important;
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 10px;
     justify-content: center;
+    margin-top: 12px;
   }
 }
