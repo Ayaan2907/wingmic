@@ -428,7 +428,7 @@ function DemoScreen({ micRef }) {
               </span>
             </h2>
             <p style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5, margin: 0 }}>
-              Voice-first networking memory graph for developers. You speak after a conversation, Wingmic does the rest, your agent gets the API.
+              Voice-first networking memory. Speak for a few seconds after you meet someone — Wingmic remembers the people, companies, and follow-ups for you.
             </p>
             <div className="mono" style={{ fontSize: 10.5, color: ACCENT, letterSpacing: 0.5 }}>tap the mic to try it ↓</div>
             {hint && <div className="mono" style={{ fontSize: 11, color: THIRD }}>{hint}</div>}
@@ -557,7 +557,7 @@ function DesktopDemo({ mode }) {
             </span>
           </h2>
           <p style={{ fontSize: 'clamp(13px, 1.15vw, 16px)', color: 'rgba(255,255,255,0.55)', lineHeight: 1.55, margin: '18px 0 0', maxWidth: 440 }}>
-            Voice-first networking memory graph for developers. You speak after a conversation, Wingmic does the rest, your agent gets the API.
+            Voice-first networking memory. Speak for a few seconds after you meet someone — Wingmic remembers the people, companies, and follow-ups for you.
           </p>
         </div>
 

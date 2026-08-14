@@ -53,7 +53,7 @@ export default function WaitlistForm({ accent = '#FFC452', source = 'wingmic.xyz
                 type="email"
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); if (errorMsg) setErrorMsg(''); }}
-                placeholder="you@dev.shop"
+                placeholder="you@email.com"
                 style={{ flex: 1, minWidth: 0, padding: '9px 11px', borderRadius: 8, border: `1px solid ${errorMsg ? '#FF6B6B' : 'rgba(255,255,255,0.15)'}`, background: 'rgba(0,0,0,0.35)', color: '#fff', fontSize: 12.5, outline: 'none', fontFamily: 'inherit' }}
               />
               <button type="submit" disabled={pending} style={{ padding: '9px 14px', borderRadius: 8, border: 'none', background: accent, color: '#000', fontSize: 12.5, fontWeight: 700, cursor: pending ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{pending ? '…' : 'join →'}</button>
@@ -75,7 +75,7 @@ export default function WaitlistForm({ accent = '#FFC452', source = 'wingmic.xyz
           maxWidth: 500, margin: '0 auto', boxShadow: `4px 4px 0 ${accent}30`,
         }}>
           <input
-            type="email" placeholder="you@dev.shop" value={email}
+            type="email" placeholder="you@email.com" value={email}
             onChange={(e) => setEmail(e.target.value)}
             style={{ flex: 1, padding: '14px 16px', background: 'transparent', border: 'none', color: '#fff', fontSize: 15, outline: 'none', fontFamily: 'inherit' }}
           />

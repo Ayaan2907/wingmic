@@ -42,6 +42,20 @@ html {
   background: var(--bg-page);
   overflow-x: clip;
   width: 100%;
+  /* gentle section-by-section scroll (proximity = never traps tall sections) */
+  scroll-snap-type: y proximity;
+  scroll-padding-top: 92px;
+}
+
+/* each top-level section is a snap point */
+.wm-hero,
+.wm-section,
+footer.wm-section {
+  scroll-snap-align: start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-snap-type: none; }
 }
 
 body {

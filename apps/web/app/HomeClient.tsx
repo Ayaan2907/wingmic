@@ -969,7 +969,7 @@ function App() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginTop: 20 }}>
                 <div>
                   <div style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>45+</div>
-                  <div className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1.5 }}>devs on waitlist</div>
+                  <div className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1.5 }}>on the waitlist</div>
                 </div>
                 <div>
                   <div style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>32K</div>
@@ -1011,7 +1011,7 @@ function App() {
             fontSize: 12, color: accent, marginBottom: 28
           }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, animation: 'pulse-d 1.5s infinite' }} />
-            v0.1 beta · 45+ devs · waves of 50
+            v0.1 beta · 45+ on the list · waves of 50
           </div>
 
           <h2 style={{
@@ -1045,12 +1045,12 @@ function App() {
               <span className="mono" style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>wingmic.xyz</span>
             </div>
             <p style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, maxWidth: 320 }}>
-              Persistent storage for your social RAM. Voice-first networking memory graph for developers.
+              Persistent storage for your social RAM. Speak after you meet someone — Wingmic remembers everyone.
             </p>
           </div>
           {[
           { h: 'Product', items: ['Beta', 'API', 'MCP', 'Changelog'] },
-          { h: 'Devs', items: ['Docs', 'OpenAPI', 'SDK', 'GitHub'] },
+          { h: 'Build', items: ['Docs', 'OpenAPI', 'SDK', 'GitHub'] },
           { h: 'Wingmic', items: ['Manifesto', 'Privacy', 'X / Twitter', 'Status'] }].
           map((col) =>
           <div key={col.h}>
@@ -1071,7 +1071,7 @@ function App() {
         </div>
         <div style={{ maxWidth: 1280, margin: '0 auto', paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div className="mono" style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.3)' }}>
-            wingmic.xyz · MIT @ GA · built for devs who hate losing connections
+            wingmic.xyz · MIT @ GA · built for people who hate losing connections
           </div>
           <div className="mono" style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.3)' }}>
             v0.1.0-beta · sf · ⌥ ◆
