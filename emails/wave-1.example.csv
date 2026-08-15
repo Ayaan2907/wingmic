@@ -1,0 +1,7 @@
+# one address per line, or a CSV with an `email` header column.
+# CSV columns become {{merge}} vars — e.g. `email,first_name`.
+# lines starting with # are ignored.
+email,first_name
+ada@example.com,Ada
+grace@example.com,Grace
+hopper@example.com,
