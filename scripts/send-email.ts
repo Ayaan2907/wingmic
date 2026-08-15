@@ -38,7 +38,9 @@ const { values } = parseArgs({
     from: { type: 'string' },
     'reply-to': { type: 'string' },
     'unsubscribe-url': { type: 'string' },
+    'postal-address': { type: 'string' },
     send: { type: 'boolean', default: false },
+    'self-check': { type: 'boolean', default: false },
   },
 });
 
@@ -47,13 +49,35 @@ function fail(msg: string): never {
   process.exit(1);
 }
 
-if (!values.template) fail('--template <path-to-html> is required');
-if (!values.subject) fail('--subject "<line>" is required');
-if (!values.to && !values['to-file']) fail('--to or --to-file is required');
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 type Recipient = { email: string; vars: Record<string, string> };
+
+/** Shared inboxes — a greeting derived from these reads as a mail-merge failure. */
+const ROLE_ACCOUNTS = new Set([
+  'info', 'hello', 'hi', 'hey', 'team', 'admin', 'support', 'contact', 'sales',
+  'noreply', 'no-reply', 'mail', 'me', 'dev', 'office', 'help', 'careers',
+  'press', 'billing', 'accounts', 'hr', 'jobs', 'founders', 'security',
+]);
+
+/**
+ * Best-effort first name from an email local-part — the waitlist only ever
+ * collected an address, so this is the single available personalisation signal.
+ *
+ * Returns '' whenever the guess would be embarrassing (role inbox, digits,
+ * initials, an implausible length), letting the template fallback take over.
+ * Wrong-but-confident is worse than generic here.
+ */
+function firstNameFromEmail(email: string): string {
+  const local = email.split('@')[0]?.split('+')[0] ?? '';
+  const token = local.split(/[._\-]/).filter(Boolean)[0] ?? '';
+  if (token.length < 3 || token.length > 15) return '';
+  if (/\d/.test(token)) return '';
+  if (ROLE_ACCOUNTS.has(token.toLowerCase())) return '';
+  if (!/^[a-z]+$/i.test(token)) return '';
+  return token[0].toUpperCase() + token.slice(1).toLowerCase();
+}
 
 /** Split one CSV line, honouring "quoted, fields" and "" escapes. */
 function splitCsv(line: string): string[] {
@@ -98,7 +122,10 @@ function parseRecipients(raw: string): Recipient[] {
     if (!EMAIL_RE.test(addr)) fail(`not an email address: ${email}`);
     if (seen.has(addr)) return;
     seen.add(addr);
-    out.push({ email: addr, vars: { ...vars, email: addr } });
+    const merged: Record<string, string> = { ...vars, email: addr };
+    // Derived only where the file didn't supply one — an explicit column wins.
+    if (!merged.first_name) merged.first_name = firstNameFromEmail(addr);
+    out.push({ email: addr, vars: merged });
   };
 
   if (isCsv) {
@@ -138,6 +165,34 @@ function render(tpl: string, vars: Record<string, string>, unresolved: Set<strin
   });
 }
 
+if (values['self-check']) {
+  const eq = (got: unknown, want: unknown, label: string) => {
+    if (JSON.stringify(got) !== JSON.stringify(want)) {
+      fail(`self-check ${label}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+    }
+  };
+  eq(firstNameFromEmail('ada.lovelace@example.com'), 'Ada', 'dotted local-part');
+  eq(firstNameFromEmail('GRACE@example.com'), 'Grace', 'case normalised');
+  eq(firstNameFromEmail('ada+beta@example.com'), 'Ada', 'plus-tag stripped');
+  eq(firstNameFromEmail('info@example.com'), '', 'role inbox rejected');
+  eq(firstNameFromEmail('dev2907@example.com'), '', 'digits rejected');
+  eq(firstNameFromEmail('ak@example.com'), '', 'initials rejected');
+  eq(splitCsv('a,"Smith, John",b'), ['a', 'Smith, John', 'b'], 'quoted comma');
+  eq(splitCsv('a,"say ""hi""",b'), ['a', 'say "hi"', 'b'], 'escaped quotes');
+  eq(escapeHtml('<b>&"'), '&lt;b&gt;&amp;&quot;', 'html escaped');
+  const un = new Set<string>();
+  eq(render('{{a}}|{{b|fb}}', { a: 'X' }, un), 'X|fb', 'fallback applied');
+  eq([...un], [], 'no unresolved when fallback present');
+  render('{{missing}}', {}, un);
+  eq([...un], ['missing'], 'unresolved collected');
+  console.log('self-check: all passed');
+  process.exit(0);
+}
+
+if (!values.template) fail('--template <path-to-html> is required');
+if (!values.subject) fail('--subject "<line>" is required');
+if (!values.to && !values['to-file']) fail('--to or --to-file is required');
+
 const html = readFileSync(values.template, 'utf8');
 const recipients = parseRecipients(
   [values.to, values['to-file'] ? readFileSync(values['to-file'], 'utf8') : '']
@@ -153,13 +208,20 @@ if (values['unsubscribe-url']) {
   headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
 }
 
+// One flag drives both the header and the in-template link, so they cannot
+// disagree — a List-Unsubscribe pointing somewhere the footer doesn't is worse
+// than neither.
+const campaignVars: Record<string, string> = {};
+if (values['unsubscribe-url']) campaignVars.unsubscribe_url = values['unsubscribe-url'];
+if (values['postal-address']) campaignVars.postal_address = values['postal-address'];
+
 // Render everything up front so a bad template fails before any send.
 const unresolved = new Set<string>();
 const payloads = recipients.map((r) => ({
   from,
   to: [r.email],
-  subject: render(values.subject!, r.vars, unresolved),
-  html: render(html, r.vars, unresolved),
+  subject: render(values.subject!, { ...campaignVars, ...r.vars }, unresolved),
+  html: render(html, { ...campaignVars, ...r.vars }, unresolved),
   ...(values['reply-to'] ? { reply_to: values['reply-to'] } : {}),
   ...(Object.keys(headers).length ? { headers } : {}),
 }));
@@ -177,7 +239,13 @@ console.log(`subject  : ${payloads[0].subject}`);
 console.log(`vars     : ${[...new Set(placeholders)].join(', ') || '(none)'}`);
 console.log(`unsub    : ${values['unsubscribe-url'] ?? 'NOT SET'}`);
 console.log(`to       : ${recipients.length} address(es) in ${batches.length} batch(es)`);
-console.log(recipients.map((r) => `  - ${r.email}`).join('\n'));
+// Show the resolved greeting per address — derived names are a heuristic, and
+// this is the moment to catch a bad one, before it is in someone's inbox.
+console.log(
+  recipients
+    .map((r) => `  - ${r.email.padEnd(34)} → ${r.vars.first_name || '(fallback)'}`)
+    .join('\n'),
+);
 
 if (unresolved.size > 0) {
   fail(
