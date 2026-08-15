@@ -1,0 +1,26 @@
+package.json
+  s_383620e3a1e4e3::t_6f502dbc370aa3 39-40
+emails/beta-launch.html
+  s_383620e3a1e4e3::t_ee6f037ef93efa 1-229
+emails/wave-1.example.csv
+  s_383620e3a1e4e3::t_ee6f037ef93efa 1-7
+scripts/send-email.ts
+  s_383620e3a1e4e3::t_652fbba5ad208c 1-3,7-9,13,18,23-38,41-52,88,92,116,118-119,141-149,155,171-174,179,195-201,203-208,210-223
+  s_383620e3a1e4e3::t_27aa31066fc63c 4-6,10-12,14-17,19-22,39-40,53-87,89-91,93-115,117,120-140,150-154,156-170,175-178,180-194,202,209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "c7084fb7fbacc4cfdee3ff0762c7237b1b5b65de",
+  "prompts": {},
+  "sessions": {
+    "s_383620e3a1e4e3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fcd25faf-7627-4a96-b9ca-f00634bfbed1",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
