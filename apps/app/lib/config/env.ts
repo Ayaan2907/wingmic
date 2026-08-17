@@ -35,7 +35,7 @@ const serverSchema = z.object({
 
   // ── Email (Resend) — magic link delivery ──────────────────────────────
   RESEND_API_KEY: z.string().optional(),
-  RESEND_FROM: z.string().default('wingmic <auth@wingmic.xyz>'),
+  RESEND_FROM: z.string().default('wingmic <info@mail.wingmic.xyz>'),
 
   // ── Unified provider — OpenRouter (LLM + embeddings) ─────────────────
   // v0.1.1 "Hosted Capture" locked decision #9: OpenRouter is mandatory.
