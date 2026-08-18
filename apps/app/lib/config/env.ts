@@ -15,6 +15,34 @@
  */
 import { z } from 'zod';
 
+/** Canonical sender for magic links + bulk email. Update here, not in Railway/Doppler. */
+export const DEFAULT_RESEND_FROM = 'wingmic <info@mail.wingmic.xyz>';
+
+type NodeEnv = 'development' | 'production' | 'test';
+
+/**
+ * Resolve the outbound sender address.
+ *
+ * Production always uses {@link DEFAULT_RESEND_FROM} so a stale `RESEND_FROM`
+ * in Railway/Doppler cannot shadow a code change. Dev/test may override via env
+ * (e.g. a fork testing against their own verified Resend domain).
+ */
+export function resolveResendFrom(
+  nodeEnv: NodeEnv,
+  rawFromEnv: string | undefined,
+): string {
+  const override = rawFromEnv?.trim();
+  if (nodeEnv === 'production') {
+    if (override && override !== DEFAULT_RESEND_FROM) {
+      console.warn(
+        `[env] RESEND_FROM="${override}" ignored in production — using code default "${DEFAULT_RESEND_FROM}". Remove RESEND_FROM from Railway/Doppler.`,
+      );
+    }
+    return DEFAULT_RESEND_FROM;
+  }
+  return override || DEFAULT_RESEND_FROM;
+}
+
 // ── Server schema ───────────────────────────────────────────────────────
 // Validated on the server (process.env populated). On the client, this
 // schema is NOT parsed; the client only sees the public schema below.
@@ -35,7 +63,6 @@ const serverSchema = z.object({
 
   // ── Email (Resend) — magic link delivery ──────────────────────────────
   RESEND_API_KEY: z.string().optional(),
-  RESEND_FROM: z.string().default('wingmic <info@mail.wingmic.xyz>'),
 
   // ── Unified provider — OpenRouter (LLM + embeddings) ─────────────────
   // v0.1.1 "Hosted Capture" locked decision #9: OpenRouter is mandatory.
@@ -66,7 +93,8 @@ const clientSchema = z.object({
   NEXT_PUBLIC_BETTER_AUTH_URL: z.string().url().default('http://localhost:3211'),
 });
 
-type ServerEnv = z.infer<typeof serverSchema>;
+type ParsedServerEnv = z.infer<typeof serverSchema>;
+type ServerEnv = ParsedServerEnv & { RESEND_FROM: string };
 type ClientEnv = z.infer<typeof clientSchema>;
 export type Env = ServerEnv & ClientEnv;
 
@@ -111,8 +139,13 @@ function loadEnv(): Env {
         NEXT_PUBLIC_BETTER_AUTH_URL: process.env.NEXT_PUBLIC_BETTER_AUTH_URL,
       }),
     );
-    return {
+    const nodeEnv = result.data.NODE_ENV;
+    const serverEnv: ServerEnv = {
       ...result.data,
+      RESEND_FROM: resolveResendFrom(nodeEnv, process.env.RESEND_FROM),
+    };
+    return {
+      ...serverEnv,
       ...(clientResult.success ? clientResult.data : ({} as ClientEnv)),
     };
   }

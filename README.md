@@ -178,7 +178,7 @@ Do this in order, stopping for me at each step:
        - TURSO_DB_URL + TURSO_AUTH_TOKEN  (turso CLI)
        - BETTER_AUTH_SECRET                (openssl rand -base64 48)
        - BETTER_AUTH_URL                   (http://localhost:3211 for local dev)
-       - RESEND_API_KEY + RESEND_FROM      (resend.com — domain must be verified)
+       - RESEND_API_KEY                        (resend.com — domain must be verified)
        - OPENROUTER_API_KEY                (openrouter.ai — LLM + embeddings)
        - ASSEMBLYAI_API_KEY                (assemblyai.com — hosted ASR)
      Stop and ask me at each one — do NOT generate or fetch any keys yourself.
@@ -188,7 +188,7 @@ Do this in order, stopping for me at each step:
      a local SQLite at apps/app/local.db.
   7. Run `bun run dev:app` from the repo root. Show me http://localhost:3211 once it's up.
   8. Tell me to sign in: visit /signin, type any email, and check the dev-server
-     console — the magic link is logged there since RESEND_API_KEY isn't set.
+     console — the magic link is always logged there (email sends only when RESEND_API_KEY is set).
 
 Brand voice rule: when committing or summarizing, do NOT add "Co-Authored-By: Claude"
 or any AI co-author trailer. Authorship is mine.
