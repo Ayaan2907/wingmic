@@ -44,6 +44,8 @@ export function GraphClient({ data }: { data: GraphData }) {
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
   const hoveredRef = useRef<GraphNode | null>(null);
   const pointerRef = useRef(pointer);
+  const pointerRafRef = useRef<number | null>(null);
+  const canvasRef = useRef<HTMLElement | null>(null);
 
   const selectNode = (node: GraphNode) => {
     setActive((prev) => {
@@ -140,6 +142,7 @@ export function GraphClient({ data }: { data: GraphData }) {
     // rail is display:none and the selected node uses the floating card.
     <div className="surface-split">
     <main
+      ref={canvasRef}
       className="surface-primary"
       style={{
         position: 'relative',
@@ -150,8 +153,18 @@ export function GraphClient({ data }: { data: GraphData }) {
       }}
       onMouseMove={(e) => {
         const rect = e.currentTarget.getBoundingClientRect();
-        pointerRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-        if (hoveredRef.current) setPointer(pointerRef.current);
+        const next = {
+          x: Math.round(e.clientX - rect.left),
+          y: Math.round(e.clientY - rect.top),
+        };
+        pointerRef.current = next;
+        if (!hoveredRef.current) return;
+        if (pointerRafRef.current != null) return;
+        pointerRafRef.current = requestAnimationFrame(() => {
+          pointerRafRef.current = null;
+          const p = pointerRef.current;
+          setPointer((prev) => (prev.x === p.x && prev.y === p.y ? prev : p));
+        });
       }}
     >
       {/* Filter chips + in-canvas search. Dropdown overflows the canvas. */}
@@ -215,7 +228,13 @@ export function GraphClient({ data }: { data: GraphData }) {
         backgroundColor="rgba(0,0,0,0)"
       />
 
-      <GraphHoverCard node={hovered} x={pointer.x} y={pointer.y} />
+      <GraphHoverCard
+        node={hovered}
+        x={pointer.x}
+        y={pointer.y}
+        boundsWidth={canvasRef.current?.clientWidth}
+        boundsHeight={canvasRef.current?.clientHeight}
+      />
 
       {/* Selected-node floating card (above the nav on mobile). Hidden on
           desktop — the persistent detail rail replaces it there. */}

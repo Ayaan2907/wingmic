@@ -8,10 +8,14 @@ export function GraphHoverCard({
   node,
   x,
   y,
+  boundsWidth,
+  boundsHeight,
 }: {
   node: GraphNode | null;
   x: number;
   y: number;
+  boundsWidth?: number;
+  boundsHeight?: number;
 }) {
   if (!node) return null;
 
@@ -21,8 +25,8 @@ export function GraphHoverCard({
       role="tooltip"
       style={{
         position: 'absolute',
-        left: x + 14,
-        top: y + 14,
+        left: Math.max(8, Math.min(x + 14, (boundsWidth ?? 400) - 248)),
+        top: Math.max(8, Math.min(y + 14, (boundsHeight ?? 300) - 72)),
         zIndex: 6,
         pointerEvents: 'none',
         display: 'flex',

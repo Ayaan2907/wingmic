@@ -198,7 +198,7 @@ describe('GraphClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'orgs' }));
     expect(screen.queryByRole('button', { name: 'Acme' })).toBeNull();
     fireEvent.change(screen.getByTestId('graph-search'), { target: { value: 'acme' } });
-    fireEvent.click(within(screen.getByTestId('graph-search-results')).getByRole('button'));
+    fireEvent.click(within(screen.getByTestId('graph-search-results')).getByRole('option'));
     expect(screen.getByRole('button', { name: 'Acme' })).toBeTruthy();
     expect(screen.getByText(/edges · 1/i)).toBeTruthy();
   });
@@ -210,8 +210,19 @@ describe('GraphClient', () => {
     const results = screen.getByTestId('graph-search-results');
     expect(results.textContent).toMatch(/Acme/);
     expect(results.textContent).toMatch(/company/);
-    fireEvent.click(within(results).getByRole('button'));
+    fireEvent.click(within(results).getByRole('option'));
     expect(screen.getByText(/edges · 1/i)).toBeTruthy();
+    expect(screen.queryByTestId('graph-search-results')).toBeNull();
+  });
+
+  it('closes search results on escape and moves the active option with arrows', () => {
+    render(<GraphClient data={DATA} />);
+    const input = screen.getByTestId('graph-search');
+    fireEvent.change(input, { target: { value: 'a' } });
+    const results = screen.getByTestId('graph-search-results');
+    expect(within(results).getAllByRole('option').length).toBeGreaterThan(1);
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'Escape' });
     expect(screen.queryByTestId('graph-search-results')).toBeNull();
   });
 

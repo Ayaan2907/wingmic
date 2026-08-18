@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { KIND_COLOR } from './graph-style';
 import { GraphNodeAvatar } from './GraphNodeAvatar';
 import type { GraphNode } from './graph-types';
@@ -14,17 +14,35 @@ export function GraphSearch({
   onSelect: (node: GraphNode) => void;
 }) {
   const [query, setQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const listId = useId();
   const hits = useMemo(() => matchGraphNodes(nodes, query), [nodes, query]);
   const open = query.trim().length > 0;
+  const activeId = open && hits[activeIndex] ? `${listId}-opt-${hits[activeIndex]!.id}` : undefined;
 
   const pick = (node: GraphNode) => {
     onSelect(node);
     setQuery('');
+    setActiveIndex(0);
   };
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [query]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setQuery('');
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [open]);
 
   return (
     <div
+      ref={wrapRef}
       style={{
         position: 'relative',
         marginLeft: 'auto',
@@ -43,9 +61,19 @@ export function GraphSearch({
             setQuery('');
             return;
           }
-          if (e.key === 'Enter' && hits[0]) {
+          if (e.key === 'ArrowDown' && hits.length > 0) {
             e.preventDefault();
-            pick(hits[0]);
+            setActiveIndex((i) => (i + 1) % hits.length);
+            return;
+          }
+          if (e.key === 'ArrowUp' && hits.length > 0) {
+            e.preventDefault();
+            setActiveIndex((i) => (i - 1 + hits.length) % hits.length);
+            return;
+          }
+          if (e.key === 'Enter' && hits[activeIndex]) {
+            e.preventDefault();
+            pick(hits[activeIndex]!);
           }
         }}
         placeholder="search this graph"
@@ -54,6 +82,7 @@ export function GraphSearch({
         aria-expanded={open}
         aria-controls={listId}
         aria-autocomplete="list"
+        aria-activedescendant={activeId}
         className="mono"
         style={{
           width: '100%',
@@ -102,54 +131,61 @@ export function GraphSearch({
               no matches in your graph
             </li>
           ) : (
-            hits.map((node) => (
-              <li key={node.id} role="option" aria-selected={false}>
-                <button
-                  type="button"
-                  onClick={() => pick(node)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    width: '100%',
-                    padding: '7px 8px',
-                    border: 'none',
-                    borderRadius: 8,
-                    background: 'transparent',
-                    color: 'var(--ink)',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  <GraphNodeAvatar node={node} size={28} />
-                  <span style={{ minWidth: 0 }}>
-                    <span
-                      style={{
-                        display: 'block',
-                        fontSize: 13,
-                        fontWeight: 650,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {node.label}
+            hits.map((node, i) => {
+              const selected = i === activeIndex;
+              return (
+                <li key={node.id} role="presentation">
+                  <div
+                    id={`${listId}-opt-${node.id}`}
+                    role="option"
+                    aria-selected={selected}
+                    tabIndex={-1}
+                    onClick={() => pick(node)}
+                    onMouseEnter={() => setActiveIndex(i)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      width: '100%',
+                      padding: '7px 8px',
+                      borderRadius: 8,
+                      background: selected ? 'rgba(255,255,255,0.06)' : 'transparent',
+                      color: 'var(--ink)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    <GraphNodeAvatar node={node} size={28} />
+                    <span style={{ minWidth: 0 }}>
+                      <span
+                        style={{
+                          display: 'block',
+                          fontSize: 13,
+                          fontWeight: 650,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {node.label}
+                      </span>
+                      <span
+                        className="mono"
+                        style={{
+                          fontSize: 10,
+                          letterSpacing: 1,
+                          textTransform: 'uppercase',
+                          color: KIND_COLOR[node.kind],
+                        }}
+                      >
+                        {node.kind}
+                      </span>
                     </span>
-                    <span
-                      className="mono"
-                      style={{
-                        fontSize: 10,
-                        letterSpacing: 1,
-                        textTransform: 'uppercase',
-                        color: KIND_COLOR[node.kind],
-                      }}
-                    >
-                      {node.kind}
-                    </span>
-                  </span>
-                </button>
-              </li>
-            ))
+                  </div>
+                </li>
+              );
+            })
           )}
         </ul>
       )}
