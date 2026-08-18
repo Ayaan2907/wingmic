@@ -76,13 +76,13 @@ export function canonicalizeLinkedin(raw: string): string | null {
     return null;
   }
 
-  const host = url.hostname.replace(/^www\./, '');
-  if (host !== 'linkedin.com') return null;
+  const host = url.hostname.replace(/^www\./, '').toLowerCase();
+  if (host !== 'linkedin.com' && !host.endsWith('.linkedin.com')) return null;
 
   const parts = url.pathname.split('/').filter(Boolean);
-  const inIdx = parts.indexOf('in');
-  const handle = inIdx >= 0 ? parts[inIdx + 1] : undefined;
-  if (!handle) return null;
+  // Profile URLs are `/in/{handle}` only — do not treat `/company/…/in/…` as a person.
+  if (parts[0] !== 'in' || !parts[1]) return null;
+  const handle = parts[1];
 
   const clean = handle.replace(/\/+$/, '');
   if (!clean || !/^[a-z0-9_-]+$/i.test(clean)) return null;
@@ -93,12 +93,16 @@ export function canonicalizeLinkedin(raw: string): string | null {
 /** Trim + lowercase. Rejects strings that are not a plausible email. */
 export function canonicalizeEmail(raw: string): string | null {
   const email = raw.trim().toLowerCase();
-  if (!email) return null;
+  if (!email || /\s/.test(email)) return null;
   const at = email.indexOf('@');
   if (at <= 0 || at !== email.lastIndexOf('@')) return null;
   const local = email.slice(0, at);
   const domain = email.slice(at + 1);
-  if (!local || !domain.includes('.') || domain.startsWith('.') || domain.endsWith('.')) {
+  if (!local || local.startsWith('.') || local.endsWith('.') || local.includes('..')) {
+    return null;
+  }
+  const labels = domain.split('.');
+  if (labels.length < 2 || labels.some((label) => !label || /[^a-z0-9-]/.test(label))) {
     return null;
   }
   return email;

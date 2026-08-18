@@ -37,7 +37,17 @@ describe('canonicalizeLinkedin', () => {
   it('rejects non-profile URLs', () => {
     expect(canonicalizeLinkedin('https://linkedin.com/company/analytical-engines')).toBeNull();
     expect(canonicalizeLinkedin('https://example.com/in/ada-lovelace')).toBeNull();
+    expect(canonicalizeLinkedin('https://linkedin.com/company/foo/in/ada-lovelace')).toBeNull();
     expect(canonicalizeLinkedin('')).toBeNull();
+  });
+
+  it('accepts country LinkedIn hosts as the same profile', () => {
+    expect(canonicalizeLinkedin('https://uk.linkedin.com/in/ada-lovelace')).toBe(
+      'https://www.linkedin.com/in/ada-lovelace',
+    );
+    expect(canonicalizeLinkedin('https://de.linkedin.com/in/ada-lovelace/')).toBe(
+      'https://www.linkedin.com/in/ada-lovelace',
+    );
   });
 });
 
@@ -51,6 +61,8 @@ describe('canonicalizeEmail', () => {
     expect(canonicalizeEmail('@example.com')).toBeNull();
     expect(canonicalizeEmail('ada@@example.com')).toBeNull();
     expect(canonicalizeEmail('not-an-email')).toBeNull();
+    expect(canonicalizeEmail('ada lovelace@example.com')).toBeNull();
+    expect(canonicalizeEmail('ada@example..com')).toBeNull();
   });
 });
 
