@@ -99,15 +99,17 @@ describe('OnboardingClient', () => {
     );
   });
 
-  it('skip acknowledges then pushes /chat (skip still acknowledges → no re-trigger)', async () => {
+  it('skip acknowledges without profile even if linkedin is invalid', async () => {
     render(<OnboardingClient />);
+    walkToProfile();
+    fireEvent.change(screen.getByPlaceholderText('https://www.linkedin.com/in/you'), {
+      target: { value: 'not-a-url' },
+    });
     fireEvent.click(screen.getByRole('button', { name: /skip/i }));
 
     await waitFor(() => expect(mutateAsyncSpy).toHaveBeenCalledTimes(1));
+    expect(mutateAsyncSpy).toHaveBeenCalledWith(undefined);
     await waitFor(() => expect(pushSpy).toHaveBeenCalledWith('/chat'));
-    expect(mutateAsyncSpy.mock.invocationCallOrder[0]).toBeLessThan(
-      pushSpy.mock.invocationCallOrder[0],
-    );
   });
 
   it('acknowledge rejection re-enables buttons, shows error, and does NOT push', async () => {

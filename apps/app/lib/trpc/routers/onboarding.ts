@@ -42,6 +42,12 @@ export const onboardingRouter = router({
   acknowledge: protectedProcedure.input(acknowledgeInput.optional()).mutation(async ({ ctx, input }) => {
     const firstName = input?.firstName;
     const lastName = input?.lastName;
+    if (Boolean(firstName) !== Boolean(lastName)) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'first and last name are both required',
+      });
+    }
     const displayName = joinDisplayName(firstName, lastName);
 
     let linkedin: string | null = null;
@@ -55,16 +61,18 @@ export const onboardingRouter = router({
       }
     }
 
-    await ctx.db
-      .update(schema.users)
-      .set({
-        acknowledgedPrivacy: true,
-        ...(displayName ? { name: displayName } : {}),
-      })
-      .where(eq(schema.users.id, ctx.user.id));
+    await ctx.db.transaction(async (tx) => {
+      await tx
+        .update(schema.users)
+        .set({
+          acknowledgedPrivacy: true,
+          ...(displayName ? { name: displayName } : {}),
+        })
+        .where(eq(schema.users.id, ctx.user.id));
 
-    if (linkedin) {
-      const existingRows = await ctx.db
+      if (!linkedin) return;
+
+      const existingRows = await tx
         .select()
         .from(schema.identityClaims)
         .where(
@@ -73,12 +81,15 @@ export const onboardingRouter = router({
         .limit(1);
       const existing = existingRows[0];
       if (existing) {
-        await ctx.db
+        await tx
           .update(schema.identityClaims)
-          .set({ value: linkedin })
+          .set({
+            value: linkedin,
+            ...(existing.value !== linkedin ? { verified: false, public: false } : {}),
+          })
           .where(eq(schema.identityClaims.id, existing.id));
       } else {
-        await ctx.db.insert(schema.identityClaims).values({
+        await tx.insert(schema.identityClaims).values({
           userId: ctx.user.id,
           kind: 'linkedin',
           value: linkedin,
@@ -86,7 +97,7 @@ export const onboardingRouter = router({
           public: false,
         });
       }
-    }
+    });
 
     return { ok: true as const };
   }),

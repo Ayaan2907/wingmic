@@ -85,12 +85,14 @@ export default function OnboardingClient() {
   const [lastName, setLastName] = React.useState('');
   const [linkedinUrl, setLinkedinUrl] = React.useState('');
 
-  const finish = React.useCallback(async () => {
+  const finish = React.useCallback(async (mode: 'profile' | 'skip') => {
     if (leaving) return;
     setLeaving(true);
     setError(null);
     try {
-      await acknowledge.mutateAsync(profilePayload(firstName, lastName, linkedinUrl));
+      await acknowledge.mutateAsync(
+        mode === 'skip' ? undefined : profilePayload(firstName, lastName, linkedinUrl),
+      );
       router.push('/chat');
     } catch {
       setLeaving(false);
@@ -102,6 +104,14 @@ export default function OnboardingClient() {
     if (step === PROFILE_STEP) {
       if (!firstName.trim() || !lastName.trim()) {
         setError('first and last name, please');
+        return;
+      }
+      if (firstName.trim().length > 80 || lastName.trim().length > 80) {
+        setError('keep names under 80 characters');
+        return;
+      }
+      if (linkedinUrl.trim().length > 300) {
+        setError('linkedin url is too long');
         return;
       }
       if (linkedinUrl.trim() && !normalizeLinkedInUrl(linkedinUrl)) {
@@ -165,6 +175,7 @@ export default function OnboardingClient() {
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 placeholder="Ada"
+                maxLength={80}
                 style={fieldStyle}
               />
             </label>
@@ -178,6 +189,7 @@ export default function OnboardingClient() {
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 placeholder="Lovelace"
+                maxLength={80}
                 style={fieldStyle}
               />
             </label>
@@ -191,6 +203,7 @@ export default function OnboardingClient() {
                 value={linkedinUrl}
                 onChange={(e) => setLinkedinUrl(e.target.value)}
                 placeholder="https://www.linkedin.com/in/you"
+                maxLength={300}
                 style={fieldStyle}
               />
             </label>
@@ -239,7 +252,7 @@ export default function OnboardingClient() {
         {isLast ? (
           <button
             type="button"
-            onClick={finish}
+            onClick={() => finish('profile')}
             disabled={leaving}
             style={{
               flex: 1,
@@ -294,7 +307,7 @@ export default function OnboardingClient() {
 
       <button
         type="button"
-        onClick={finish}
+        onClick={() => finish('skip')}
         disabled={leaving}
         style={{
           width: '100%',

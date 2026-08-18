@@ -126,6 +126,30 @@ describe('onboarding router', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
+  it('rejects a profile that has only one name', async () => {
+    await expect(caller(userId).acknowledge({ firstName: 'Ada' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+  });
+
+  it('resets verified and public when the linkedin url changes', async () => {
+    await client.execute({
+      sql: `UPDATE identity_claim SET verified = 1, public = 1 WHERE user_id = ? AND kind = 'linkedin'`,
+      args: [userId],
+    });
+    await caller(userId).acknowledge({
+      linkedinUrl: 'https://www.linkedin.com/in/ada-lovelace-3',
+    });
+    const claims = await client.execute({
+      sql: `SELECT value, verified, public FROM identity_claim WHERE user_id = ? AND kind = 'linkedin'`,
+      args: [userId],
+    });
+    expect(claims.rows).toHaveLength(1);
+    expect(String(claims.rows[0]!.value)).toBe('https://www.linkedin.com/in/ada-lovelace-3');
+    expect(Number(claims.rows[0]!.verified)).toBe(0);
+    expect(Number(claims.rows[0]!.public)).toBe(0);
+  });
+
   it('does not copy A profile onto B', async () => {
     expect((await userRow(otherUserId))?.name).toBeNull();
     const bClaims = await client.execute({
