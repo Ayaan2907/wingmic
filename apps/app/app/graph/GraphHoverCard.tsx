@@ -31,7 +31,7 @@ export function GraphHoverCard({
         padding: '8px 12px 8px 8px',
         borderRadius: 12,
         background: 'rgba(17,17,17,0.94)',
-        border: '1px solid var(--hair)',
+        border: '1px solid var(--border-soft)',
         boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
         maxWidth: 240,
       }}

@@ -9,7 +9,7 @@
 // mocks `next/dynamic` so jsdom never instantiates the real canvas.
 
 import dynamic from 'next/dynamic';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { accent } from '@/app/chat/_components/tokens';
 import { trpc } from '@/lib/trpc/client';
@@ -42,6 +42,18 @@ export function GraphClient({ data }: { data: GraphData }) {
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [hovered, setHovered] = useState<GraphNode | null>(null);
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
+  const hoveredRef = useRef<GraphNode | null>(null);
+  const pointerRef = useRef(pointer);
+
+  const selectNode = (node: GraphNode) => {
+    setActive((prev) => {
+      if (prev.has(node.kind)) return prev;
+      const next = new Set(prev);
+      next.add(node.kind);
+      return next;
+    });
+    setSelected(node);
+  };
 
   const toggle = (kind: NodeKind) => {
     setActive((prev) => {
@@ -56,9 +68,17 @@ export function GraphClient({ data }: { data: GraphData }) {
   const filtered = useMemo(() => {
     const nodes = data.nodes.filter((n) => active.has(n.kind));
     const visibleIds = new Set(nodes.map((n) => n.id));
-    const links = data.links.filter(
-      (l) => visibleIds.has(l.source) && visibleIds.has(l.target),
-    );
+    // Copy + stringify ends so d3-force mutation of link.source/target
+    // cannot poison `data.links` or break the next filter pass.
+    const links = data.links
+      .filter(
+        (l) => visibleIds.has(graphEndId(l.source)) && visibleIds.has(graphEndId(l.target)),
+      )
+      .map((l) => ({
+        source: graphEndId(l.source),
+        target: graphEndId(l.target),
+        rel: l.rel,
+      }));
     return { nodes, links };
   }, [data, active]);
 
@@ -130,7 +150,8 @@ export function GraphClient({ data }: { data: GraphData }) {
       }}
       onMouseMove={(e) => {
         const rect = e.currentTarget.getBoundingClientRect();
-        setPointer({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+        pointerRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        if (hoveredRef.current) setPointer(pointerRef.current);
       }}
     >
       {/* Filter chips + in-canvas search. Dropdown overflows the canvas. */}
@@ -162,7 +183,7 @@ export function GraphClient({ data }: { data: GraphData }) {
                 textTransform: 'uppercase',
                 padding: '5px 11px',
                 borderRadius: 999,
-                border: `1px solid ${on ? KIND_COLOR[kind] : 'var(--hair)'}`,
+                border: `1px solid ${on ? KIND_COLOR[kind] : 'var(--border-soft)'}`,
                 background: on ? `${KIND_COLOR[kind]}22` : 'transparent',
                 color: on ? KIND_COLOR[kind] : 'var(--text-55)',
                 cursor: 'pointer',
@@ -172,7 +193,7 @@ export function GraphClient({ data }: { data: GraphData }) {
             </button>
           );
         })}
-        <GraphSearch nodes={data.nodes} onSelect={setSelected} />
+        <GraphSearch nodes={data.nodes} onSelect={selectNode} />
       </div>
 
       <ForceGraph2D
@@ -184,8 +205,13 @@ export function GraphClient({ data }: { data: GraphData }) {
         linkWidth={(l: any) => linkWidthOf((l as GraphLink).rel)}
         linkDirectionalArrowLength={4}
         linkDirectionalArrowRelPos={1}
-        onNodeClick={(n: any) => setSelected(n as GraphNode)}
-        onNodeHover={(n: any) => setHovered(n ? (n as GraphNode) : null)}
+        onNodeClick={(n: any) => selectNode(n as GraphNode)}
+        onNodeHover={(n: any) => {
+          const next = n ? (n as GraphNode) : null;
+          hoveredRef.current = next;
+          setHovered(next);
+          if (next) setPointer(pointerRef.current);
+        }}
         backgroundColor="rgba(0,0,0,0)"
       />
 
@@ -207,7 +233,7 @@ export function GraphClient({ data }: { data: GraphData }) {
             padding: 16,
             borderRadius: 14,
             background: 'var(--bg-elev, #111)',
-            border: '1px solid var(--hair)',
+            border: '1px solid var(--border-soft)',
             boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
           }}
         >
@@ -400,7 +426,7 @@ export function GraphClient({ data }: { data: GraphData }) {
                       : 'rgba(255,255,255,0.55)',
                   fontSize: 12,
                   textDecoration: 'none',
-                  border: '1px solid var(--hair)',
+                  border: '1px solid var(--border-soft)',
                   cursor: selected.kind === 'topic' ? 'not-allowed' : 'pointer',
                   pointerEvents: selected.kind === 'topic' ? 'none' : 'auto',
                 }}

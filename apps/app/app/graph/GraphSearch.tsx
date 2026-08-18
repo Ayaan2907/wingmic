@@ -61,7 +61,7 @@ export function GraphSearch({
           padding: '6px 12px',
           borderRadius: 999,
           background: 'rgba(10,10,10,0.85)',
-          border: '1px solid var(--hair)',
+          border: '1px solid var(--border-soft)',
           color: 'var(--ink)',
           fontSize: 11,
           letterSpacing: 0.4,
@@ -86,7 +86,7 @@ export function GraphSearch({
             overflowY: 'auto',
             borderRadius: 12,
             background: 'var(--bg-elev, #111)',
-            border: '1px solid var(--hair)',
+            border: '1px solid var(--border-soft)',
             boxShadow: '0 12px 32px rgba(0,0,0,0.55)',
           }}
         >
