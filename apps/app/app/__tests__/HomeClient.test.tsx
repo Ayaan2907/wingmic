@@ -84,9 +84,16 @@ describe('HomeClient', () => {
     cleanup();
   });
 
+  it('uses the first name in the greeting', () => {
+    render(<HomeClient userName="Ada Lovelace" initialData={sampleData} />);
+    expect(screen.getByTestId('home-greeting').textContent).toMatch(/hey,\s*Ada/i);
+    expect(screen.getByText(/home · Ada Lovelace/)).toBeTruthy();
+  });
+
   it('renders header with user name and stat numerals', () => {
     render(<HomeClient userName="ayaan" initialData={sampleData} />);
     expect(screen.getByText(/home · ayaan/)).toBeTruthy();
+    expect(screen.getByTestId('home-greeting').textContent).toMatch(/hey,\s*ayaan/i);
     const stats = screen.getByTestId('home-stats');
     expect(stats.textContent).toContain('3');
     expect(stats.textContent).toContain('12');
@@ -139,6 +146,7 @@ describe('HomeClient', () => {
   it('shows an empty-state row when there are no recent commits', () => {
     listState = { data: { acts: [] }, isLoading: false };
     render(<HomeClient userName={null} initialData={emptyData} />);
+    expect(screen.getByTestId('home-greeting').textContent).toMatch(/hey,\s*you/i);
     expect(screen.getByTestId('home-activity-empty').textContent).toMatch(/tap the mic/);
     expect(screen.getByTestId('home-acts-empty').textContent).toMatch(/no drafts yet/);
   });
