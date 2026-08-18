@@ -1,0 +1,50 @@
+scripts/send-email.ts
+  s_8c6250a9ef1119::t_46b4d6726707b5 24,28
+  s_8c6250a9ef1119::t_b3b38bcac6a39c 23
+  s_8c6250a9ef1119::t_e44ea1ab885e44 205-210
+README.md
+  s_8c6250a9ef1119::t_883ea7cc6dfc98 181
+  s_8c6250a9ef1119::t_6590f24113db1f 191
+apps/app/lib/config/resend-from.test.ts
+  s_8c6250a9ef1119::t_de73696a3a4f4e 1-28
+apps/app/.env.example
+  s_8c6250a9ef1119::t_02a1d10f453e6d 25
+  s_8c6250a9ef1119::t_e67aa3bc41b185 24,26
+apps/app/lib/config/env.ts
+  s_8c6250a9ef1119::t_e8be2643d85421 17-19
+  s_8c6250a9ef1119::t_a8d0b2a0f7bcfc 71-72
+  s_8c6250a9ef1119::t_75ebc2e876dc8e 117,120
+  s_8c6250a9ef1119::t_af9d3ef50d847b 118,121-123
+apps/app/lib/auth.ts
+  s_8c6250a9ef1119::t_b875cabead83aa 30,32-34,36,46
+docs/deploy.md
+  s_8c6250a9ef1119::t_1e84b73c8ae469 139
+  s_8c6250a9ef1119::t_5ceba777acd981 84
+  s_8c6250a9ef1119::t_843a9703e8c009 16
+  s_8c6250a9ef1119::t_0f9d7c50f16fdb 6
+  s_8c6250a9ef1119::t_af046f5117a13c 198,206-207,210
+  s_8c6250a9ef1119::t_ad83fef2bacef0 63
+  s_8c6250a9ef1119::t_e06d0bd4ce5e93 211
+  s_8c6250a9ef1119::t_4d16025662e955 65,67
+docs/railway-deploy-runbook.md
+  s_8c6250a9ef1119::t_f43392630ad82d 184
+  s_8c6250a9ef1119::t_45f0e7cd13852d 185
+apps/app/lib/config/resend-from.ts
+  s_8c6250a9ef1119::t_29909d1d94168d 1-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "0f447f9f71131ef8362100bc923ed5e6ed88242a",
+  "prompts": {},
+  "sessions": {
+    "s_8c6250a9ef1119": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "63f5e265-40f8-4bf1-b1c7-ea2ba189ef82",
+        "model": "composer-2.5"
+      },
+      "human_author": null
+    }
+  }
+}
