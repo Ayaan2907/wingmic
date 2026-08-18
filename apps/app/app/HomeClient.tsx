@@ -51,6 +51,12 @@ export interface HomeClientProps {
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
+function firstNameOf(userName: string | null): string {
+  const trimmed = userName?.trim();
+  if (!trimmed) return 'you';
+  return trimmed.split(/\s+/)[0]!;
+}
+
 function timeOf(iso: string): string {
   try {
     return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -85,6 +91,19 @@ export default function HomeClient({ userName, initialData }: HomeClientProps) {
           boxSizing: 'border-box',
         }}
       >
+        <h1
+          data-testid="home-greeting"
+          style={{
+            font: '800 32px/1.05 var(--font-sans)',
+            letterSpacing: '-0.03em',
+            margin: '0 0 18px',
+          }}
+        >
+          hey,{' '}
+          <span className="serif" style={{ fontStyle: 'italic', color: accent, fontWeight: 400 }}>
+            {firstNameOf(userName)}.
+          </span>
+        </h1>
         <StatsRow today={todayCount} week={weekCount} />
         <ImportsCue />
         <HomeActsPanel fallbackCount={pendingActs} />
