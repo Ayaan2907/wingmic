@@ -5,6 +5,11 @@ export const metadata = {
   description: 'sign in to wingmic — magic link, no password.',
 };
 
-export default function Page({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
-  return <SignInClient searchParamsPromise={searchParams} />;
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const sp = await searchParams;
+  return <SignInClient next={sp?.next ?? '/chat'} />;
 }

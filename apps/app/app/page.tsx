@@ -35,8 +35,21 @@ export default async function Page() {
   // here (the primary post-signin landing), never from /onboarding (loop).
   await requireOnboarded(session.user.id);
 
-  const initialData = await loadHomeData(session.user.id);
-  return <HomeClient userName={session.user.name ?? null} initialData={initialData} />;
+  const [initialData, userRow] = await Promise.all([
+    loadHomeData(session.user.id),
+    db.query.users.findFirst({
+      where: eq(schema.users.id, session.user.id),
+      columns: { name: true },
+    }),
+  ]);
+  // Prefer the row over the session: magic-link sessions cache `name` as null
+  // until the cookie refreshes, even after onboarding writes user.name.
+  return (
+    <HomeClient
+      userName={userRow?.name ?? session.user.name ?? null}
+      initialData={initialData}
+    />
+  );
 }
 
 async function loadHomeData(userId: string): Promise<HomeInitialData> {
