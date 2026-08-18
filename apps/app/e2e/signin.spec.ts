@@ -7,6 +7,10 @@ test.describe('signin', () => {
     await expect(page.getByText(/no password/i)).toBeVisible();
     await expect(page.getByPlaceholder('you@domain.com')).toBeVisible();
     await expect(page.getByRole('button', { name: /send sign-in link/i })).toBeVisible();
+    const linkedin = page.getByTestId('linkedin-signin-coming-soon');
+    await expect(linkedin).toBeVisible();
+    await expect(linkedin).toBeDisabled();
+    await expect(page.getByText(/coming soon/i)).toBeVisible();
   });
 
   test('rejects empty email submit', async ({ page }) => {
