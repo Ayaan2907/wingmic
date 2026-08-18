@@ -11,33 +11,23 @@
 import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { accent, blue, violet } from '@/app/chat/_components/tokens';
+import { accent } from '@/app/chat/_components/tokens';
 import { trpc } from '@/lib/trpc/client';
+import { GraphHoverCard } from './GraphHoverCard';
+import { GraphSearch } from './GraphSearch';
+import {
+  FILTERS,
+  KIND_COLOR,
+  NODE_REL_SIZE,
+  linkColorOf,
+  linkWidthOf,
+} from './graph-style';
+import type { GraphData, GraphLink, GraphNode, LinkRel, NodeKind } from './graph-types';
+import { graphEndId } from './graph-types';
+
+export type { GraphData, GraphLink, GraphNode, LinkRel, NodeKind };
 
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), { ssr: false });
-
-type NodeKind = 'person' | 'company' | 'event' | 'topic';
-type LinkRel = 'works_at' | 'attended' | 'discussed';
-
-export type GraphNode = { id: string; kind: NodeKind; label: string };
-export type GraphLink = { source: string; target: string; rel: LinkRel };
-export type GraphData = { nodes: GraphNode[]; links: GraphLink[] };
-
-// Node palette by kind — entity colors lifted from chat/_components/tokens.
-// event has no dedicated token; the grey --text-55 keeps it recessive.
-const KIND_COLOR: Record<NodeKind, string> = {
-  person: accent, // #FFC452
-  company: blue, // #7DD3FC
-  event: 'var(--text-55)',
-  topic: violet, // #A78BFA
-};
-
-const FILTERS: Array<{ kind: NodeKind; label: string }> = [
-  { kind: 'person', label: 'people' },
-  { kind: 'company', label: 'orgs' },
-  { kind: 'event', label: 'events' },
-  { kind: 'topic', label: 'topics' },
-];
 
 export function GraphClient({ data }: { data: GraphData }) {
   const router = useRouter();
@@ -50,6 +40,8 @@ export function GraphClient({ data }: { data: GraphData }) {
     () => new Set<NodeKind>(['person', 'company', 'event', 'topic']),
   );
   const [selected, setSelected] = useState<GraphNode | null>(null);
+  const [hovered, setHovered] = useState<GraphNode | null>(null);
+  const [pointer, setPointer] = useState({ x: 0, y: 0 });
 
   const toggle = (kind: NodeKind) => {
     setActive((prev) => {
@@ -76,11 +68,11 @@ export function GraphClient({ data }: { data: GraphData }) {
   const nodeById = useMemo(() => new Map(data.nodes.map((n) => [n.id, n])), [data.nodes]);
   const selectedEdges = useMemo(() => {
     if (!selected) return [] as Array<{ rel: LinkRel; label: string }>;
-    const idOf = (end: string | { id: string }) => (typeof end === 'object' ? end.id : end);
     return data.links
-      .filter((l) => idOf(l.source) === selected.id || idOf(l.target) === selected.id)
+      .filter((l) => graphEndId(l.source) === selected.id || graphEndId(l.target) === selected.id)
       .map((l) => {
-        const otherId = idOf(l.source) === selected.id ? idOf(l.target) : idOf(l.source);
+        const otherId =
+          graphEndId(l.source) === selected.id ? graphEndId(l.target) : graphEndId(l.source);
         return { rel: l.rel, label: nodeById.get(otherId)?.label ?? otherId };
       });
   }, [selected, data.links, nodeById]);
@@ -136,17 +128,23 @@ export function GraphClient({ data }: { data: GraphData }) {
         color: 'var(--ink)',
         overflow: 'hidden',
       }}
+      onMouseMove={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setPointer({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+      }}
     >
-      {/* Filter chips */}
+      {/* Filter chips + in-canvas search. Dropdown overflows the canvas. */}
       <div
         style={{
           position: 'absolute',
           top: 16,
           left: 16,
-          zIndex: 2,
+          right: 16,
+          zIndex: 4,
           display: 'flex',
           gap: 8,
           flexWrap: 'wrap',
+          alignItems: 'center',
         }}
       >
         {FILTERS.map(({ kind, label }) => {
@@ -174,15 +172,24 @@ export function GraphClient({ data }: { data: GraphData }) {
             </button>
           );
         })}
+        <GraphSearch nodes={data.nodes} onSelect={setSelected} />
       </div>
 
       <ForceGraph2D
         graphData={filtered}
         nodeColor={(n: any) => KIND_COLOR[(n as GraphNode).kind] ?? accent}
-        nodeLabel={(n: any) => (n as GraphNode).label}
+        nodeRelSize={NODE_REL_SIZE}
+        nodeLabel={() => ''}
+        linkColor={(l: any) => linkColorOf((l as GraphLink).rel)}
+        linkWidth={(l: any) => linkWidthOf((l as GraphLink).rel)}
+        linkDirectionalArrowLength={4}
+        linkDirectionalArrowRelPos={1}
         onNodeClick={(n: any) => setSelected(n as GraphNode)}
+        onNodeHover={(n: any) => setHovered(n ? (n as GraphNode) : null)}
         backgroundColor="rgba(0,0,0,0)"
       />
+
+      <GraphHoverCard node={hovered} x={pointer.x} y={pointer.y} />
 
       {/* Selected-node floating card (above the nav on mobile). Hidden on
           desktop — the persistent detail rail replaces it there. */}

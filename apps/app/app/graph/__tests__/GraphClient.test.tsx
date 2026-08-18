@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 
 const routerPush = vi.fn();
@@ -29,15 +29,29 @@ vi.mock('@/lib/trpc/client', () => ({
   },
 }));
 
-// Mock the dynamic force-graph: render a button per node that fires onNodeClick,
-// so jsdom never touches a real canvas / window.
+// Mock the dynamic force-graph: render a button per node that fires onNodeClick
+// / onNodeHover, so jsdom never touches a real canvas / window.
 vi.mock('next/dynamic', () => ({
   default: () =>
     function MockGraph(props: any) {
       return (
         <div data-testid="force-graph">
+          {props.graphData.links.map((l: any, i: number) => (
+            <span
+              key={`${l.source}-${l.target}-${i}`}
+              data-testid={`graph-link-${i}`}
+              data-rel={l.rel}
+              data-color={props.linkColor?.(l)}
+              data-width={String(props.linkWidth?.(l) ?? props.linkWidth ?? '')}
+            />
+          ))}
           {props.graphData.nodes.map((n: any) => (
-            <button key={n.id} onClick={() => props.onNodeClick?.(n)}>
+            <button
+              key={n.id}
+              onClick={() => props.onNodeClick?.(n)}
+              onMouseEnter={() => props.onNodeHover?.(n)}
+              onMouseLeave={() => props.onNodeHover?.(null)}
+            >
               {n.label}
             </button>
           ))}
@@ -141,5 +155,49 @@ describe('GraphClient', () => {
     const btns = screen.getAllByRole('button', { name: /draft check-in/i });
     expect(btns.every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
     expect(createDraftMutate).not.toHaveBeenCalled();
+  });
+
+  it('paints visible relation edges on the canvas payload', () => {
+    render(<GraphClient data={DATA} />);
+    const worksAt = screen.getByTestId('graph-link-0');
+    const attended = screen.getByTestId('graph-link-1');
+    expect(worksAt.getAttribute('data-rel')).toBe('works_at');
+    expect(worksAt.getAttribute('data-color')).toMatch(/^#/);
+    expect(Number(worksAt.getAttribute('data-width'))).toBeGreaterThan(0);
+    expect(attended.getAttribute('data-rel')).toBe('attended');
+    expect(attended.getAttribute('data-color')).toMatch(/^#/);
+  });
+
+  it('searches graph nodes and selects from the overflowing dropdown', () => {
+    render(<GraphClient data={DATA} />);
+    const input = screen.getByTestId('graph-search') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'acme' } });
+    const results = screen.getByTestId('graph-search-results');
+    expect(results.textContent).toMatch(/Acme/);
+    expect(results.textContent).toMatch(/company/);
+    fireEvent.click(within(results).getByRole('button'));
+    expect(screen.getByText(/edges · 1/i)).toBeTruthy();
+    expect(screen.queryByTestId('graph-search-results')).toBeNull();
+  });
+
+  it('hides the search dropdown when the query is empty', () => {
+    render(<GraphClient data={DATA} />);
+    expect(screen.queryByTestId('graph-search-results')).toBeNull();
+    fireEvent.change(screen.getByTestId('graph-search'), { target: { value: 'zzz' } });
+    expect(screen.getByTestId('graph-search-results').textContent).toMatch(
+      /no matches in your graph/i,
+    );
+  });
+
+  it('shows a hover card with name and avatar', () => {
+    render(<GraphClient data={DATA} />);
+    const nodeBtn = screen.getByRole('button', { name: 'Ada' });
+    fireEvent.mouseEnter(nodeBtn);
+    const card = screen.getByTestId('graph-hover-card');
+    expect(card.textContent).toMatch(/Ada/);
+    expect(card.textContent).toMatch(/person/);
+    expect(card.querySelector('[data-testid="entity-person"]')).toBeTruthy();
+    fireEvent.mouseLeave(nodeBtn);
+    expect(screen.queryByTestId('graph-hover-card')).toBeNull();
   });
 });
