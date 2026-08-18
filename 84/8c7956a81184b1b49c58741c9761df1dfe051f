@@ -1,0 +1,204 @@
+apps/app/lib/config/resend-from.ts
+  s_8c6250a9ef1119::t_29909d1d94168d 1-27
+apps/app/lib/config/resend-from.test.ts
+  s_8c6250a9ef1119::t_de73696a3a4f4e 1-28
+scripts/send-email.ts
+  s_8c6250a9ef1119::t_46b4d6726707b5 24,28
+  s_8c6250a9ef1119::t_b3b38bcac6a39c 23
+  s_8c6250a9ef1119::t_e44ea1ab885e44 205-210
+apps/app/lib/config/env.ts
+  s_8c6250a9ef1119::t_e8be2643d85421 17-19
+  s_8c6250a9ef1119::t_75ebc2e876dc8e 117,120
+  s_8c6250a9ef1119::t_af9d3ef50d847b 118,121-123
+  s_8c6250a9ef1119::t_a8d0b2a0f7bcfc 71-72
+apps/app/.env.example
+  s_8c6250a9ef1119::t_02a1d10f453e6d 25
+  s_8c6250a9ef1119::t_e67aa3bc41b185 24,26
+README.md
+  s_8c6250a9ef1119::t_6590f24113db1f 191
+  s_8c6250a9ef1119::t_883ea7cc6dfc98 181
+docs/deploy.md
+  s_8c6250a9ef1119::t_e06d0bd4ce5e93 211
+  s_8c6250a9ef1119::t_ad83fef2bacef0 63
+  s_8c6250a9ef1119::t_843a9703e8c009 16
+  s_8c6250a9ef1119::t_4d16025662e955 65,67
+  s_8c6250a9ef1119::t_0f9d7c50f16fdb 6
+  s_8c6250a9ef1119::t_af046f5117a13c 198,206-207,210
+  s_8c6250a9ef1119::t_1e84b73c8ae469 139
+  s_8c6250a9ef1119::t_5ceba777acd981 84
+docs/railway-deploy-runbook.md
+  s_8c6250a9ef1119::t_f43392630ad82d 184
+  s_8c6250a9ef1119::t_45f0e7cd13852d 185
+apps/app/lib/auth.ts
+  s_8c6250a9ef1119::t_b875cabead83aa 30,32-34,36,46
+docs/superpowers/plans/2026-08-14-product-analytics-posthog.md
+  s_383620e3a1e4e3::t_10a07d59217211 1-130
+.agents/skills/impeccable/SKILL.md
+  s_8c6250a9ef1119::t_c21536d55a32a4 1-168
+.agents/skills/impeccable/agents/impeccable-asset-producer.md
+  s_8c6250a9ef1119::t_fccfed184a0f7b 1-101
+.agents/skills/impeccable/reference/adapt.md
+  s_8c6250a9ef1119::t_9cc2282235174f 1-190
+.agents/skills/impeccable/reference/animate.md
+  s_8c6250a9ef1119::t_f7544c8927922e 1-175
+.agents/skills/impeccable/reference/audit.md
+  s_8c6250a9ef1119::t_30193287b1b2ec 1-133
+.agents/skills/impeccable/reference/bolder.md
+  s_8c6250a9ef1119::t_9f7433bc0ae130 1-113
+.agents/skills/impeccable/reference/brand.md
+  s_8c6250a9ef1119::t_4a90430eebe03b 1-118
+.agents/skills/impeccable/reference/clarify.md
+  s_8c6250a9ef1119::t_6d0feedd4180e6 1-174
+.agents/skills/impeccable/reference/codex.md
+  s_8c6250a9ef1119::t_0c517546e4bdbd 1-105
+.agents/skills/impeccable/reference/cognitive-load.md
+  s_8c6250a9ef1119::t_3557f5e37daa9b 1-106
+.agents/skills/impeccable/reference/color-and-contrast.md
+  s_8c6250a9ef1119::t_55e51d120be98d 1-105
+.agents/skills/impeccable/reference/colorize.md
+  s_8c6250a9ef1119::t_f1e6e30f41ad86 1-154
+.agents/skills/impeccable/reference/craft.md
+  s_8c6250a9ef1119::t_d7aa8094de7f15 1-123
+.agents/skills/impeccable/reference/critique.md
+  s_8c6250a9ef1119::t_15d7f2ede4d37d 1-273
+.agents/skills/impeccable/reference/delight.md
+  s_8c6250a9ef1119::t_56b7624458e8fc 1-302
+.agents/skills/impeccable/reference/distill.md
+  s_8c6250a9ef1119::t_7bda04debc964a 1-111
+.agents/skills/impeccable/reference/document.md
+  s_8c6250a9ef1119::t_013fda5e286f5b 1-427
+.agents/skills/impeccable/reference/extract.md
+  s_8c6250a9ef1119::t_6e94d8459bb929 1-69
+.agents/skills/impeccable/reference/harden.md
+  s_8c6250a9ef1119::t_936f3504b6ed6e 1-347
+.agents/skills/impeccable/reference/heuristics-scoring.md
+  s_8c6250a9ef1119::t_154fdb9dadc90c 1-234
+.agents/skills/impeccable/reference/interaction-design.md
+  s_8c6250a9ef1119::t_67250ec5493ec7 1-195
+.agents/skills/impeccable/reference/layout.md
+  s_8c6250a9ef1119::t_3e9c0eef27a264 1-141
+.agents/skills/impeccable/reference/live.md
+  s_8c6250a9ef1119::t_2a7c239fd30cdc 1-622
+.agents/skills/impeccable/reference/motion-design.md
+  s_8c6250a9ef1119::t_3453f0a9ea129e 1-109
+.agents/skills/impeccable/reference/onboard.md
+  s_8c6250a9ef1119::t_e8f171136bfb4c 1-234
+.agents/skills/impeccable/reference/optimize.md
+  s_8c6250a9ef1119::t_4419045e4a6950 1-258
+.agents/skills/impeccable/reference/overdrive.md
+  s_8c6250a9ef1119::t_dcc37a7aa05d3e 1-130
+.agents/skills/impeccable/reference/personas.md
+  s_8c6250a9ef1119::t_692170b856b8bf 1-179
+.agents/skills/impeccable/reference/polish.md
+  s_8c6250a9ef1119::t_9524fa47fd44f4 1-242
+.agents/skills/impeccable/reference/product.md
+  s_8c6250a9ef1119::t_40f7c40256a990 1-62
+.agents/skills/impeccable/reference/quieter.md
+  s_8c6250a9ef1119::t_5be668a23887b5 1-99
+.agents/skills/impeccable/reference/responsive-design.md
+  s_8c6250a9ef1119::t_634cf0bc44be2c 1-114
+.agents/skills/impeccable/reference/shape.md
+  s_8c6250a9ef1119::t_7fc58fe2d6073f 1-165
+.agents/skills/impeccable/reference/spatial-design.md
+  s_8c6250a9ef1119::t_43411bf36bfeff 1-100
+.agents/skills/impeccable/reference/teach.md
+  s_8c6250a9ef1119::t_42e11bdfdf0013 1-156
+.agents/skills/impeccable/reference/typeset.md
+  s_8c6250a9ef1119::t_13e37a8b262a40 1-124
+.agents/skills/impeccable/reference/typography.md
+  s_8c6250a9ef1119::t_563f6b2d894b9a 1-159
+.agents/skills/impeccable/reference/ux-writing.md
+  s_8c6250a9ef1119::t_377802893d4a7f 1-107
+.agents/skills/impeccable/scripts/cleanup-deprecated.mjs
+  s_8c6250a9ef1119::t_a3467ec817a8dc 1-284
+.agents/skills/impeccable/scripts/command-metadata.json
+  s_8c6250a9ef1119::t_3f5c28f4da6bab 1-94
+.agents/skills/impeccable/scripts/critique-storage.mjs
+  s_8c6250a9ef1119::t_28568d68d5e6dd 1-242
+.agents/skills/impeccable/scripts/design-parser.mjs
+  s_8c6250a9ef1119::t_42d1a82d732acb 1-820
+.agents/skills/impeccable/scripts/detect-csp.mjs
+  s_8c6250a9ef1119::t_2c1d85b6ea62b1 1-198
+.agents/skills/impeccable/scripts/detect.mjs
+  s_8c6250a9ef1119::t_b1d22653896462 1-21
+.agents/skills/impeccable/scripts/impeccable-paths.mjs
+  s_8c6250a9ef1119::t_957ed1f93df38d 1-110
+.agents/skills/impeccable/scripts/is-generated.mjs
+  s_8c6250a9ef1119::t_ff1b5eb24f0599 1-69
+.agents/skills/impeccable/scripts/live-accept.mjs
+  s_8c6250a9ef1119::t_b9b41ee8b6de51 1-595
+.agents/skills/impeccable/scripts/live-browser-session.js
+  s_8c6250a9ef1119::t_07c1da84ffb6f0 1-123
+.agents/skills/impeccable/scripts/live-browser.js
+  s_8c6250a9ef1119::t_7d300d93c45314 1-4860
+.agents/skills/impeccable/scripts/live-complete.mjs
+  s_8c6250a9ef1119::t_8ee0c583c82e6e 1-75
+.agents/skills/impeccable/scripts/live-completion.mjs
+  s_8c6250a9ef1119::t_c7469deb388b3a 1-18
+.agents/skills/impeccable/scripts/live-inject.mjs
+  s_8c6250a9ef1119::t_c88db089d7993d 1-446
+.agents/skills/impeccable/scripts/live-poll.mjs
+  s_8c6250a9ef1119::t_546d7e2080640c 1-200
+.agents/skills/impeccable/scripts/live-resume.mjs
+  s_8c6250a9ef1119::t_666e21298acd8b 1-48
+.agents/skills/impeccable/scripts/live-server.mjs
+  s_8c6250a9ef1119::t_856064ed0d0c0a 1-838
+.agents/skills/impeccable/scripts/live-session-store.mjs
+  s_8c6250a9ef1119::t_c3c51be1b2ccdf 1-254
+.agents/skills/impeccable/scripts/live-status.mjs
+  s_8c6250a9ef1119::t_c9b78091ceb4bb 1-47
+.agents/skills/impeccable/scripts/live-wrap.mjs
+  s_8c6250a9ef1119::t_ed28b8c63af134 1-632
+.agents/skills/impeccable/scripts/live.mjs
+  s_8c6250a9ef1119::t_6716b048c65a86 1-247
+.agents/skills/impeccable/scripts/load-context.mjs
+  s_8c6250a9ef1119::t_0265abeaf8bc8d 1-141
+.agents/skills/impeccable/scripts/modern-screenshot.umd.js
+  s_8c6250a9ef1119::t_72c5602f726fdc 1-14
+.agents/skills/impeccable/scripts/pin.mjs
+  s_8c6250a9ef1119::t_7f8ca92dd33f6e 1-214
+.claude/skills/impeccable
+  s_8c6250a9ef1119::t_0401948c628cc4 1
+.claude/worktrees/agent-t11-final
+  s_8c6250a9ef1119::t_3d5d39049b85f5 1
+.claude/worktrees/agent-t4-brand
+  s_8c6250a9ef1119::t_a7e3b17a36ebf8 1
+.claude/worktrees/agent-t5-tokens
+  s_8c6250a9ef1119::t_6bdf13fa41afdd 1
+.claude/worktrees/agent-t6-db
+  s_8c6250a9ef1119::t_17d30054bcc517 1
+.claude/worktrees/agent-t7-extractor
+  s_8c6250a9ef1119::t_c58b563530bde3 1
+.claude/worktrees/agent-t8-ci
+  s_8c6250a9ef1119::t_e587ed5233482d 1
+.claude/worktrees/agent-t9-docs
+  s_8c6250a9ef1119::t_6efa962c67004e 1
+.claude/worktrees/agent-waitlist
+  s_8c6250a9ef1119::t_af4f85d17666c3 1
+skills-lock.json
+  s_8c6250a9ef1119::t_26a4b3d03116da 1-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "848c7956a81184b1b49c58741c9761df1dfe051f",
+  "prompts": {},
+  "sessions": {
+    "s_383620e3a1e4e3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fcd25faf-7627-4a96-b9ca-f00634bfbed1",
+        "model": "unknown"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    },
+    "s_8c6250a9ef1119": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "63f5e265-40f8-4bf1-b1c7-ea2ba189ef82",
+        "model": "composer-2.5"
+      },
+      "human_author": null
+    }
+  }
+}
