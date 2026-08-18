@@ -9,6 +9,7 @@ import {
 } from './types';
 
 const TAVILY_BASE = 'https://api.tavily.com';
+const TAVILY_TIMEOUT_MS = 12_000;
 
 type FetchLike = typeof fetch;
 
@@ -82,6 +83,7 @@ export class TavilyWebSearchProvider implements WebSearchProvider {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(TAVILY_TIMEOUT_MS),
       });
     } catch (err) {
       throw new WebSearchError(`tavily ${path} network error`, err);
@@ -91,6 +93,10 @@ export class TavilyWebSearchProvider implements WebSearchProvider {
       throw new WebSearchError(`tavily ${path} failed (${res.status})`);
     }
 
-    return (await res.json()) as T;
+    try {
+      return (await res.json()) as T;
+    } catch (err) {
+      throw new WebSearchError(`tavily ${path} returned invalid json`, err);
+    }
   }
 }

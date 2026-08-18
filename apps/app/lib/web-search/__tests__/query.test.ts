@@ -28,12 +28,16 @@ describe('buildWebSearchQuery', () => {
     expect(buildWebSearchQuery({ intent: 'company', company: 'Acme' }).q).toBe(
       'Acme official site',
     );
+    expect(
+      buildWebSearchQuery({ intent: 'company', company: '  ', domain: 'acme.dev' }).q,
+    ).toBe('acme.dev official site');
   });
 });
 
 describe('isBlockedExtractUrl', () => {
   it('blocks LinkedIn hosts so we never extract profile HTML', () => {
     expect(isBlockedExtractUrl('https://www.linkedin.com/in/ada-lovelace')).toBe(true);
+    expect(isBlockedExtractUrl('https://uk.linkedin.com/in/ada-lovelace')).toBe(true);
     expect(isBlockedExtractUrl('https://lnkd.in/abc')).toBe(true);
     expect(isBlockedExtractUrl('https://www.analytical-engines.example/')).toBe(false);
   });

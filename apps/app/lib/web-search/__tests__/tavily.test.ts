@@ -122,6 +122,7 @@ describe('TavilyWebSearchProvider.extract', () => {
     const pages = await provider.extract({
       urls: [
         'https://www.linkedin.com/in/ada-lovelace',
+        'https://uk.linkedin.com/in/ada-lovelace',
         'https://www.analytical-engines.example/',
       ],
     });
@@ -129,5 +130,16 @@ describe('TavilyWebSearchProvider.extract', () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
     expect(body.urls).toEqual(['https://www.analytical-engines.example/']);
     expect(pages).toHaveLength(1);
+  });
+
+  it('wraps non-JSON 2xx bodies as WebSearchError', async () => {
+    const fetchMock = vi.fn(async () => new Response('nope', { status: 200 }));
+    const provider = new TavilyWebSearchProvider({
+      apiKey: 'tvly-test',
+      fetch: fetchMock,
+    });
+    await expect(
+      provider.search({ intent: 'general', q: 'Ada Lovelace' }),
+    ).rejects.toMatchObject({ name: 'WebSearchError' });
   });
 });

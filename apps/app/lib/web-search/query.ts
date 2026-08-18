@@ -1,11 +1,14 @@
 import type { WebSearchIntent, WebSearchQuery } from './types';
 
-const LINKEDIN_EXTRACT_HOSTS = new Set(['linkedin.com', 'lnkd.in']);
-
 export function isBlockedExtractUrl(raw: string): boolean {
   try {
     const host = new URL(raw).hostname.replace(/^www\./, '').toLowerCase();
-    return LINKEDIN_EXTRACT_HOSTS.has(host);
+    return (
+      host === 'linkedin.com' ||
+      host.endsWith('.linkedin.com') ||
+      host === 'lnkd.in' ||
+      host.endsWith('.lnkd.in')
+    );
   } catch {
     return true;
   }
@@ -38,11 +41,15 @@ export function buildWebSearchQuery(hints: WebSearchQueryHints): WebSearchQuery 
     }
     case 'person':
       return { intent: 'person', q: joinPresent(quoteName(hints.name), hints.company) };
-    case 'company':
+    case 'company': {
+      const company = hints.company?.trim() || undefined;
+      const domain = hints.domain?.trim() || undefined;
+      const subject = company ?? domain;
       return {
         intent: 'company',
-        q: joinPresent(hints.company ?? hints.domain, hints.company ? 'official site' : undefined),
+        q: joinPresent(subject, subject ? 'official site' : undefined),
       };
+    }
     case 'event':
       return { intent: 'event', q: joinPresent(hints.event, hints.year) };
     case 'general':
