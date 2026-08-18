@@ -53,6 +53,12 @@ const serverSchema = z.object({
   EMBEDDING_MODEL: z.string().default('openai/text-embedding-3-small'),
   /** Mastra acts-draft agent model (OpenRouter id; openrouter/ prefix optional). */
   ACTS_DRAFT_MODEL: z.string().default('anthropic/claude-haiku-4.5'),
+
+  // ── Public web search (enrich / events / profile index) ───────────────
+  // Swap vendor without changing call sites: tavily today, exa when registered.
+  WEB_SEARCH_PROVIDER: z.enum(['tavily', 'exa', 'none']).default('tavily'),
+  TAVILY_API_KEY: z.string().min(1).optional(),
+  EXA_API_KEY: z.string().min(1).optional(),
 });
 
 // ── Client schema ───────────────────────────────────────────────────────
