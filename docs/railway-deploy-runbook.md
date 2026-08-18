@@ -181,6 +181,8 @@ GitHub Actions CI is separate; it does not replace Railway’s builder.
 
 Railway does **not** run `doppler run` in the container. Sync secrets into Railway Variables per environment (`dev` / `stg` / `prd` configs).
 
+**Email sender:** production ignores `RESEND_FROM` in Railway variables and uses `DEFAULT_RESEND_FROM` from `apps/app/lib/config/env.ts` (`wingmic <info@mail.wingmic.xyz>`). Delete any stale `RESEND_FROM` variable after deploy — the app logs a warning if one is present but ignored.
+
 ---
 
 ## 6. Verify a successful build (log checklist)
