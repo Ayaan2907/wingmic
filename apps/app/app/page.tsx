@@ -44,9 +44,12 @@ export default async function Page() {
   ]);
   // Prefer the row over the session: magic-link sessions cache `name` as null
   // until the cookie refreshes, even after onboarding writes user.name.
+  // Empty-string names are treated as missing so we can fall back.
+  const fromRow = userRow?.name?.trim() || null;
+  const fromSession = session.user.name?.trim() || null;
   return (
     <HomeClient
-      userName={userRow?.name ?? session.user.name ?? null}
+      userName={fromRow ?? fromSession}
       initialData={initialData}
     />
   );
