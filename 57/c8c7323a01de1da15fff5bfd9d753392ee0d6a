@@ -1,0 +1,41 @@
+apps/app/.env.example
+  s_8c6250a9ef1119::t_e67aa3bc41b185 24-26
+scripts/send-email.ts
+  s_8c6250a9ef1119::t_e44ea1ab885e44 205-210
+  s_8c6250a9ef1119::t_b3b38bcac6a39c 23-24,28
+apps/app/lib/auth.ts
+  s_8c6250a9ef1119::t_b875cabead83aa 30,32-34,36,46
+README.md
+  s_8c6250a9ef1119::t_8b3abdc85ff3eb 181
+  s_8c6250a9ef1119::t_6590f24113db1f 191
+apps/app/lib/config/env.test.ts
+  s_8c6250a9ef1119::t_517b0deb6464cc 1-28
+docs/deploy.md
+  s_8c6250a9ef1119::t_af046f5117a13c 198,206-207,210
+  s_8c6250a9ef1119::t_434e04ca800a6e 139
+  s_8c6250a9ef1119::t_4d16025662e955 65,67,84
+  s_8c6250a9ef1119::t_e06d0bd4ce5e93 211
+docs/railway-deploy-runbook.md
+  s_8c6250a9ef1119::t_45f0e7cd13852d 184-185
+apps/app/lib/config/env.ts
+  s_8c6250a9ef1119::t_75ebc2e876dc8e 142,145
+  s_8c6250a9ef1119::t_7c7b07e90169f4 18-45
+  s_8c6250a9ef1119::t_a8d0b2a0f7bcfc 96-97
+  s_8c6250a9ef1119::t_af9d3ef50d847b 143,146-148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "57c8c7323a01de1da15fff5bfd9d753392ee0d6a",
+  "prompts": {},
+  "sessions": {
+    "s_8c6250a9ef1119": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "63f5e265-40f8-4bf1-b1c7-ea2ba189ef82",
+        "model": "composer-2.5"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
