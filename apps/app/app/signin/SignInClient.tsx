@@ -1,19 +1,13 @@
 'use client';
 
-import { use, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { signIn } from '@/lib/auth-client';
 
 type Status = 'idle' | 'sending' | 'sent' | 'error';
 
 const accent = '#FFC452';
 
-export default function SignInClient({
-  searchParamsPromise,
-}: {
-  searchParamsPromise: Promise<{ next?: string }>;
-}) {
-  const sp = use(searchParamsPromise);
-  const next = sp?.next ?? '/chat';
+export default function SignInClient({ next = '/chat' }: { next?: string }) {
 
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<Status>('idle');
