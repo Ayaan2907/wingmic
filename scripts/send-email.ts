@@ -20,15 +20,14 @@
  * available. Values are HTML-escaped. A placeholder with no value and no
  * fallback is an error at dry-run time, not a blank in someone's inbox.
  *
- * Env: RESEND_API_KEY (required for --send). RESEND_FROM is dev-only override;
- * production uses the code default in apps/app/lib/config/env.ts.
+ * Env: RESEND_API_KEY (required for --send), RESEND_FROM (optional override).
  */
 import { parseArgs } from 'node:util';
 import { readFileSync } from 'node:fs';
-import { resolveResendFrom } from '../apps/app/lib/config/env.ts';
 
 const BATCH_SIZE = 100; // Resend batch endpoint hard limit
 const BATCH_DELAY_MS = 600; // stay under Resend's 2 req/s default rate limit
+const DEFAULT_FROM = 'wingmic <info@mail.wingmic.xyz>';
 
 const { values } = parseArgs({
   options: {
@@ -202,12 +201,7 @@ const recipients = parseRecipients(
 );
 if (recipients.length === 0) fail('no recipients found');
 
-const from =
-  values.from ??
-  resolveResendFrom(
-    (process.env.NODE_ENV ?? 'development') as 'development' | 'production' | 'test',
-    process.env.RESEND_FROM,
-  );
+const from = values.from ?? process.env.RESEND_FROM ?? DEFAULT_FROM;
 const headers: Record<string, string> = {};
 if (values['unsubscribe-url']) {
   headers['List-Unsubscribe'] = `<${values['unsubscribe-url']}>`;
