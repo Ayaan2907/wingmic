@@ -25,7 +25,7 @@ people stay private. Acme and ETH Denver stay shared.
 - replace CSV / vCard / device import as the legal contact path (#102)
 - store attendee rosters from Luma, Partiful, calendars, or search snippets
 - auto-write `entity_resolution` or `connection_request`
-- invent a parallel people table or persist Brave/Tavily/Google JSON
+- invent a parallel people table or persist vendor JSON
 - add `packages/enrich` in the first PR (this issue authorizes it for a later cut)
 
 ## alignment with existing schema
@@ -69,32 +69,26 @@ fake PII only in fixtures: Ada Lovelace, `ada@example.com`, `https://www.linkedi
 
 ## adapter contract
 
-```ts
-interface SearchAdapter {
-  kind: 'brave' | 'tavily' | 'google_cse';
-  search(query: SearchQuery): Promise<PersonaDraft[]>;
-}
-```
+`WebSearchProvider` in `apps/app/lib/web-search/` (#132). `search` + `extract`. Call sites never import a vendor. **Brave is not used.** Tavily is the first implementation for person, company, event, general, profile, and extract. Swap with `WEB_SEARCH_PROVIDER` (next: exa).
 
-`PersonaDraft` is the field-union of `ImportContactDraft` + `PersonCandidate` + `entity_fact` keys + `{ sourceUrl, retrievedAt, adapterKind, snippet? }`. canonicalize `linkedin`/`linkedinUrl` and `company`/`companyHint` on parse.
+`PersonaDraft` is the field-union of `ImportContactDraft` + `PersonCandidate` + `entity_fact` keys + `{ sourceUrl, retrievedAt, adapterKind, snippet? }`. canonicalize `linkedin`/`linkedinUrl` and `company`/`companyHint` on parse. Map `WebSearchHit` → `PersonaDraft` in the app.
 
 pipeline, in order:
 
 1. local owner-scoped `matchContacts`
 2. local `identity_claim` lookup (verified only, no write)
 3. canonical company/event slug (and company domain)
-4. web adapter **only** on local miss / low confidence
+4. web provider **only** on local miss / low confidence
 
 query text comes from this user's memo or import row. never from another user's private facts. never GET LinkedIn HTML; a search hit that *is* a LinkedIn URL is stored as a string and normalized.
-
-starting pair: Brave (events / general) + Tavily (person / company snippets). Google CSE later, same interface. LinkedIn official API is identity-only (#101), not this.
 
 ## comparison (short)
 
 | approach | person | company/event | ToS / ban | cost | MIT-safe | rec |
 |---|---|---|---|---|---|---|
-| Tavily | high snippets | good bios/domains | low | mid | yes | **start — person/company** |
-| Brave Search API | medium | high events/news | low | low | yes | **start — general/events** |
+| Tavily | high snippets | good bios/events | low | mid | yes | **start — all intents** |
+| Exa | TBD | TBD | low | mid | yes if we write client | next, same interface |
+| Brave Search API | medium | high events/news | low | paid | yes | **skip** |
 | Google CSE | medium | high | low | free tier then paid | yes | later fallback |
 | SerpAPI | high | high | gray | high | client ok | skip |
 | LinkedIn official | identity only | none | none in-scope | free | yes | #101, not graph |
@@ -106,8 +100,8 @@ starting pair: Brave (events / general) + Tavily (person / company snippets). Go
 - [ ] **WP0** — this issue + tree (you are here)
 - [ ] **WP1** — `PersonaDraft` Zod + `fingerprint()` + vitest (Ada fixtures)
 - [ ] **WP2** — local matcher reuse of `matchContacts` (email / linkedin / name-only ambiguous / foreign identifier skip)
-- [ ] **WP3** — Brave adapter (event + general) → `PersonaDraft[]`; skip if key unset
-- [ ] **WP4** — Tavily adapter (person + company); LinkedIn URLs as strings, never fetched
+- [x] **WP3** — ~~Brave adapter~~ skipped (paid)
+- [ ] **WP4** — Tavily `WebSearchProvider` (#132) for all intents + extract; LinkedIn URLs as strings, never extracted
 - [ ] **WP5** — capture hook when `linkedin` or `name+companyHint` present; tiers 1–3 then 4; `commit()` still owns writes
 - [ ] **WP6** — import enrichment optional / env-gated; undo still `importSource`
 - [ ] **WP7** — verified `identity_claim` check; return `{ userId, claimId }`; no `entity_resolution` write
