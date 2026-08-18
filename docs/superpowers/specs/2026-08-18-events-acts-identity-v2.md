@@ -1,7 +1,7 @@
 # Events via search · dynamic acts · platform identity handshake — v2 spec
 
 **Date:** 2026-08-18 · **Status:** finalized with marked open calls · **Base:** `staging`
-**Supersedes:** the ICS/calendar-subscription portion of #104 (its convergence keys, privacy tiers, and `event.external_*` migration survive). Consumes the `SearchAdapter` contract from `2026-08-18-identity-fingerprint-search-design.md`.
+**Supersedes:** the ICS/calendar-subscription portion of #104 (its convergence keys, privacy tiers, and `event.external_*` migration survive). Consumes `WebSearchProvider` from `2026-08-18-web-search-provider.md` (#132).
 **Parent:** #100.
 
 ---
@@ -9,7 +9,7 @@
 ## 0. Direction locked by the founder (2026-08-18)
 
 1. **No calendar links, no ICS.** Users will not paste feeds. Event details come from
-   *search* (Brave), general facts only — date, location, official URL. Never attendees.
+   *search* (Tavily via `WebSearchProvider`), general facts only — date, location, official URL. Never attendees.
 2. **Acts must be dynamic.** A `.ics` download is not a product. Acts should schedule
    themselves and come back to the user.
 3. **Platform identity must do something.** If Ayaan records "met X, he works at Acme"
@@ -29,7 +29,8 @@ memo mentions "ETH Denver"          pasted lu.ma/partiful URL in chat
 upsertEvent (canonical, slug)   ←──── external_id from the URL
         │
         ▼  async job: event_enrich (skip if url+dates already set)
-BraveSearchAdapter.search({ intent: 'event', q: '<event name> <year?>' })
+webSearch.search({ intent: 'event', q: '<event name> <year?>' })
+optional extract() on the official URL (never LinkedIn)
         │
         ▼
 write onto the CANONICAL event row, confidence 70:
@@ -39,8 +40,8 @@ never: attendees, rosters, counts, other users' anything
 ```
 
 - Enrich is **tier-4 discipline** from the fingerprint spec: async, env-gated
-  (`BRAVE_SEARCH_API_KEY` missing → skip silently), search-snippet parsing only.
-  No HTML fetch of event pages in this slice.
+  (`TAVILY_API_KEY` missing or `WEB_SEARCH_PROVIDER=none` → skip silently).
+  Search snippets plus Tavily extract on non-LinkedIn URLs. Never first-party HTML GET of LinkedIn.
 - User-stated fields are never overwritten by web-filled fields; web fills blanks only.
 - Recurring private meetings ("weekly standup") will find no clean public hit —
   enrich writes nothing. That is correct; do not force it.
@@ -181,7 +182,7 @@ matching from another user's private facts, LinkedIn scraping.
 | WP | What | Depends on |
 |---|---|---|
 | V1 | `event.external_source/external_id` migration + slug normalization | — |
-| V2 | Brave `SearchAdapter` (event intent) + `event_enrich` async fill | V1, enrich WP1 |
+| V2 | `WebSearchProvider` event intent (Tavily default) + `event_enrich` async fill | V1, #132 |
 | V3 | Memo↔event window attach (auto-1 + undo, chip on many) | V2 |
 | V4 | `whenHint → runAt` at commit + `/api/cron/acts` + Resend due-nudge | — |
 | V5 | Act CTAs rework: mailto primary, meeting-only add-to-calendar, snooze wakes | V4 |
