@@ -45,7 +45,10 @@ vi.mock('next/dynamic', () => ({
         if (typeof l.target === 'string') l.target = byId.get(l.target) ?? l.target;
       }
       return (
-        <div data-testid="force-graph">
+        <div
+          data-testid="force-graph"
+          data-has-node-paint={typeof props.nodeCanvasObject === 'function' ? '1' : '0'}
+        >
           {props.graphData.links.map((l: any, i: number) => (
             <span
               key={`${idOf(l.source)}-${idOf(l.target)}-${i}`}
@@ -201,6 +204,19 @@ describe('GraphClient', () => {
     fireEvent.click(within(screen.getByTestId('graph-search-results')).getByRole('button'));
     expect(screen.getByRole('button', { name: 'Acme' })).toBeTruthy();
     expect(screen.getByText(/edges · 1/i)).toBeTruthy();
+  });
+
+  it('paints on-canvas node labels via nodeCanvasObject', () => {
+    render(<GraphClient data={DATA} />);
+    expect(screen.getByTestId('force-graph').getAttribute('data-has-node-paint')).toBe('1');
+  });
+
+  it('highlights the matching canvas node when a search hit is picked', () => {
+    render(<GraphClient data={DATA} />);
+    expect(screen.getByTestId('graph-canvas').getAttribute('data-highlighted-id')).toBe('');
+    fireEvent.change(screen.getByTestId('graph-search'), { target: { value: 'acme' } });
+    fireEvent.click(within(screen.getByTestId('graph-search-results')).getByRole('button'));
+    expect(screen.getByTestId('graph-canvas').getAttribute('data-highlighted-id')).toBe('c1');
   });
 
   it('searches graph nodes and selects from the overflowing dropdown', () => {

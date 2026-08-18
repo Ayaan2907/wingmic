@@ -9,8 +9,9 @@
 // mocks `next/dynamic` so jsdom never instantiates the real canvas.
 
 import dynamic from 'next/dynamic';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { ForceGraphMethods } from 'react-force-graph-2d';
 import { accent } from '@/app/chat/_components/tokens';
 import { trpc } from '@/lib/trpc/client';
 import { GraphHoverCard } from './GraphHoverCard';
@@ -21,6 +22,8 @@ import {
   NODE_REL_SIZE,
   linkColorOf,
   linkWidthOf,
+  paintGraphNode,
+  paintGraphNodePointerArea,
 } from './graph-style';
 import type { GraphData, GraphLink, GraphNode, LinkRel, NodeKind } from './graph-types';
 import { graphEndId } from './graph-types';
@@ -44,6 +47,7 @@ export function GraphClient({ data }: { data: GraphData }) {
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
   const hoveredRef = useRef<GraphNode | null>(null);
   const pointerRef = useRef(pointer);
+  const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
 
   const selectNode = (node: GraphNode) => {
     setActive((prev) => {
@@ -97,6 +101,17 @@ export function GraphClient({ data }: { data: GraphData }) {
       });
   }, [selected, data.links, nodeById]);
 
+  useEffect(() => {
+    fgRef.current?.refresh?.();
+    if (!selected) return;
+    const node = filtered.nodes.find((n) => n.id === selected.id) as
+      | (GraphNode & { x?: number; y?: number })
+      | undefined;
+    if (node?.x == null || node.y == null) return;
+    fgRef.current?.centerAt(node.x, node.y, 480);
+    fgRef.current?.zoom(3.1, 480);
+  }, [selected, filtered.nodes]);
+
   if (data.nodes.length === 0) {
     return (
       <main
@@ -141,6 +156,8 @@ export function GraphClient({ data }: { data: GraphData }) {
     <div className="surface-split">
     <main
       className="surface-primary"
+      data-testid="graph-canvas"
+      data-highlighted-id={selected?.id ?? ''}
       style={{
         position: 'relative',
         minHeight: '100dvh',
@@ -197,10 +214,18 @@ export function GraphClient({ data }: { data: GraphData }) {
       </div>
 
       <ForceGraph2D
+        ref={fgRef}
         graphData={filtered}
         nodeColor={(n: any) => KIND_COLOR[(n as GraphNode).kind] ?? accent}
         nodeRelSize={NODE_REL_SIZE}
         nodeLabel={() => ''}
+        nodeCanvasObjectMode={() => 'replace'}
+        nodeCanvasObject={(n: any, ctx: CanvasRenderingContext2D, scale: number) =>
+          paintGraphNode(n as GraphNode, ctx, scale, selected?.id ?? null)
+        }
+        nodePointerAreaPaint={(n: any, color: string, ctx: CanvasRenderingContext2D) =>
+          paintGraphNodePointerArea(n as GraphNode, color, ctx, selected?.id ?? null)
+        }
         linkColor={(l: any) => linkColorOf((l as GraphLink).rel)}
         linkWidth={(l: any) => linkWidthOf((l as GraphLink).rel)}
         linkDirectionalArrowLength={4}
