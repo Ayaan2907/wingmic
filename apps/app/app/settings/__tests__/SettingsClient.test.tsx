@@ -14,6 +14,17 @@ type Settings = {
 let getData: Settings | undefined;
 const mutateSpy = vi.fn();
 
+const routerPush = vi.fn();
+const signOut = vi.fn(async () => {});
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerPush, replace: vi.fn(), refresh: vi.fn() }),
+}));
+
+vi.mock('@/lib/auth-client', () => ({
+  signOut: (...args: unknown[]) => signOut(...args),
+}));
+
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: any) => (
     <a href={typeof href === 'string' ? href : String(href)} {...rest}>
@@ -59,6 +70,8 @@ describe('SettingsClient', () => {
   beforeEach(() => {
     getData = fixture();
     mutateSpy.mockClear();
+    routerPush.mockClear();
+    signOut.mockClear();
   });
   afterEach(() => cleanup());
 
@@ -121,5 +134,14 @@ describe('SettingsClient', () => {
     fireEvent.change(input, { target: { value: 'x' } });
     fireEvent.blur(input);
     expect(mutateSpy).not.toHaveBeenCalled();
+  });
+
+  it('signs out from the account section and returns to sign-in', async () => {
+    renderSettings();
+    fireEvent.click(screen.getByRole('button', { name: /sign out/i }));
+    expect(signOut).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(routerPush).toHaveBeenCalledWith('/signin');
+    });
   });
 });
