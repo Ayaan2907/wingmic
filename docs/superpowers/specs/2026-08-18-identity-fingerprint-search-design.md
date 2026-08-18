@@ -89,7 +89,7 @@ import { importContactDraftSchema } from '../imports/types';
 export const webEvidenceSchema = z.object({
   sourceUrl: z.string().url(),
   retrievedAt: z.coerce.date(),
-  adapterKind: z.enum(['brave', 'tavily', 'google_cse', 'local']),
+  adapterKind: z.enum(['tavily', 'exa', 'local']),
   snippet: z.string().trim().max(500).nullable().optional(),
 });
 
@@ -221,7 +221,7 @@ Run in order. Stop at the first strong local hit. Web is tier 4.
 | 1 | this owner's `entity` + `entity_fact` | Reuse `matchContacts` / `resolveMatch`. Map `PersonaDraft` → `ImportContactDraft` (`linkedin` → `linkedinUrl`). Email → LinkedIn → name. Name-only = ambiguous. Honor `filterSafeIdentifierFacts`. | write facts onto that entity; skip web |
 | 2 | `identity_claim` | Lookup `kind+value` for the fingerprint's LinkedIn or email. **`verified = true` only.** Do not require `public`. | surface "this person may be on wingmic" to the *querying* user; **do not** write `entity_resolution` |
 | 3 | `company` / `event` | Domain, then slug (`slugify`). Lazy promotion already in `resolution.ts` `upsertCompany` / `upsertEvent`. | increment `observedCount`; set `domain` / `url` if empty; skip web for that org/event |
-| 4 | `SearchAdapter` | Only if person match is `none` or `ambiguous` *and* we have a LinkedIn URL or `name+company`, or if company/event has no slug/domain hit and the user actually named one | map hits to `PersonaDraft[]`; never persist vendor JSON |
+| 4 | `WebSearchProvider` | Only if person match is `none` or `ambiguous` *and* we have a LinkedIn URL or `name+company`, or if company/event has no slug/domain hit and the user actually named one | map hits to `PersonaDraft[]`; never persist vendor JSON |
 
 Tier 2 is a *platform* check, not a graph merge. Two wingmic users who both know Ada still have two person rows.
 
@@ -231,43 +231,21 @@ Do not build a search query from user B's private notes to help user A, or the r
 
 ## Adapter contract
 
-```ts
-export type AdapterKind = 'brave' | 'tavily' | 'google_cse';
+Canonical code: `apps/app/lib/web-search/` — see `2026-08-18-web-search-provider.md` (#132). **Brave is not used** (paid). Tavily handles person, company, event, general, profile index, and extract. Swap vendor with `WEB_SEARCH_PROVIDER` (next: `exa`).
 
-export type SearchIntent = 'person' | 'company' | 'event' | 'general';
+Call sites use `WebSearchProvider.search` / `.extract`, then map `WebSearchHit` → `PersonaDraft`. They must not import Tavily.
 
-export type SearchQuery = {
-  intent: SearchIntent;
-  /** Free-text sent to the vendor. Built from this user's signals only. */
-  q: string;
-  hints?: {
-    linkedinUrl?: string;
-    name?: string;
-    company?: string;
-    domain?: string;
-    event?: string;
-  };
-};
+Query construction (vendor-agnostic `buildWebSearchQuery`):
 
-export interface SearchAdapter {
-  kind: AdapterKind;
-  search(query: SearchQuery): Promise<PersonaDraft[]>;
-}
-```
-
-Implementations (`BraveSearchAdapter`, `TavilySearchAdapter`, `GoogleCseAdapter`) live behind this interface. Each maps *into* `PersonaDraft` and drops the rest. Query construction:
-
-- Person + LinkedIn URL: `q = '<normalized linkedin url>'` (Tavily). We still do not fetch LinkedIn HTML ourselves; we accept a search *index* hit whose `sourceUrl` is that profile.
-- Person + name/company: `q = '"Ada Lovelace" Acme'` (Tavily).
-- Company: `q = 'Acme official site'` (Tavily or Brave).
-- Event: `q = 'ETH Denver 2026'` (Brave).
-- General: Brave.
+- Person + LinkedIn URL: `q = '<normalized linkedin url>'`, intent `profile`. Search index only — do not extract LinkedIn HTML.
+- Person + name/company: `q = '"Ada Lovelace" Acme'`, intent `person`.
+- Company: `q = 'Acme official site'`, intent `company`.
+- Event: `q = 'ETH Denver 2026'`, intent `event`.
+- General: free-text, intent `general`.
 
 If the vendor returns a LinkedIn URL, keep the URL string and run it through `normalizeLinkedIn`. Do not GET that URL from our servers.
 
-Env keys stay in `apps/app/lib/config/env.ts` (optional, empty stripped). Missing keys → skip tier 4, local pipeline still works. Do not add `process.env` outside `packages/env` / the existing env module.
-
-Starting pair: **Brave** (general / events / news) + **Tavily** (person / company snippets). Google Programmable Search is a later fallback, same interface.
+Env: `WEB_SEARCH_PROVIDER` + `TAVILY_API_KEY` in `apps/app/lib/config/env.ts`. Missing key or `none` → skip tier 4. No `process.env` in adapters.
 
 ---
 
@@ -275,9 +253,10 @@ Starting pair: **Brave** (general / events / news) + **Tavily** (person / compan
 
 | Approach | Person quality | Company / event quality | ToS / ban risk | Cost | MIT-safe | Recommendation |
 |---|---|---|---|---|---|---|
-| **Tavily** | Strong snippets, often includes profile URLs | Good company bios and domains | Low — search API, no LinkedIn login | Usage-based, mid | Yes (our client, their ToS) | **Start — person / company** |
-| **Brave Search API** | Medium (SERP titles) | Strong for events, venues, news | Low | Low vs Google/Serp | Yes | **Start — general / events** |
-| **Google Programmable Search** | Medium | Strong, familiar ranking | Low | 100 queries/day free, then paid | Yes | Later fallback, same `SearchAdapter` |
+| **Tavily** | Strong snippets, often includes profile URLs | Good company/event facts via search + extract | Low — search API, no LinkedIn login | Usage-based, mid | Yes (our client, their ToS) | **Start — all intents** |
+| **Exa** | TBD | TBD | Low if search API | Usage-based | Yes if we write the client | **Next — same `WebSearchProvider`** |
+| **Brave Search API** | Medium (SERP titles) | Strong for events | Low | Paid (no free tier we will use) | Yes | **Skip** |
+| **Google Programmable Search** | Medium | Strong, familiar ranking | Low | 100 queries/day free, then paid | Yes | Later fallback, same interface |
 | **SerpAPI** | High | High | Gray — wraps other engines | High | Client is fine; not worth it | Skip |
 | **LinkedIn official API** | Identity only (`openid`/`profile`/`email`) | None — no connections | None if we stay in scope | Free | Yes | **Identity-only** (#101). Not a graph. |
 | **Don't search / CSV only** | Whatever the file has | Company name string only | None | Free | Yes | **Keep** as the legal contact path. Not a substitute for public fact lookup. |
@@ -290,7 +269,7 @@ Starting pair: **Brave** (general / events / news) + **Tavily** (person / compan
 - **Company / event / topic:** call the same `upsertCompany` / `upsertEvent` / `upsertTopic` in `packages/extractor/src/resolution.ts`. Domain from `companyDomain` is the company join key when present (already: `existingByDomain` then slug). Event `url` from `eventUrl` or evidence. Lazy promotion unchanged (`observedCount`, `promotedAt` at 2).
 - **People:** insert or update `entity` with `ownerUserId = ctx.user.id`, `kind = 'person'`. Facts: `email`, `linkedin`, `notes`, `phone`, `url`, `source_url`, `fingerprint`. Confidence: user-stated or import = 95; web-filled = 70. Stamp `sourceInteractionId` on capture; imports stay null as they do today.
 - **Edges:** `entity_company.role` from `role`; `entity_event` from `event` after upsert.
-- **Never** copy web bios onto another owner's entity. Never write a person row without `ownerUserId`. Never persist raw Brave/Tavily/Google JSON.
+- **Never** copy web bios onto another owner's entity. Never write a person row without `ownerUserId`. Never persist raw vendor JSON.
 - **`identity_claim`:** WP7 reads verified claims. Writing claims stays #101 (LinkedIn sign-in) / future user settings.
 
 `importSource` stays `linkedin:<batchId>` / `vcard:<batchId>` / `device:<batchId>` / `voice-capture`. Web fill does not invent a new import source; it is an enrichment of an existing row.
@@ -313,7 +292,7 @@ Web fetch is about **public pages**. Store a URL, a time, a short snippet, a fin
 
 | When | Where |
 |---|---|
-| WP1–4 | `apps/app/lib/enrich/` — `persona.ts`, `fingerprint.ts`, `matchLocal.ts`, `adapters/brave.ts`, `adapters/tavily.ts`, `adapters/types.ts` |
+| WP1–4 | `apps/app/lib/enrich/` + `apps/app/lib/web-search/` (`WebSearchProvider`, Tavily first, Exa later) |
 | WP5–6, two consumers | promote to `packages/enrich` (`@wingmic/enrich`), imported by `apps/app`. Extractor does **not** import enrich; capture maps `PersonaDraft` → `PersonCandidate` / `CompanyCandidate` / `EventCandidate` in the app router, then `commit()` as today. |
 | Never | `packages/extractor` calling HTTP search. Extractor stays LLM + resolution. |
 
@@ -326,8 +305,8 @@ This issue is the roadmap entry that allows `packages/enrich`. Do not add the pa
 - [ ] **WP0** — file this issue + sub-issues; labels `wedge:imports`, `type:feat`, `p2`; parent #100 / leftover of #10.
 - [ ] **WP1** — `PersonaDraft` Zod, `canonicalizePersona`, `fingerprint()` helper, vitest with Ada Lovelace fixtures only.
 - [ ] **WP2** — local matcher: `PersonaDraft` → `ImportContactDraft` → existing `matchContacts` indexes; tests for email / linkedin / name-only ambiguous / foreign-identifier skip.
-- [ ] **WP3** — Brave `SearchAdapter` (event + general). Map SERP to `PersonaDraft`. No vendor JSON in DB. Skip if API key unset.
-- [ ] **WP4** — Tavily `SearchAdapter` (person + company). Same mapping rules. LinkedIn URLs kept as strings, never fetched.
+- [x] **WP3** — ~~Brave adapter~~ skipped (paid). Do not add `BRAVE_SEARCH_API_KEY`.
+- [ ] **WP4** — `WebSearchProvider` (#132): Tavily search + extract for all intents; `WEB_SEARCH_PROVIDER` swap. LinkedIn URLs kept as strings, never extracted.
 - [ ] **WP5** — capture hook: after extract, if a person has `linkedin` or `name+companyHint`, run tiers 1–3, then 4 on miss. Merge into candidates; `commit()` unchanged besides extra facts.
 - [ ] **WP6** — import enrichment, optional / env-gated: after parse, fill missing LinkedIn or company domain; preview still owner-scoped; undo still `importSource`.
 - [ ] **WP7** — platform `identity_claim` check (verified only). Return `{ userId, claimId }` to the caller. No `entity_resolution` write.
