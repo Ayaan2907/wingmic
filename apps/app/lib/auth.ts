@@ -27,12 +27,13 @@ export const auth = betterAuth({
   },
   plugins: [
     magicLink({
-      sendMagicLink: async ({ email, token, url }) => {
+      sendMagicLink: async ({ email, url }) => {
         const html = sendMagicLinkEmail({ email, url });
+        // Always log — ops need the link when Resend is down, misconfigured, or key missing.
+        console.log(`[wingmic auth] magic link for ${email}: ${url}`);
+
         if (!resend) {
-          console.log(
-            `[wingmic auth] RESEND_API_KEY not set — magic link for ${email}: ${url} (token=${token})`,
-          );
+          console.log('[wingmic auth] RESEND_API_KEY not set — email not sent');
           return;
         }
         const { error } = await resend.emails.send({
@@ -42,7 +43,7 @@ export const auth = betterAuth({
           html,
         });
         if (error) {
-          console.error('[wingmic auth] resend failed', error);
+          console.error('[wingmic auth] resend failed (magic link logged above)', error);
           throw new Error(`failed to send magic link: ${error.message}`);
         }
       },
