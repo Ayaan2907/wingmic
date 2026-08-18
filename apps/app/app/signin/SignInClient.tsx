@@ -160,9 +160,99 @@ export default function SignInClient({
                 {error}
               </div>
             )}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                margin: '4px 0',
+              }}
+            >
+              <span style={{ flex: 1, height: 1, background: 'var(--border-soft)' }} />
+              <span
+                className="mono"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: 1.4,
+                  textTransform: 'uppercase',
+                  color: 'var(--text-40)',
+                }}
+              >
+                or
+              </span>
+              <span style={{ flex: 1, height: 1, background: 'var(--border-soft)' }} />
+            </div>
+            <LinkedInComingSoonButton />
           </form>
         )}
       </div>
     </main>
+  );
+}
+
+const LINKEDIN_BLUE = '#0A66C2';
+
+function LinkedInMark({ size = 18 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        fill="currentColor"
+        d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"
+      />
+    </svg>
+  );
+}
+
+/** Placeholder until BetterAuth LinkedIn OAuth lands (#101). Not connectable yet. */
+function LinkedInComingSoonButton() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <button
+        type="button"
+        disabled
+        aria-disabled="true"
+        aria-label="log in with linkedin, coming soon"
+        title="coming soon"
+        data-testid="linkedin-signin-coming-soon"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 10,
+          minHeight: 48,
+          padding: '14px 20px',
+          borderRadius: 10,
+          background: LINKEDIN_BLUE,
+          color: '#fff',
+          fontWeight: 700,
+          fontSize: 15,
+          border: '1.5px solid #000',
+          boxShadow: '4px 4px 0 #000',
+          cursor: 'not-allowed',
+          opacity: 0.55,
+        }}
+      >
+        <LinkedInMark />
+        log in with linkedin
+      </button>
+      <p
+        className="mono"
+        style={{
+          margin: 0,
+          textAlign: 'center',
+          fontSize: 11,
+          letterSpacing: 0.4,
+          color: 'var(--text-40)',
+        }}
+      >
+        coming soon
+      </p>
+    </div>
   );
 }
