@@ -2,6 +2,7 @@ export {
   IMPORT_MAX_BATCH,
   IMPORT_MAX_BYTES,
   isLinkedInHost,
+  normalizeLinkedInUrl,
   importContactDraftSchema,
   importSourceKindSchema,
   formatImportSource,
