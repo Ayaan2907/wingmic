@@ -12,6 +12,23 @@ export function isLinkedInHost(hostname: string): boolean {
   return host === 'linkedin.com' || host.endsWith('.linkedin.com');
 }
 
+/** Strip tracking query/hash; require a linkedin.com host. Null if unusable. */
+export function normalizeLinkedInUrl(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    const u = new URL(withScheme);
+    if (!isLinkedInHost(u.hostname)) return null;
+    u.hash = '';
+    u.search = '';
+    return u.toString().replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+}
+
 const linkedinUrlSchema = z
   .string()
   .trim()
