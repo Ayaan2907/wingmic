@@ -16,6 +16,9 @@ vi.mock('next/link', () => ({
 
 const routerPush = vi.fn();
 const createDraftMutate = vi.fn();
+const mergeMutate = vi.fn();
+const undoMergeMutate = vi.fn();
+const invalidateDetail = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPush, replace: vi.fn(), refresh: vi.fn() }),
@@ -25,6 +28,11 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
+    useUtils: () => ({
+      entity: {
+        detail: { invalidate: invalidateDetail },
+      },
+    }),
     acts: {
       createDraft: {
         useMutation: (opts?: { onSuccess?: (r: { ok: boolean }) => void }) => ({
@@ -39,6 +47,30 @@ vi.mock('@/lib/trpc/client', () => ({
     entity: {
       listPeople: {
         useQuery: () => ({ data: { people: [] }, isLoading: false }),
+      },
+      merge: {
+        useMutation: (opts?: {
+          onMutate?: (input: { sourceId: string }) => void;
+          onSuccess?: (res: { mergeId: string; sourceName: string }) => void;
+          onSettled?: () => void;
+        }) => ({
+          mutate: (input: { sourceId: string; targetId: string }) => {
+            opts?.onMutate?.({ sourceId: input.sourceId });
+            mergeMutate(input);
+            opts?.onSuccess?.({ mergeId: 'mg_1', sourceName: 'Sarah' });
+            opts?.onSettled?.();
+          },
+          isPending: false,
+        }),
+      },
+      undoMerge: {
+        useMutation: (opts?: { onSuccess?: () => void }) => ({
+          mutate: (input: { mergeId: string }) => {
+            undoMergeMutate(input);
+            opts?.onSuccess?.();
+          },
+          isPending: false,
+        }),
       },
     },
   },
