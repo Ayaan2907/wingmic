@@ -1,6 +1,6 @@
 # Append-merge identity, person cards, graph paint
 
-**Date:** 2026-08-20 · **Status:** draft for founder review · **Base:** `staging`  
+**Date:** 2026-08-20 · **Status:** approved · **Base:** `staging`  
 **Parent tickets:** [#122](https://github.com/Ayaan2907/wingmic/issues/122) (local match before fuzzy score), [#3](https://github.com/Ayaan2907/wingmic/issues/3) (mid-band prompt — **not this spec**), [#130](https://github.com/Ayaan2907/wingmic/issues/130) (verified wingmic probe — **read, do not implement here**)  
 **Related:** fingerprint spec [`2026-08-18-identity-fingerprint-search-design.md`](./2026-08-18-identity-fingerprint-search-design.md); hosted-capture merge dialog in [`../plans/2026-05-23-v0.1.1-hosted-capture.md`](../plans/2026-05-23-v0.1.1-hosted-capture.md) (~entity page / 30s undo); PR [#143](https://github.com/Ayaan2907/wingmic/pull/143) (person `on the web` + `also in your graph`, capture-level topics)
 
