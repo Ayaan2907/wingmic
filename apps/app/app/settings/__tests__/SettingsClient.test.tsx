@@ -22,7 +22,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/lib/auth-client', () => ({
-  signOut: (...args: unknown[]) => signOut(...args),
+  signOut: () => signOut(),
 }));
 
 vi.mock('next/link', () => ({

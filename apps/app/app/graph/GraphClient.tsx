@@ -47,7 +47,7 @@ export function GraphClient({ data }: { data: GraphData }) {
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
   const hoveredRef = useRef<GraphNode | null>(null);
   const pointerRef = useRef(pointer);
-  const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
+  const fgRef = useRef<(ForceGraphMethods & { refresh?: () => void }) | undefined>(undefined);
 
   const selectNode = (node: GraphNode) => {
     setActive((prev) => {
