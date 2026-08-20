@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   graphNodeCaption,
   graphNodeInitials,
+  graphLinkNeighborhoodAlpha,
+  graphNeighborhoodAlpha,
+  graphNeighborhoodIds,
   isHighlightedGraphNode,
+  shouldShowGraphNodeCaption,
+  GRAPH_CAPTION_ZOOM_MIN,
 } from '../graph-node-label';
 
 describe('graphNodeInitials', () => {
@@ -38,5 +43,47 @@ describe('isHighlightedGraphNode', () => {
     expect(isHighlightedGraphNode('p1', 'p1')).toBe(true);
     expect(isHighlightedGraphNode('p1', 'c1')).toBe(false);
     expect(isHighlightedGraphNode('p1', null)).toBe(false);
+  });
+});
+
+describe('shouldShowGraphNodeCaption', () => {
+  it('shows for selected or hovered nodes at any zoom', () => {
+    expect(shouldShowGraphNodeCaption('p1', 'p1', null, 1)).toBe(true);
+    expect(shouldShowGraphNodeCaption('p1', null, 'p1', 1)).toBe(true);
+  });
+
+  it('shows at high zoom only otherwise', () => {
+    expect(shouldShowGraphNodeCaption('p1', null, null, GRAPH_CAPTION_ZOOM_MIN)).toBe(
+      true,
+    );
+    expect(shouldShowGraphNodeCaption('p1', null, null, 1)).toBe(false);
+  });
+});
+
+describe('graphNeighborhoodIds', () => {
+  it('returns selected node plus one-hop neighbors', () => {
+    const ids = graphNeighborhoodIds('p1', [
+      { source: 'p1', target: 'c1' },
+      { source: 'p2', target: 'c2' },
+    ]);
+    expect([...ids].sort()).toEqual(['c1', 'p1']);
+  });
+
+  it('is empty when nothing is selected', () => {
+    expect(graphNeighborhoodIds(null, [{ source: 'p1', target: 'c1' }]).size).toBe(0);
+  });
+});
+
+describe('neighborhood alpha', () => {
+  it('dims nodes outside the neighborhood when one is selected', () => {
+    const hood = new Set(['p1', 'c1']);
+    expect(graphNeighborhoodAlpha('p1', hood)).toBe(1);
+    expect(graphNeighborhoodAlpha('p2', hood)).toBe(0.22);
+  });
+
+  it('dims links that do not stay inside the neighborhood', () => {
+    const hood = new Set(['p1', 'c1']);
+    expect(graphLinkNeighborhoodAlpha('p1', 'c1', hood)).toBe(1);
+    expect(graphLinkNeighborhoodAlpha('p1', 'p2', hood)).toBe(0.15);
   });
 });

@@ -1,5 +1,7 @@
 /** Canvas-facing label helpers for graph nodes. */
 
+export const GRAPH_CAPTION_ZOOM_MIN = 1.35;
+
 export function graphNodeInitials(label: string): string {
   const parts = label.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '?';
@@ -23,4 +25,46 @@ export function isHighlightedGraphNode(
   selectedId: string | null,
 ): boolean {
   return selectedId !== null && nodeId === selectedId;
+}
+
+export function shouldShowGraphNodeCaption(
+  nodeId: string,
+  selectedId: string | null,
+  hoveredId: string | null,
+  globalScale: number,
+): boolean {
+  if (selectedId === nodeId || hoveredId === nodeId) return true;
+  return globalScale >= GRAPH_CAPTION_ZOOM_MIN;
+}
+
+/** Selected node + 1-hop neighbors; empty when nothing selected. */
+export function graphNeighborhoodIds(
+  selectedId: string | null,
+  links: Array<{ source: string | { id: string }; target: string | { id: string } }>,
+): Set<string> {
+  if (!selectedId) return new Set();
+  const endId = (end: string | { id: string }) =>
+    typeof end === 'object' ? end.id : end;
+  const ids = new Set<string>([selectedId]);
+  for (const link of links) {
+    const a = endId(link.source);
+    const b = endId(link.target);
+    if (a === selectedId) ids.add(b);
+    if (b === selectedId) ids.add(a);
+  }
+  return ids;
+}
+
+export function graphNeighborhoodAlpha(nodeId: string, neighborhood: Set<string>): number {
+  if (neighborhood.size === 0) return 1;
+  return neighborhood.has(nodeId) ? 1 : 0.22;
+}
+
+export function graphLinkNeighborhoodAlpha(
+  sourceId: string,
+  targetId: string,
+  neighborhood: Set<string>,
+): number {
+  if (neighborhood.size === 0) return 1;
+  return neighborhood.has(sourceId) && neighborhood.has(targetId) ? 1 : 0.15;
 }

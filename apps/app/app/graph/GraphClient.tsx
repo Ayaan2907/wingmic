@@ -19,14 +19,16 @@ import { GraphSearch } from './GraphSearch';
 import {
   FILTERS,
   KIND_COLOR,
+  NODE_PAINT_RADIUS,
   NODE_REL_SIZE,
-  linkColorOf,
   linkWidthOf,
+  paintGraphLinkColor,
   paintGraphNode,
   paintGraphNodePointerArea,
 } from './graph-style';
 import type { GraphData, GraphLink, GraphNode, LinkRel, NodeKind } from './graph-types';
 import { graphEndId } from './graph-types';
+import { graphNeighborhoodIds } from './graph-node-label';
 
 export type { GraphData, GraphLink, GraphNode, LinkRel, NodeKind };
 
@@ -90,6 +92,10 @@ export function GraphClient({ data }: { data: GraphData }) {
   // derived from data.links. react-force-graph mutates link.source/target from
   // id strings into node objects after first render, so normalise both.
   const nodeById = useMemo(() => new Map(data.nodes.map((n) => [n.id, n])), [data.nodes]);
+  const neighborhood = useMemo(
+    () => graphNeighborhoodIds(selected?.id ?? null, data.links),
+    [selected?.id, data.links],
+  );
   const selectedEdges = useMemo(() => {
     if (!selected) return [] as Array<{ rel: LinkRel; label: string }>;
     return data.links
@@ -102,7 +108,6 @@ export function GraphClient({ data }: { data: GraphData }) {
   }, [selected, data.links, nodeById]);
 
   useEffect(() => {
-    // react-force-graph redraws via refresh() at runtime; it is missing from ForceGraphMethods.
     const graph = fgRef.current as (ForceGraphMethods & { refresh?: () => void }) | undefined;
     graph?.refresh?.();
     if (!selected) return;
@@ -113,6 +118,17 @@ export function GraphClient({ data }: { data: GraphData }) {
     fgRef.current?.centerAt(node.x, node.y, 480);
     fgRef.current?.zoom(3.1, 480);
   }, [selected, filtered.nodes]);
+
+  useEffect(() => {
+    const graph = fgRef.current as ForceGraphMethods | undefined;
+    if (!graph?.d3Force) return;
+    const charge = graph.d3Force('charge');
+    charge?.strength?.(-180);
+    const link = graph.d3Force('link');
+    link?.distance?.(70);
+    const collide = graph.d3Force('collide');
+    collide?.radius?.(NODE_PAINT_RADIUS + 8);
+  }, [filtered.nodes.length]);
 
   if (data.nodes.length === 0) {
     return (
@@ -223,12 +239,26 @@ export function GraphClient({ data }: { data: GraphData }) {
         nodeLabel={() => ''}
         nodeCanvasObjectMode={() => 'replace'}
         nodeCanvasObject={(n: any, ctx: CanvasRenderingContext2D, scale: number) =>
-          paintGraphNode(n as GraphNode, ctx, scale, selected?.id ?? null)
+          paintGraphNode(
+            n as GraphNode,
+            ctx,
+            scale,
+            selected?.id ?? null,
+            hovered?.id ?? null,
+            neighborhood,
+          )
         }
         nodePointerAreaPaint={(n: any, color: string, ctx: CanvasRenderingContext2D) =>
           paintGraphNodePointerArea(n as GraphNode, color, ctx, selected?.id ?? null)
         }
-        linkColor={(l: any) => linkColorOf((l as GraphLink).rel)}
+        linkColor={(l: any) =>
+          paintGraphLinkColor(
+            (l as GraphLink).rel,
+            graphEndId((l as GraphLink).source),
+            graphEndId((l as GraphLink).target),
+            neighborhood,
+          )
+        }
         linkWidth={(l: any) => linkWidthOf((l as GraphLink).rel)}
         linkDirectionalArrowLength={4}
         linkDirectionalArrowRelPos={1}
