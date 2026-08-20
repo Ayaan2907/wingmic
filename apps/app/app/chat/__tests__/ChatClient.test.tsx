@@ -214,6 +214,14 @@ describe('ChatClient', () => {
     expect(screen.getByRole('button', { name: /record voice memo/i })).toBeTruthy();
   });
 
+  it('chat composer sits on an opaque pill so the thread cannot show through', () => {
+    renderChat({ userName: 'ada' });
+    const composer = screen.getByTestId('chat-composer');
+    expect(composer.style.background).toMatch(/var\(--bg-page\)|#0a0a0a/);
+    const pill = composer.firstElementChild as HTMLElement;
+    expect(pill.style.background).toMatch(/#141414|rgb\(20,\s*20,\s*20\)/);
+  });
+
   it('runs the full record → transcribe → commit cycle and renders a committed bubble + graph card', async () => {
     const audioBlob = new Blob(['xxx'], { type: 'audio/webm' });
     fakeRecorder.audioBlob = audioBlob;
