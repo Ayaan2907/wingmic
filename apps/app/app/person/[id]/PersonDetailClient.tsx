@@ -142,6 +142,7 @@ export default function PersonDetailClient({ detail }: { detail: PersonDetail })
           onUndoMerge={() => {
             if (mergeUndo) undoMerge.mutate({ mergeId: mergeUndo.mergeId });
           }}
+          entityId={detail.id}
         />
       </div>
     </div>

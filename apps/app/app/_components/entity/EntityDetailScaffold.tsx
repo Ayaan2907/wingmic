@@ -86,6 +86,8 @@ export interface EntityDetailScaffoldProps {
   mergePendingId?: string | null;
   mergeUndo?: { mergeId: string; sourceName: string; expiresAt: number } | null;
   onUndoMerge?: () => void;
+  /** Person entity id — used for public profile avatar seed. */
+  entityId?: string;
 }
 
 const STAT_COLORS = [accent, '#86efac', third];
@@ -111,6 +113,7 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
     mergePendingId,
     mergeUndo,
     onUndoMerge,
+    entityId,
   } = props;
 
   return (
@@ -212,7 +215,12 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
 
         {kind === 'person' && (
           <Section title="on the web" testid="entity-public-profile">
-            <PublicProfileCard profile={publicProfile ?? null} />
+            <PublicProfileCard
+              profile={publicProfile ?? null}
+              name={name}
+              sub={sub}
+              entityId={entityId}
+            />
           </Section>
         )}
 
@@ -758,59 +766,109 @@ function safeHref(raw: string | null | undefined): string | null {
   }
 }
 
-function PublicProfileCard({ profile }: { profile: EntityPublicProfile | null }) {
+function PublicProfileCard({
+  profile,
+  name,
+  sub,
+  entityId,
+}: {
+  profile: EntityPublicProfile | null;
+  name: string;
+  sub: React.ReactNode;
+  entityId?: string;
+}) {
   const linkedin = safeHref(profile?.linkedin);
   const url = safeHref(profile?.url);
   const sourceUrl = safeHref(profile?.sourceUrl);
-  if (!linkedin && !url && !sourceUrl) {
+  const pressUrl =
+    url && url !== linkedin ? url : sourceUrl && sourceUrl !== linkedin ? sourceUrl : null;
+
+  if (!linkedin && !pressUrl) {
     return <EmptyCard>no public sources yet.</EmptyCard>;
   }
+
+  if (linkedin) {
+    const subLine = typeof sub === 'string' ? sub : null;
+    return (
+      <div data-testid="entity-public-profile-card">
+        <div
+          style={{
+            padding: 14,
+            borderRadius: 14,
+            background: 'var(--surface-1, rgba(255,255,255,0.025))',
+            border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
+            display: 'flex',
+            gap: 12,
+            alignItems: 'flex-start',
+          }}
+        >
+          <PersonAvatar name={name} seed={entityId ?? name} size={44} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ font: '600 14px Inter, system-ui, sans-serif', color: 'var(--ink)' }}>
+              {name}
+            </div>
+            {subLine && subLine !== 'no role yet' ? (
+              <div
+                className="mono"
+                style={{
+                  font: '400 11px JetBrains Mono, ui-monospace, monospace',
+                  color: 'var(--text-55)',
+                  marginTop: 4,
+                }}
+              >
+                {subLine}
+              </div>
+            ) : null}
+            <a
+              href={linkedin}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mono"
+              style={{
+                display: 'inline-block',
+                marginTop: 10,
+                color: accent,
+                fontSize: 12,
+                textDecoration: 'none',
+              }}
+            >
+              show their linkedin →
+            </a>
+          </div>
+        </div>
+        {pressUrl ? (
+          <a
+            href={pressUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mono"
+            style={{
+              display: 'inline-block',
+              marginTop: 8,
+              marginLeft: 2,
+              color: 'var(--text-55)',
+              fontSize: 11,
+              textDecoration: 'none',
+            }}
+          >
+            press mention → {hostLabel(pressUrl)}
+          </a>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
-    <div
-      data-testid="entity-public-profile-links"
-      style={{
-        padding: 14,
-        borderRadius: 14,
-        background: 'var(--surface-1, rgba(255,255,255,0.025))',
-        border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-      }}
-    >
-      {linkedin && (
-        <a
-          href={linkedin}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mono"
-          style={{ color: accent, fontSize: 12.5, textDecoration: 'none' }}
-        >
-          linkedin →
-        </a>
-      )}
-      {url && (
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mono"
-          style={{ color: 'var(--text-85)', fontSize: 12.5, textDecoration: 'none' }}
-        >
-          {hostLabel(url)} →
-        </a>
-      )}
-      {sourceUrl && sourceUrl !== url && sourceUrl !== linkedin && (
-        <a
-          href={sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mono"
-          style={{ color: 'var(--text-55)', fontSize: 11.5, textDecoration: 'none' }}
-        >
-          found via {hostLabel(sourceUrl)} →
-        </a>
-      )}
+    <div data-testid="entity-public-profile-links">
+      <a
+        href={pressUrl!}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mono"
+        style={{ color: 'var(--text-55)', fontSize: 11.5, textDecoration: 'none' }}
+      >
+        press mention → {hostLabel(pressUrl!)}
+      </a>
     </div>
   );
 }

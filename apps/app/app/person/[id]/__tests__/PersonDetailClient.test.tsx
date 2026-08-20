@@ -128,10 +128,13 @@ describe('PersonDetailClient', () => {
         }}
       />,
     );
-    expect(screen.getByTestId('entity-possible-match').getAttribute('href')).toBe(
+    expect(screen.getByTestId('entity-possible-match')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /open/i }).getAttribute('href')).toBe(
       '/person/en_sarah_b',
     );
-    expect(screen.getByTestId('entity-public-profile-links').textContent).toMatch(/linkedin/i);
+    expect(screen.getByTestId('entity-public-profile-card').textContent).toMatch(
+      /show their linkedin/i,
+    );
   });
 
   it('draft check-in creates an act and routes to /acts', () => {
