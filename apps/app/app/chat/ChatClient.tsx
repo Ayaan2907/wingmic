@@ -60,9 +60,12 @@ function ChatComposer() {
         right: 0,
         maxWidth: 640,
         margin: '0 auto',
-        padding: '0 16px',
+        padding: '10px 16px 0',
         zIndex: 40,
         boxSizing: 'border-box',
+        background:
+          'linear-gradient(180deg, rgba(10,10,10,0) 0%, var(--bg-page) 28%, var(--bg-page) 100%)',
+        pointerEvents: 'none',
       }}
     >
       <div
@@ -72,8 +75,9 @@ function ChatComposer() {
           gap: 8,
           padding: '10px 12px',
           borderRadius: 999,
-          background: 'var(--surface-1)',
+          background: '#141414',
           border: '1px solid var(--border-mid)',
+          pointerEvents: 'auto',
         }}
       >
         <input

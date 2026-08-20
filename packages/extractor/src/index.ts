@@ -1,6 +1,6 @@
 export { extract, ExtractionError } from './client';
 export { embedText, embedTexts, cosine, EmbeddingError } from './embeddings';
-export { commit, type CommitResult } from './resolution';
+export { commit, type CommitResult, type CommitPersonResolution } from './resolution';
 export { slugify, nameSimilarity } from './slug';
 export {
   fingerprint,
@@ -20,5 +20,5 @@ export {
   ActionCandidate,
 } from './schema';
 export { SYSTEM_PROMPT, userPrompt } from './prompt';
-export { extractHybrid, mapProviderEntities, applyHeuristics, mergeResults, sanitizeExtraction } from './hybrid';
+export { extractHybrid, mapProviderEntities, applyHeuristics, mergeResults, sanitizeExtraction, extractTopicPhrases } from './hybrid';
 export type { AssemblyAIEntity } from './types';

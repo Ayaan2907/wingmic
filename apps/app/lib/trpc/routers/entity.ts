@@ -4,6 +4,9 @@ import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import type { DB } from '@wingmic/db';
 import * as schema from '@wingmic/db/schema';
+import { linkedinProfileHref } from '@/lib/acts/linkedinHref';
+import { namesOverlap } from '@/lib/entity/namesOverlap';
+import { mergePersonEntities, undoPersonMerge } from '@/lib/entity/mergePerson';
 
 // entity.detail — single procedure powering /person/[id], /company/[id],
 // /event/[id]. Source of truth: docs/superpowers/plans/2026-05-23-...md §18
@@ -38,10 +41,8 @@ type Capture = {
   interactionId: string;
   capturedAt: string; // ISO
   transcript: string;
-  // eventName intentionally omitted — there's no reliable interaction→event
-  // mapping today (sourceInteractionId lives on entityFacts/entityTopics but
-  // not on entityEvents). Don't fake it from events[0]; add the proper mapping
-  // when the extractor stamps event linkage onto interactions.
+  topics: string[];
+  eventName?: string | null;
 };
 
 type Related = {
@@ -49,6 +50,19 @@ type Related = {
   id: string;
   name: string;
   role?: string | null;
+};
+
+type PossibleMatch = {
+  id: string;
+  name: string;
+  role: string | null;
+  companyName: string | null;
+};
+
+type PublicProfile = {
+  linkedin: string | null;
+  url: string | null;
+  sourceUrl: string | null;
 };
 
 type DetailSub = Record<string, unknown>;
@@ -74,6 +88,41 @@ export const entityRouter = router({
         return await loadCompany(db, userId, id);
       }
       return await loadEvent(db, userId, id);
+    }),
+
+  merge: protectedProcedure
+    .input(z.object({ sourceId: z.string().min(1), targetId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await mergePersonEntities(
+          ctx.db,
+          ctx.user.id,
+          input.sourceId,
+          input.targetId,
+        );
+      } catch (e) {
+        if (e instanceof Error && e.message === 'MERGE_NOT_ALLOWED') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'cannot merge these people' });
+        }
+        throw e;
+      }
+    }),
+
+  undoMerge: protectedProcedure
+    .input(z.object({ mergeId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await undoPersonMerge(ctx.db, ctx.user.id, input.mergeId);
+        return { ok: true as const };
+      } catch (e) {
+        if (e instanceof Error && e.message === 'MERGE_UNDO_EXPIRED') {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'undo window closed' });
+        }
+        if (e instanceof Error && e.message === 'MERGE_NOT_FOUND') {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'merge not found' });
+        }
+        throw e;
+      }
     }),
 
   /** Desktop person rail — owned people, newest first. */
@@ -189,10 +238,23 @@ async function loadPerson(
       })
     : [];
 
+  const topicById = new Map(topics.map((t: any) => [t.id as string, t.name as string]));
+  const topicsByInteraction = new Map<string, string[]>();
+  for (const link of et) {
+    const iid = (link as { sourceInteractionId?: string | null }).sourceInteractionId;
+    if (!iid) continue;
+    const name = topicById.get((link as { topicId: string }).topicId);
+    if (!name) continue;
+    const list = topicsByInteraction.get(iid) ?? [];
+    if (!list.includes(name)) list.push(name);
+    topicsByInteraction.set(iid, list);
+  }
+
   const captures: Capture[] = interactions.map((i: any) => ({
     interactionId: i.id,
     capturedAt: (toDate(i.capturedAt) ?? new Date()).toISOString(),
     transcript: i.transcript ?? '',
+    topics: topicsByInteraction.get(i.id) ?? [],
   }));
 
   // Stats
@@ -201,14 +263,31 @@ async function loadPerson(
   const mostRecent = interactions[0] ? toDate(interactions[0].capturedAt) : null;
   const since = daysSince(mostRecent);
 
-  // Related: other people sharing an event/company/topic with this person.
-  const related = await findRelatedPeople(db, userId, entityId, {
+  const relatedPeople = await findRelatedPeople(db, userId, entityId, {
     companyIds,
     eventIds,
-    topicIds,
     companyById,
     eventById,
   });
+
+  const related: Related[] = [
+    ...companies.map((c: any) => ({
+      kind: 'company' as const,
+      id: c.id as string,
+      name: c.name as string,
+      role: 'works at',
+    })),
+    ...events.map((e: any) => ({
+      kind: 'event' as const,
+      id: e.id as string,
+      name: e.name as string,
+      role: eventPublicRole(e),
+    })),
+    ...relatedPeople,
+  ].slice(0, 8);
+
+  const possibleMatches = await findPossibleMatches(db, userId, entityId, entity.name);
+  const publicProfile = publicProfileFromFacts(facts);
 
   // Captures + pending acts targeted at this person (follow-ups strip).
   const followupRows = await db.query.acts.findMany({
@@ -245,6 +324,8 @@ async function loadPerson(
     })),
     related,
     topics: topics.map((t: any) => ({ id: t.id, name: t.name })),
+    publicProfile,
+    possibleMatches,
   };
 }
 
@@ -255,14 +336,13 @@ async function findRelatedPeople(
   ctxInfo: {
     companyIds: string[];
     eventIds: string[];
-    topicIds: string[];
     companyById: Map<string, any>;
     eventById: Map<string, any>;
   },
 ): Promise<Related[]> {
-  const { companyIds, eventIds, topicIds, companyById, eventById } = ctxInfo;
+  const { companyIds, eventIds, companyById, eventById } = ctxInfo;
 
-  const [otherEc, otherEe, otherEt] = await Promise.all([
+  const [otherEc, otherEe] = await Promise.all([
     companyIds.length
       ? db.query.entityCompanies.findMany({
           where: and(
@@ -276,14 +356,6 @@ async function findRelatedPeople(
           where: and(
             inArray(schema.entityEvents.eventId, eventIds),
             eq(schema.entityEvents.sourceDeleted, false),
-          ),
-        })
-      : Promise.resolve([] as any[]),
-    topicIds.length
-      ? db.query.entityTopics.findMany({
-          where: and(
-            inArray(schema.entityTopics.topicId, topicIds),
-            eq(schema.entityTopics.sourceDeleted, false),
           ),
         })
       : Promise.resolve([] as any[]),
@@ -302,10 +374,6 @@ async function findRelatedPeople(
     if (row.entityId === selfEntityId) continue;
     const e = eventById.get(row.eventId);
     addRole(row.entityId, e ? `co-attended ${e.name}` : 'shared event');
-  }
-  for (const row of otherEt) {
-    if (row.entityId === selfEntityId) continue;
-    addRole(row.entityId, 'overlapping topic');
   }
 
   const ids = [...roleByEntityId.keys()].slice(0, 20);
@@ -407,6 +475,7 @@ async function loadCompany(db: DB, userId: string, companyId: string) {
     interactionId: i.id,
     capturedAt: (toDate(i.capturedAt) ?? new Date()).toISOString(),
     transcript: i.transcript ?? '',
+    topics: [],
   }));
 
   // Topics raised
@@ -539,6 +608,7 @@ async function loadEvent(db: DB, userId: string, eventId: string) {
     interactionId: i.id,
     capturedAt: (toDate(i.capturedAt) ?? new Date()).toISOString(),
     transcript: i.transcript ?? '',
+    topics: [],
     eventName: event.name,
   }));
 
@@ -560,6 +630,7 @@ async function loadEvent(db: DB, userId: string, eventId: string) {
       date: start ? start.toISOString() : null,
       location: event.location ?? null,
       durationDays,
+      url: event.url ?? null,
     } satisfies DetailSub,
     stats: [
       { key: 'people met', value: String(myEntities.length) },
@@ -576,6 +647,101 @@ async function loadEvent(db: DB, userId: string, eventId: string) {
     })) satisfies Related[],
     topics: topics.map((t: any) => ({ id: t.id, name: t.name })),
   };
+}
+
+function firstFactValue(
+  facts: Array<{ key: string; value: string; confidence?: number }>,
+  key: string,
+): string | null {
+  const rows = facts.filter((f) => f.key === key);
+  rows.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+  const value = rows[0]?.value?.trim();
+  return value || null;
+}
+
+function safeHttpUrl(raw: string | null): string | null {
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+function publicProfileFromFacts(
+  facts: Array<{ key: string; value: string; confidence?: number }>,
+): PublicProfile {
+  const linkedin = linkedinProfileHref(firstFactValue(facts, 'linkedin'));
+  let url = safeHttpUrl(firstFactValue(facts, 'url'));
+  const sourceUrl = safeHttpUrl(firstFactValue(facts, 'source_url'));
+  if (url && linkedin && url.replace(/\/$/, '') === linkedin.replace(/\/$/, '')) {
+    url = null;
+  }
+  return { linkedin, url, sourceUrl };
+}
+
+function eventPublicRole(e: {
+  dateRangeStart?: Date | number | null;
+  location?: string | null;
+  url?: string | null;
+}): string {
+  const bits: string[] = [];
+  const start = toDate(e.dateRangeStart ?? null);
+  if (start) bits.push(start.toISOString().slice(0, 10));
+  if (e.location?.trim()) bits.push(e.location.trim());
+  if (e.url?.trim()) bits.push('public page');
+  return bits.join(' · ') || 'attended';
+}
+
+async function findPossibleMatches(
+  db: DB,
+  userId: string,
+  selfEntityId: string,
+  name: string,
+): Promise<PossibleMatch[]> {
+  const others = await db.query.entities.findMany({
+    where: and(
+      eq(schema.entities.ownerUserId, userId),
+      isNull(schema.entities.deletedAt),
+      eq(schema.entities.kind, 'person'),
+    ),
+    columns: { id: true, name: true },
+    limit: 200,
+  });
+  const hits = others
+    .filter((p) => p.id !== selfEntityId && namesOverlap(name, p.name))
+    .slice(0, 5);
+  if (hits.length === 0) return [];
+
+  const ids = hits.map((h) => h.id);
+  const ecs = await db.query.entityCompanies.findMany({
+    where: and(
+      inArray(schema.entityCompanies.entityId, ids),
+      eq(schema.entityCompanies.sourceDeleted, false),
+    ),
+  });
+  const companyIds = [...new Set(ecs.map((row: { companyId: string }) => row.companyId))];
+  const companies = companyIds.length
+    ? await db.query.companies.findMany({ where: inArray(schema.companies.id, companyIds) })
+    : [];
+  const companyById = new Map(companies.map((c: { id: string; name: string }) => [c.id, c]));
+  const metaByEntity = new Map<string, { role: string | null; companyName: string | null }>();
+  for (const row of ecs) {
+    if (metaByEntity.has(row.entityId)) continue;
+    const c = companyById.get(row.companyId);
+    metaByEntity.set(row.entityId, {
+      role: row.role ?? null,
+      companyName: c?.name ?? null,
+    });
+  }
+  return hits.map((h) => ({
+    id: h.id,
+    name: h.name,
+    role: metaByEntity.get(h.id)?.role ?? null,
+    companyName: metaByEntity.get(h.id)?.companyName ?? null,
+  }));
 }
 
 // EntityDetail is the resolved payload from caller.detail(...) — note the

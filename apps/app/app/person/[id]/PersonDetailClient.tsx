@@ -8,6 +8,8 @@ import {
   type EntityFollowup,
   type EntityRelated,
   type EntityStat,
+  type EntityPublicProfile,
+  type EntityPossibleMatch,
 } from '@/app/_components/entity/EntityDetailScaffold';
 import { PersonAvatar } from '@/app/_components/entity/EntityAvatar';
 import { PersonListRail } from './_components/PersonListRail';
@@ -30,13 +32,56 @@ export interface PersonDetail {
   followups: EntityFollowup[];
   related: EntityRelated[];
   topics: Array<{ id: string; name: string }>;
+  publicProfile?: EntityPublicProfile | null;
+  possibleMatches?: EntityPossibleMatch[];
 }
 
 export default function PersonDetailClient({ detail }: { detail: PersonDetail }) {
   const router = useRouter();
+  const utils = trpc.useUtils();
+  const [mergePendingId, setMergePendingId] = React.useState<string | null>(null);
+  const [mergeUndo, setMergeUndo] = React.useState<{
+    mergeId: string;
+    sourceName: string;
+    expiresAt: number;
+  } | null>(null);
+
+  React.useEffect(() => {
+    if (!mergeUndo) return;
+    const ms = mergeUndo.expiresAt - Date.now();
+    if (ms <= 0) {
+      setMergeUndo(null);
+      return;
+    }
+    const t = window.setTimeout(() => setMergeUndo(null), ms);
+    return () => window.clearTimeout(t);
+  }, [mergeUndo]);
+
   const createDraft = trpc.acts.createDraft.useMutation({
     onSuccess: (res) => {
       if (res.ok) router.push('/acts');
+    },
+  });
+
+  const merge = trpc.entity.merge.useMutation({
+    onMutate: ({ sourceId }) => setMergePendingId(sourceId),
+    onSuccess: (res) => {
+      setMergeUndo({
+        mergeId: res.mergeId,
+        sourceName: res.sourceName,
+        expiresAt: Date.now() + 30_000,
+      });
+      void utils.entity.detail.invalidate({ kind: 'person', id: detail.id });
+      router.refresh();
+    },
+    onSettled: () => setMergePendingId(null),
+  });
+
+  const undoMerge = trpc.entity.undoMerge.useMutation({
+    onSuccess: () => {
+      setMergeUndo(null);
+      void utils.entity.detail.invalidate({ kind: 'person', id: detail.id });
+      router.refresh();
     },
   });
 
@@ -56,8 +101,6 @@ export default function PersonDetailClient({ detail }: { detail: PersonDetail })
             : undefined;
 
   return (
-    // Desktop (≥1120px) splits into [people list | detail]; on mobile the
-    // list is display:none and the detail scaffold is the full-width column.
     <div className="surface-split">
       <PersonListRail />
       <div className="surface-primary">
@@ -89,6 +132,17 @@ export default function PersonDetailClient({ detail }: { detail: PersonDetail })
           followups={detail.followups}
           related={detail.related}
           topics={detail.topics}
+          publicProfile={detail.publicProfile}
+          possibleMatches={detail.possibleMatches}
+          onMergePossibleMatch={(sourceId) =>
+            merge.mutate({ sourceId, targetId: detail.id })
+          }
+          mergePendingId={mergePendingId}
+          mergeUndo={mergeUndo}
+          onUndoMerge={() => {
+            if (mergeUndo) undoMerge.mutate({ mergeId: mergeUndo.mergeId });
+          }}
+          entityId={detail.id}
         />
       </div>
     </div>

@@ -16,7 +16,12 @@ export interface EventDetail {
   kind: 'event';
   id: string;
   name: string;
-  sub: { date: string | null; location: string | null; durationDays: number | null };
+  sub: {
+    date: string | null;
+    location: string | null;
+    durationDays: number | null;
+    url?: string | null;
+  };
   stats: EntityStat[];
   captures: EntityCapture[];
   followups: EntityFollowup[];
@@ -30,6 +35,17 @@ function fmtDate(iso: string | null): string | null {
     return new Date(iso)
       .toLocaleDateString([], { month: 'short', day: '2-digit' })
       .toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function safeEventUrl(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  try {
+    const u = new URL(raw.trim());
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    return u.toString();
   } catch {
     return null;
   }
@@ -49,6 +65,24 @@ export default function EventDetailClient({ detail }: { detail: EventDetail }) {
     detail.sub.durationDays ? `${detail.sub.durationDays} days` : null,
   ].filter(Boolean) as string[];
   const subText = parts.length ? parts.join(' · ') : 'date unknown';
+  const publicHref = safeEventUrl(detail.sub.url);
+  const subNode = publicHref ? (
+    <>
+      {subText}
+      {' · '}
+      <a
+        href={publicHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-testid="event-public-url"
+        style={{ color: '#FFC452', textDecoration: 'none' }}
+      >
+        public page →
+      </a>
+    </>
+  ) : (
+    subText
+  );
 
   return (
     <EntityDetailScaffold
@@ -56,7 +90,7 @@ export default function EventDetailClient({ detail }: { detail: EventDetail }) {
       hero={<EventDiamond size={64} name={detail.name} />}
       eyebrow="◆ event"
       name={detail.name}
-      sub={subText}
+      sub={subNode}
       primaryCta={{
         label: 'generate recap →',
         pending: createDraft.isPending,
