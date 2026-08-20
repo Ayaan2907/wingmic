@@ -176,7 +176,33 @@ describe('entity.detail', () => {
     expect(res.related.some((r) => r.id === 'en_marcus')).toBe(true);
     expect(res.related.every((r) => r.id !== 'en_sarah')).toBe(true);
     expect(res.related.every((r) => r.id !== 'en_priya')).toBe(true);
+    expect(res.related.some((r) => r.kind === 'company' && r.id === 'co_acme')).toBe(true);
+    expect(res.related.some((r) => r.kind === 'event' && r.id === 'ev_dc')).toBe(true);
     expect(res.topics.map((t) => t.name)).toContain('rust');
+    expect((res as { publicProfile?: { linkedin: string | null } }).publicProfile).toEqual({
+      linkedin: null,
+      url: null,
+      sourceUrl: null,
+    });
+    expect((res as { possibleMatches?: unknown[] }).possibleMatches).toEqual([]);
+  });
+
+  it('returns public profile facts and same-name cards', async () => {
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO entity_fact (id, entity_id, key, value, source_interaction_id, confidence, created_at) VALUES (?, ?, ?, ?, null, 70, ?)`,
+      args: ['fact_li', 'en_sarah', 'linkedin', 'https://www.linkedin.com/in/ada-lovelace', now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, created_at, updated_at) VALUES (?, ?, 'person', ?, '[]', ?, ?)`,
+      args: ['en_sarah_b', userId, 'Sarah', now, now],
+    });
+    const res = await caller().detail({ kind: 'person', id: 'en_sarah' });
+    expect((res as { publicProfile: { linkedin: string | null } }).publicProfile.linkedin).toBe(
+      'https://www.linkedin.com/in/ada-lovelace',
+    );
+    const matches = (res as { possibleMatches: Array<{ id: string }> }).possibleMatches;
+    expect(matches.some((m) => m.id === 'en_sarah_b')).toBe(true);
   });
 
   it('person detail 404s on cross-user access', async () => {
@@ -203,6 +229,15 @@ describe('entity.detail', () => {
     expect(res.stats[0]!.value).toBe('2'); // people met
     expect(res.related.map((r) => r.id).sort()).toEqual(['en_marcus', 'en_sarah']);
     expect(res.topics.map((t) => t.name)).toContain('rust');
+  });
+
+  it('event detail includes a public url when stored', async () => {
+    await client.execute({
+      sql: `UPDATE event SET url = ? WHERE id = 'ev_dc'`,
+      args: ['https://devconnect.example/2026'],
+    });
+    const res = await caller().detail({ kind: 'event', id: 'ev_dc' });
+    expect((res.sub as { url?: string | null }).url).toBe('https://devconnect.example/2026');
   });
 
   it('NOT_FOUND on missing ids', async () => {

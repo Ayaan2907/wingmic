@@ -89,6 +89,19 @@ describe('EventDetailClient', () => {
     expect(rows[0]!.getAttribute('data-related-href')).toBe('/person/en_sarah');
   });
 
+  it('links a public event page when url is set', () => {
+    render(
+      <EventDetailClient
+        detail={{
+          ...detail,
+          sub: { ...detail.sub, url: 'https://devconnect.example/2026' },
+        }}
+      />,
+    );
+    const link = screen.getByTestId('event-public-url') as HTMLAnchorElement;
+    expect(link.href).toContain('https://devconnect.example/2026');
+  });
+
   it('generate recap creates an act and routes to /acts', () => {
     render(<EventDetailClient detail={detail} />);
     fireEvent.click(screen.getByRole('button', { name: /generate recap/i }));

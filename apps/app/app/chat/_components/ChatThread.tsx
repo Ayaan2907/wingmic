@@ -233,6 +233,7 @@ function isEmptyExtraction(e: GraphResult['extracted']): boolean {
     e.persons.length === 0 &&
     e.companies.length === 0 &&
     e.events.length === 0 &&
+    e.topics.length === 0 &&
     e.actions.length === 0
   );
 }
@@ -332,6 +333,9 @@ function AgentReply({ message, result }: { message: ThreadMessage; result: Graph
   }
   if (extracted.events.length) {
     counts.push(`${extracted.events.length} ${extracted.events.length === 1 ? 'event' : 'events'}`);
+  }
+  if (extracted.topics.length) {
+    counts.push(`${extracted.topics.length} ${extracted.topics.length === 1 ? 'topic' : 'topics'}`);
   }
   const summary = sparse
     ? 'noted — nothing solid to tag yet.'
@@ -539,6 +543,7 @@ function BubbleFooter({ m }: { m: ThreadMessage }) {
       g.extracted.persons.length === 0 &&
       g.extracted.companies.length === 0 &&
       g.extracted.events.length === 0 &&
+      g.extracted.topics.length === 0 &&
       g.extracted.actions.length === 0;
     if (isEmpty) {
       // Soft agent reply carries the "nothing solid" copy; footer stays timing-only.
@@ -909,12 +914,20 @@ function GraphCard({ message, result }: { message: ThreadMessage; result: GraphR
       )}
 
       {extracted.topics.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {extracted.topics.map((t) => (
-            <TagPill key={t} color={violet}>
-              {t}
-            </TagPill>
-          ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div
+            className="mono"
+            style={{ fontSize: 9.5, color: 'var(--text-40)', letterSpacing: 2, textTransform: 'uppercase' }}
+          >
+            topics
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {extracted.topics.map((t) => (
+              <TagPill key={t} color={violet}>
+                {t}
+              </TagPill>
+            ))}
+          </div>
         </div>
       )}
 

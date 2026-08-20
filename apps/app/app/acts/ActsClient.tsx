@@ -204,9 +204,8 @@ export function ActsClient() {
             }}
           />
           <span>
-            <span style={{ color: accent, fontWeight: 700 }}>acts</span> drafts from your
-            captures — review, edit, snooze, then send yourself (mailto / calendar). nothing
-            auto-sends.
+            <span style={{ color: accent, fontWeight: 700 }}>acts</span> one draft per
+            person per capture. review, then send yourself — nothing auto-sends.
           </span>
         </div>
 
@@ -257,7 +256,7 @@ export function ActsClient() {
               lineHeight: 1.55,
             }}
           >
-            no drafts yet — capture a memo that mentions a follow-up, intro, or meeting.
+            no drafts yet — capture a memo that names a follow-up, intro, or a dated meeting.
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} data-testid="acts-list">

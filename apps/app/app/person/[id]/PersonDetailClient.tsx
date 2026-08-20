@@ -8,6 +8,8 @@ import {
   type EntityFollowup,
   type EntityRelated,
   type EntityStat,
+  type EntityPublicProfile,
+  type EntityPossibleMatch,
 } from '@/app/_components/entity/EntityDetailScaffold';
 import { PersonAvatar } from '@/app/_components/entity/EntityAvatar';
 import { PersonListRail } from './_components/PersonListRail';
@@ -30,6 +32,8 @@ export interface PersonDetail {
   followups: EntityFollowup[];
   related: EntityRelated[];
   topics: Array<{ id: string; name: string }>;
+  publicProfile?: EntityPublicProfile | null;
+  possibleMatches?: EntityPossibleMatch[];
 }
 
 export default function PersonDetailClient({ detail }: { detail: PersonDetail }) {
@@ -89,6 +93,8 @@ export default function PersonDetailClient({ detail }: { detail: PersonDetail })
           followups={detail.followups}
           related={detail.related}
           topics={detail.topics}
+          publicProfile={detail.publicProfile}
+          possibleMatches={detail.possibleMatches}
         />
       </div>
     </div>

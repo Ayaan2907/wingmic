@@ -224,9 +224,18 @@ export async function commit(
       }
     }
 
-    for (const topicName of cand.topics) {
+    const personTopicNames = new Set<string>(cand.topics);
+    for (const t of extracted.topics) personTopicNames.add(t);
+    for (const topicName of personTopicNames) {
       const topicId = topicIds.get(topicName);
       if (!topicId) continue;
+      const existing = await writeDb.query.entityTopics.findFirst({
+        where: and(
+          eq(schema.entityTopics.entityId, entityId),
+          eq(schema.entityTopics.topicId, topicId),
+        ),
+      });
+      if (existing) continue;
       await writeDb.insert(schema.entityTopics).values({
         entityId,
         topicId,

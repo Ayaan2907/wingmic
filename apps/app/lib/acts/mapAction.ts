@@ -44,7 +44,7 @@ export function toPendingAct(row: {
   const name =
     kind === 'intro' && row.targetName && row.secondaryName
       ? `${row.targetName} → ${row.secondaryName}`
-      : row.targetName?.trim() || ui.label;
+      : row.targetName?.trim() || (kind === 'intro' ? 'intro' : 'follow-up');
   return {
     kind: ui.label,
     glyph: ui.glyph,
@@ -59,6 +59,36 @@ export function toPendingAct(row: {
     whenHint: row.whenHint ?? null,
     body: row.body,
   };
+}
+
+/** Skip undated meetings — "I met with X" is a memory, not a calendar hold. */
+function isUndatedMeeting(action: Pick<ActionCandidate, 'kind' | 'whenHint'>): boolean {
+  return action.kind === 'meeting' && !action.whenHint?.trim();
+}
+
+/**
+ * One draft per person per kind per capture. Prefer an explicit target,
+ * else the first extracted person (so cards never title themselves "meeting").
+ */
+export function collapseActionsForCapture(
+  actions: ActionCandidate[],
+  persons: Array<{ name: string }>,
+): ActionCandidate[] {
+  const fallbackName = persons[0]?.name?.trim() || null;
+  const seen = new Set<string>();
+  const out: ActionCandidate[] = [];
+  for (const action of actions) {
+    if (isUndatedMeeting(action)) continue;
+    const target = (action.targetPersonName?.trim() || fallbackName || '').toLowerCase();
+    const key = `${action.kind}:${target}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      ...action,
+      targetPersonName: action.targetPersonName?.trim() || fallbackName,
+    });
+  }
+  return out;
 }
 
 /** Tokenize a display name for whole-token matching (avoids "Ann" → "Joanne"). */

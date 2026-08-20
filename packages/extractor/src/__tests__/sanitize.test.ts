@@ -147,4 +147,24 @@ describe('sanitizeExtraction', () => {
     });
     expect(r.topics).toEqual(['research', 'rust']);
   });
+
+  it('drops unigram topics that are tokens of a person name', () => {
+    const r = sanitizeExtraction({
+      ...empty(),
+      topics: ['tomo', 'merchant cash advance'],
+      persons: [
+        {
+          name: 'Tomo Matsuo',
+          role: null,
+          companyHint: null,
+          topics: [],
+          notes: null,
+          email: null,
+          linkedin: null,
+          aliases: [],
+        },
+      ],
+    });
+    expect(r.topics).toEqual(['merchant cash advance']);
+  });
 });

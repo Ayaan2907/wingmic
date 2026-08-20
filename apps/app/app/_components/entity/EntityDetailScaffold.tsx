@@ -39,6 +39,19 @@ export interface EntityRelated {
   role?: string | null;
 }
 
+export interface EntityPublicProfile {
+  linkedin: string | null;
+  url: string | null;
+  sourceUrl: string | null;
+}
+
+export interface EntityPossibleMatch {
+  id: string;
+  name: string;
+  role?: string | null;
+  companyName?: string | null;
+}
+
 export interface EntityStat {
   key: string;
   value: string;
@@ -66,6 +79,8 @@ export interface EntityDetailScaffoldProps {
   followups: EntityFollowup[];
   related: EntityRelated[];
   topics?: Array<{ id: string; name: string }>;
+  publicProfile?: EntityPublicProfile | null;
+  possibleMatches?: EntityPossibleMatch[];
 }
 
 const STAT_COLORS = [accent, '#86efac', third];
@@ -85,6 +100,8 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
     followups,
     related,
     topics,
+    publicProfile,
+    possibleMatches,
   } = props;
 
   return (
@@ -143,6 +160,31 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
 
         <StatTrio stats={stats} />
 
+        {kind === 'person' && (
+          <Section title="on the web" testid="entity-public-profile">
+            <PublicProfileCard profile={publicProfile ?? null} />
+          </Section>
+        )}
+
+        {kind === 'person' && possibleMatches && possibleMatches.length > 0 && (
+          <Section title="also in your graph" testid="entity-possible-matches">
+            <p
+              className="mono"
+              style={{
+                fontSize: 11,
+                color: 'var(--text-55)',
+                margin: '0 0 10px',
+                letterSpacing: 0.2,
+              }}
+            >
+              same name — pick who you actually met.
+            </p>
+            {possibleMatches.map((m) => (
+              <PossibleMatchCard key={m.id} match={m} />
+            ))}
+          </Section>
+        )}
+
         <Section title="from your captures" testid="entity-captures">
           {captures.length === 0 ? (
             <EmptyCard>no captures yet for this one.</EmptyCard>
@@ -153,7 +195,7 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
 
         <Section title="follow-ups" testid="entity-followups">
           {followups.length === 0 ? (
-            <EmptyCard>no follow-ups yet. acts agent arrives v0.3.</EmptyCard>
+            <EmptyCard>no follow-ups yet — draft one from a capture, or tap draft check-in.</EmptyCard>
           ) : (
             followups.map((f) => <FollowupCard key={f.id} followup={f} />)
           )}
@@ -187,7 +229,7 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
 
         <Section title="related" testid="entity-related" last>
           {related.length === 0 ? (
-            <EmptyCard>nothing connected yet.</EmptyCard>
+            <EmptyCard>nothing connected yet — companies, events, and people from the same captures land here.</EmptyCard>
           ) : (
             related.map((r, i) => (
               <RelatedRow key={`${r.kind}-${r.id}`} item={r} isLast={i === related.length - 1} />
@@ -625,6 +667,122 @@ function RelatedRow({ item, isLast }: { item: EntityRelated; isLast: boolean }) 
 
 function relatedHref(item: EntityRelated): string {
   return `/${item.kind}/${encodeURIComponent(item.id)}`;
+}
+
+function safeHref(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  try {
+    const u = new URL(raw.trim());
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+function PublicProfileCard({ profile }: { profile: EntityPublicProfile | null }) {
+  const linkedin = safeHref(profile?.linkedin);
+  const url = safeHref(profile?.url);
+  const sourceUrl = safeHref(profile?.sourceUrl);
+  if (!linkedin && !url && !sourceUrl) {
+    return <EmptyCard>no public sources yet.</EmptyCard>;
+  }
+  return (
+    <div
+      data-testid="entity-public-profile-links"
+      style={{
+        padding: 14,
+        borderRadius: 14,
+        background: 'var(--surface-1, rgba(255,255,255,0.025))',
+        border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}
+    >
+      {linkedin && (
+        <a
+          href={linkedin}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mono"
+          style={{ color: accent, fontSize: 12.5, textDecoration: 'none' }}
+        >
+          linkedin →
+        </a>
+      )}
+      {url && (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mono"
+          style={{ color: 'var(--text-85)', fontSize: 12.5, textDecoration: 'none' }}
+        >
+          {hostLabel(url)} →
+        </a>
+      )}
+      {sourceUrl && sourceUrl !== url && sourceUrl !== linkedin && (
+        <a
+          href={sourceUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mono"
+          style={{ color: 'var(--text-55)', fontSize: 11.5, textDecoration: 'none' }}
+        >
+          found via {hostLabel(sourceUrl)} →
+        </a>
+      )}
+    </div>
+  );
+}
+
+function hostLabel(href: string): string {
+  try {
+    return new URL(href).hostname.replace(/^www\./, '');
+  } catch {
+    return 'site';
+  }
+}
+
+function PossibleMatchCard({ match }: { match: EntityPossibleMatch }) {
+  const sub = [match.role, match.companyName].filter(Boolean).join(' · ');
+  return (
+    <a
+      href={`/person/${encodeURIComponent(match.id)}`}
+      data-testid="entity-possible-match"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '11px 0',
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+        textDecoration: 'none',
+        color: 'inherit',
+      }}
+    >
+      <PersonAvatar name={match.name} seed={match.id} size={28} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ font: '500 13.5px Inter, system-ui, sans-serif', color: 'var(--ink)' }}>
+          {match.name}
+        </div>
+        {sub ? (
+          <div
+            className="mono"
+            style={{
+              font: '400 11px JetBrains Mono, ui-monospace, monospace',
+              color: 'var(--text-40)',
+            }}
+          >
+            {sub}
+          </div>
+        ) : null}
+      </div>
+      <span className="mono" style={{ color: accent, fontSize: 11 }}>
+        open →
+      </span>
+    </a>
+  );
 }
 
 function relatedAvatar(item: EntityRelated): React.ReactNode {

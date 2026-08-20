@@ -23,6 +23,27 @@ const draftIntentSchema = z.enum([
   'memo',
 ]);
 
+/** Hide duplicate drafts from the same capture (same person + kind). Newest wins. */
+function collapseActRows<
+  T extends {
+    id: string;
+    kind: string;
+    targetEntityId: string | null;
+    sourceInteractionId: string | null;
+  },
+>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const row of rows) {
+    const source = row.sourceInteractionId ?? row.id;
+    const key = `${source}:${row.kind}:${row.targetEntityId ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
+
 /**
  * Acts — permission-first draft follow-ups from capture extraction +
  * entity CTAs. Mastra polishes createDraft bodies when OpenRouter is set.
@@ -77,10 +98,11 @@ export const actsRouter = router({
         orderBy: [desc(schema.acts.createdAt)],
         limit: input.limit,
       });
+      const visibleRows = collapseActRows(rows);
 
       const entityIds = [
         ...new Set(
-          rows
+          visibleRows
             .flatMap((r) => [r.targetEntityId, r.secondaryEntityId])
             .filter((id): id is string => Boolean(id)),
         ),
@@ -128,7 +150,7 @@ export const actsRouter = router({
       }
 
       return {
-        acts: rows.map((r) => {
+        acts: visibleRows.map((r) => {
           const targetEmail = r.targetEntityId
             ? emailByEntityId.get(r.targetEntityId) ?? null
             : null;

@@ -99,6 +99,39 @@ describe('commit() sourceInteractionId', () => {
     }
   });
 
+  it('attaches capture-level topics even when the person candidate has none', async () => {
+    const result = await commit(
+      {
+        persons: [
+          {
+            name: 'Grace Hopper',
+            role: null,
+            companyHint: null,
+            topics: [],
+            notes: null,
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [],
+        events: [],
+        topics: ['cobol'],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId,
+        transcript: 'met grace hopper, talked cobol',
+        capturedAt: new Date(),
+      },
+    );
+    const topics = await db.query.entityTopics.findMany({
+      where: eq(schema.entityTopics.entityId, result.entityIds[0]!),
+    });
+    expect(topics).toHaveLength(1);
+  });
+
   it('leaves event dates blank when speech has no date hint', async () => {
     const result = await commit(
       {

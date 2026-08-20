@@ -43,6 +43,7 @@ import {
   applyHeuristics,
   mergeResults,
   extractHybrid,
+  extractTopicPhrases,
 } from '../hybrid';
 
 function emptyResult(): ExtractionResult {
@@ -143,18 +144,43 @@ describe('applyHeuristics', () => {
     expect(reminderAction).toBeDefined();
   });
 
-  it('picks top-3 unique topic words >= 4 chars excluding stopwords', () => {
+  it('picks noun phrases and keeps repeated subjects', () => {
     const transcript =
       'rust compilers and rust tooling are the future. rust beats cpp. ' +
       'compilers are nice. tooling matters. tooling tooling.';
     const result = applyHeuristics(emptyResult(), transcript);
     expect(result.topics.length).toBeLessThanOrEqual(3);
-    expect(result.topics).toContain('rust');
-    expect(result.topics).toContain('tooling');
-    // no stopwords like 'the', 'and', 'are'
+    expect(result.topics.some((t) => t.includes('rust'))).toBe(true);
+    expect(result.topics.some((t) => t.includes('tooling') || t.includes('compiler'))).toBe(true);
     for (const t of result.topics) {
       expect(t.length).toBeGreaterThanOrEqual(4);
     }
+  });
+
+  it('extracts merchant cash advance and does not mint an undated meeting', () => {
+    const transcript =
+      'Hey. I met with Tomo Matsuo who is the co founder of AdvanceIQ AI and we discussed a lot about merchant cash advance business.';
+    const skeleton: ExtractionResult = {
+      ...emptyResult(),
+      persons: [
+        {
+          name: 'Tomo Matsuo',
+          aliases: [],
+          role: null,
+          companyHint: 'AdvanceIQ AI',
+          topics: [],
+          email: null,
+          linkedin: null,
+          notes: null,
+        },
+      ],
+      companies: [{ name: 'AdvanceIQ AI', domainHint: null, industry: [] }],
+    };
+    const result = applyHeuristics(skeleton, transcript);
+    expect(result.actions.filter((a) => a.kind === 'meeting')).toHaveLength(0);
+    expect(result.topics.some((t) => t.includes('merchant') && t.includes('advance'))).toBe(true);
+    expect(result.topics.join(' ')).not.toMatch(/\btomo\b/);
+    expect(result.topics.join(' ')).not.toMatch(/\bmatsuo\b/);
   });
 
   it('filters expanded stopwords (today, tomorrow, things, really, talked, discussed) from topic candidates', () => {
@@ -171,7 +197,7 @@ describe('applyHeuristics', () => {
       expect(result.topics).not.toContain(banned);
     }
     // and at least one real topic survives
-    expect(result.topics).toContain('compilers');
+    expect(result.topics.some((t) => /\bcompilers\b/.test(t))).toBe(true);
   });
 
   it('attaches whenHint when a date span text appears in an action body', () => {
@@ -202,6 +228,16 @@ describe('applyHeuristics', () => {
       (a) => a.body.trim().toLowerCase() === 'send sarah the link',
     ).length;
     expect(sendCount).toBe(1);
+  });
+});
+
+describe('extractTopicPhrases', () => {
+  it('prefers the longest noun phrase when counts are equal', () => {
+    const phrases = extractTopicPhrases(
+      'we talked a lot about merchant cash advance business with the team',
+    );
+    expect(phrases.some((t) => t.includes('merchant') && t.includes('advance'))).toBe(true);
+    expect(phrases).not.toContain('business');
   });
 });
 

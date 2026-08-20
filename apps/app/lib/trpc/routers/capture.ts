@@ -4,7 +4,7 @@ import { router, protectedProcedure } from '../trpc';
 import { extractHybrid, commit, ExtractionError, EmbeddingError } from '@wingmic/extractor';
 import { TRPCError } from '@trpc/server';
 import { transcribeEntities } from '@/lib/capture/transcribe-entities';
-import { resolveIntroEntityIds } from '@/lib/acts/mapAction';
+import { resolveIntroEntityIds, collapseActionsForCapture } from '@/lib/acts/mapAction';
 import { polishDraft } from '@/lib/acts/draftAgent';
 import { chooseActChannel, hasUsableIdentityValue, intentForChannel } from '@/lib/acts/chooseActChannel';
 import { linkedinProfileHref } from '@/lib/acts/linkedinHref';
@@ -159,7 +159,8 @@ export const captureRouter = router({
         // Acts insert is best-effort after commit() — graph already persisted.
         // Soft-catch so a draft failure does not 500 a successful capture (retry
         // would duplicate the interaction). Full tx merge deferred.
-        if (extracted.actions.length > 0) {
+        const captureActions = collapseActionsForCapture(extracted.actions, extracted.persons);
+        if (captureActions.length > 0) {
           try {
             const existingActs = await ctx.db.query.acts.findMany({
               where: eq(schema.acts.sourceInteractionId, result.interactionId),
@@ -202,7 +203,7 @@ export const captureRouter = router({
               );
 
               const actRows = await Promise.all(
-                extracted.actions.map(async (action) => {
+                captureActions.map(async (action) => {
                   const { targetEntityId, secondaryEntityId } = resolveIntroEntityIds(
                     action,
                     extracted.persons,

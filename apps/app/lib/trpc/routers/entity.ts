@@ -4,6 +4,8 @@ import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import type { DB } from '@wingmic/db';
 import * as schema from '@wingmic/db/schema';
+import { linkedinProfileHref } from '@/lib/acts/linkedinHref';
+import { namesOverlap } from '@/lib/entity/namesOverlap';
 
 // entity.detail — single procedure powering /person/[id], /company/[id],
 // /event/[id]. Source of truth: docs/superpowers/plans/2026-05-23-...md §18
@@ -49,6 +51,19 @@ type Related = {
   id: string;
   name: string;
   role?: string | null;
+};
+
+type PossibleMatch = {
+  id: string;
+  name: string;
+  role: string | null;
+  companyName: string | null;
+};
+
+type PublicProfile = {
+  linkedin: string | null;
+  url: string | null;
+  sourceUrl: string | null;
 };
 
 type DetailSub = Record<string, unknown>;
@@ -201,14 +216,31 @@ async function loadPerson(
   const mostRecent = interactions[0] ? toDate(interactions[0].capturedAt) : null;
   const since = daysSince(mostRecent);
 
-  // Related: other people sharing a company or event — not a topic.
-  // Overlapping "rust" (etc.) pulls in strangers and clutters the card.
-  const related = await findRelatedPeople(db, userId, entityId, {
+  const relatedPeople = await findRelatedPeople(db, userId, entityId, {
     companyIds,
     eventIds,
     companyById,
     eventById,
   });
+
+  const related: Related[] = [
+    ...companies.map((c: any) => ({
+      kind: 'company' as const,
+      id: c.id as string,
+      name: c.name as string,
+      role: 'works at',
+    })),
+    ...events.map((e: any) => ({
+      kind: 'event' as const,
+      id: e.id as string,
+      name: e.name as string,
+      role: eventPublicRole(e),
+    })),
+    ...relatedPeople,
+  ].slice(0, 8);
+
+  const possibleMatches = await findPossibleMatches(db, userId, entityId, entity.name);
+  const publicProfile = publicProfileFromFacts(facts);
 
   // Captures + pending acts targeted at this person (follow-ups strip).
   const followupRows = await db.query.acts.findMany({
@@ -245,6 +277,8 @@ async function loadPerson(
     })),
     related,
     topics: topics.map((t: any) => ({ id: t.id, name: t.name })),
+    publicProfile,
+    possibleMatches,
   };
 }
 
@@ -547,6 +581,7 @@ async function loadEvent(db: DB, userId: string, eventId: string) {
       date: start ? start.toISOString() : null,
       location: event.location ?? null,
       durationDays,
+      url: event.url ?? null,
     } satisfies DetailSub,
     stats: [
       { key: 'people met', value: String(myEntities.length) },
@@ -563,6 +598,101 @@ async function loadEvent(db: DB, userId: string, eventId: string) {
     })) satisfies Related[],
     topics: topics.map((t: any) => ({ id: t.id, name: t.name })),
   };
+}
+
+function firstFactValue(
+  facts: Array<{ key: string; value: string; confidence?: number }>,
+  key: string,
+): string | null {
+  const rows = facts.filter((f) => f.key === key);
+  rows.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+  const value = rows[0]?.value?.trim();
+  return value || null;
+}
+
+function safeHttpUrl(raw: string | null): string | null {
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+function publicProfileFromFacts(
+  facts: Array<{ key: string; value: string; confidence?: number }>,
+): PublicProfile {
+  const linkedin = linkedinProfileHref(firstFactValue(facts, 'linkedin'));
+  let url = safeHttpUrl(firstFactValue(facts, 'url'));
+  const sourceUrl = safeHttpUrl(firstFactValue(facts, 'source_url'));
+  if (url && linkedin && url.replace(/\/$/, '') === linkedin.replace(/\/$/, '')) {
+    url = null;
+  }
+  return { linkedin, url, sourceUrl };
+}
+
+function eventPublicRole(e: {
+  dateRangeStart?: Date | number | null;
+  location?: string | null;
+  url?: string | null;
+}): string {
+  const bits: string[] = [];
+  const start = toDate(e.dateRangeStart ?? null);
+  if (start) bits.push(start.toISOString().slice(0, 10));
+  if (e.location?.trim()) bits.push(e.location.trim());
+  if (e.url?.trim()) bits.push('public page');
+  return bits.join(' · ') || 'attended';
+}
+
+async function findPossibleMatches(
+  db: DB,
+  userId: string,
+  selfEntityId: string,
+  name: string,
+): Promise<PossibleMatch[]> {
+  const others = await db.query.entities.findMany({
+    where: and(
+      eq(schema.entities.ownerUserId, userId),
+      isNull(schema.entities.deletedAt),
+      eq(schema.entities.kind, 'person'),
+    ),
+    columns: { id: true, name: true },
+    limit: 200,
+  });
+  const hits = others
+    .filter((p) => p.id !== selfEntityId && namesOverlap(name, p.name))
+    .slice(0, 5);
+  if (hits.length === 0) return [];
+
+  const ids = hits.map((h) => h.id);
+  const ecs = await db.query.entityCompanies.findMany({
+    where: and(
+      inArray(schema.entityCompanies.entityId, ids),
+      eq(schema.entityCompanies.sourceDeleted, false),
+    ),
+  });
+  const companyIds = [...new Set(ecs.map((row: { companyId: string }) => row.companyId))];
+  const companies = companyIds.length
+    ? await db.query.companies.findMany({ where: inArray(schema.companies.id, companyIds) })
+    : [];
+  const companyById = new Map(companies.map((c: { id: string; name: string }) => [c.id, c]));
+  const metaByEntity = new Map<string, { role: string | null; companyName: string | null }>();
+  for (const row of ecs) {
+    if (metaByEntity.has(row.entityId)) continue;
+    const c = companyById.get(row.companyId);
+    metaByEntity.set(row.entityId, {
+      role: row.role ?? null,
+      companyName: c?.name ?? null,
+    });
+  }
+  return hits.map((h) => ({
+    id: h.id,
+    name: h.name,
+    role: metaByEntity.get(h.id)?.role ?? null,
+    companyName: metaByEntity.get(h.id)?.companyName ?? null,
+  }));
 }
 
 // EntityDetail is the resolved payload from caller.detail(...) — note the

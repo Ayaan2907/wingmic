@@ -109,6 +109,29 @@ describe('PersonDetailClient', () => {
     expect(rows.length).toBe(2);
     expect(rows[0]!.getAttribute('data-related-href')).toBe('/person/en_marcus');
     expect(rows[1]!.getAttribute('data-related-href')).toBe('/company/co_acme');
+    expect(getByTestId('entity-public-profile').textContent).toMatch(/no public sources yet/i);
+  });
+
+  it('renders possible-match cards so the user can pick who they met', () => {
+    render(
+      <PersonDetailClient
+        detail={{
+          ...detail,
+          possibleMatches: [
+            { id: 'en_sarah_b', name: 'Sarah', companyName: 'Acme Corp' },
+          ],
+          publicProfile: {
+            linkedin: 'https://www.linkedin.com/in/ada-lovelace',
+            url: null,
+            sourceUrl: null,
+          },
+        }}
+      />,
+    );
+    expect(screen.getByTestId('entity-possible-match').getAttribute('href')).toBe(
+      '/person/en_sarah_b',
+    );
+    expect(screen.getByTestId('entity-public-profile-links').textContent).toMatch(/linkedin/i);
   });
 
   it('draft check-in creates an act and routes to /acts', () => {
