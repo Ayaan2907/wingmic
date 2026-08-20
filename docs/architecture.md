@@ -204,9 +204,9 @@ All capture stages run inside `apps/app` (the dynamic product on Railway); `apps
  │     observed_count++; promotedAt set at count≥2   │
  │  2. upsert canonical Event (slug + date)          │
  │  3. upsert canonical Topic (exact slug)           │
- │  4. resolve Person against owner's entities       │
- │     score = 0.55*name + 0.25*embed (companyBoost  │
- │     reserved, 0 in v0.1.x); ≥0.85 link else create│
+ │  4. resolve Person: strong keys + unique same-owner name, then fuzzy │
+ │     score = 0.5*name + 0.2*embed + 0.15*companyBoost + 0.3*email;   │
+ │     unique normalized name reuses without 0.85 bar; ≥0.85 fuzzy link │
  │  5. persist Interaction with full embedding       │
  │  6. wire EntityCompany / EntityEvent / EntityTopic│
  │  7. persist email / linkedin / notes as facts     │
@@ -275,18 +275,30 @@ Runs in `apps/app`, same as capture.
 
 ```
 For each PersonCandidate from the extractor:
-  Pull all entities owned by this user.
-  For each existing entity:
-    nameScore = max(nameSimilarity(cand.name, entity.name),
-                    nameSimilarity(cand.name, alias) for alias in entity.aliases)
-    embedScore = cosine(entity.embedding, cand.embedding) (0..1, clamped)
-    companyBoost = 0.0  (reserved; v0.2 wires actual entity_company joins)
+  Pull all entities owned by this user (deletedAt IS NULL).
+  Match in strict order (same owner only):
+    1. unique email (trim + lowercase)
+    2. unique normalized LinkedIn (/in/ profile)
+    3. colliding email/LinkedIn → best fuzzy score among hits (never create)
+    4. exact normalized name + exactly one works_at companyHint
+    5. exact normalized name, set size === 1 (aliases count)
+    6. fuzzy resolvePerson; link iff score ≥ 0.85
 
-    score = 0.55 * nameScore + 0.25 * embedScore + 0.2 * companyBoost
+  normalizePersonName = lowercase tokens, punctuation stripped, space-joined.
+  Partial names ("Jordan" vs "Jordan Lee") do NOT auto-link.
 
-  Take the best score.
-  If score ≥ 0.85 → LINK to existing entity, refresh its embedding
-  Else            → CREATE a new entity with this candidate's data
+  resolvePerson score (when fuzzy runs):
+    nameScore = max(nameSimilarity(cand.name, entity.name), alias scores)
+    embedScore = cosine(entity.embedding, cand.embedding)
+    companyBoost = 1 when entity already works_at cand.companyHint's company
+    emailBoost = 1 when stored email matches
+    importBoost = 0.05 for non-voice-capture importSource
+
+    score = 0.5*name + 0.2*embed + 0.15*companyBoost + 0.3*email + importBoost
+
+  On link: refresh embedding; append facts/topics; skip duplicate email/linkedin;
+  fill blank company role; never overwrite entity.name.
+  Else CREATE a new entity.
 ```
 
 The threshold (`0.85`) is tunable. Future work: prompt the user to confirm in the 0.5–0.85 range instead of always-creating.

@@ -23,6 +23,7 @@ export interface EntityCapture {
   interactionId: string;
   capturedAt: string;
   transcript: string;
+  topics?: string[];
   eventName?: string | null;
 }
 
@@ -37,6 +38,19 @@ export interface EntityRelated {
   id: string;
   name: string;
   role?: string | null;
+}
+
+export interface EntityPublicProfile {
+  linkedin: string | null;
+  url: string | null;
+  sourceUrl: string | null;
+}
+
+export interface EntityPossibleMatch {
+  id: string;
+  name: string;
+  role?: string | null;
+  companyName?: string | null;
 }
 
 export interface EntityStat {
@@ -66,6 +80,14 @@ export interface EntityDetailScaffoldProps {
   followups: EntityFollowup[];
   related: EntityRelated[];
   topics?: Array<{ id: string; name: string }>;
+  publicProfile?: EntityPublicProfile | null;
+  possibleMatches?: EntityPossibleMatch[];
+  onMergePossibleMatch?: (sourceId: string) => void;
+  mergePendingId?: string | null;
+  mergeUndo?: { mergeId: string; sourceName: string; expiresAt: number } | null;
+  onUndoMerge?: () => void;
+  /** Person entity id — used for public profile avatar seed. */
+  entityId?: string;
 }
 
 const STAT_COLORS = [accent, '#86efac', third];
@@ -85,6 +107,13 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
     followups,
     related,
     topics,
+    publicProfile,
+    possibleMatches,
+    onMergePossibleMatch,
+    mergePendingId,
+    mergeUndo,
+    onUndoMerge,
+    entityId,
   } = props;
 
   return (
@@ -141,7 +170,83 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
 
         <CtaRow primary={primaryCta} ghost={ghostCta} />
 
+        {mergeUndo && onUndoMerge ? (
+          <div
+            data-testid="entity-merge-undo"
+            className="mono"
+            style={{
+              marginBottom: 14,
+              padding: '10px 12px',
+              borderRadius: 10,
+              background: 'rgba(255,107,107,0.12)',
+              border: '1px solid rgba(255,107,107,0.35)',
+              fontSize: 12,
+              color: 'var(--text-85)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+            }}
+          >
+            <span>
+              <span className="serif" style={{ fontStyle: 'italic' }}>
+                {mergeUndo.sourceName}
+              </span>{' '}
+              merged
+            </span>
+            <button
+              type="button"
+              onClick={onUndoMerge}
+              className="mono"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: accent,
+                cursor: 'pointer',
+                fontSize: 12,
+              }}
+            >
+              ↶ undo
+            </button>
+          </div>
+        ) : null}
+
         <StatTrio stats={stats} />
+
+        {kind === 'person' && (
+          <Section title="on the web" testid="entity-public-profile">
+            <PublicProfileCard
+              profile={publicProfile ?? null}
+              name={name}
+              sub={sub}
+              entityId={entityId}
+            />
+          </Section>
+        )}
+
+        {kind === 'person' && possibleMatches && possibleMatches.length > 0 && (
+          <Section title="also in your graph" testid="entity-possible-matches">
+            <p
+              className="mono"
+              style={{
+                fontSize: 11,
+                color: 'var(--text-55)',
+                margin: '0 0 10px',
+                letterSpacing: 0.2,
+              }}
+            >
+              same name — pick who you actually met.
+            </p>
+            {possibleMatches.map((m) => (
+              <PossibleMatchCard
+                key={m.id}
+                match={m}
+                onMerge={onMergePossibleMatch}
+                pending={mergePendingId === m.id}
+              />
+            ))}
+          </Section>
+        )}
 
         <Section title="from your captures" testid="entity-captures">
           {captures.length === 0 ? (
@@ -153,7 +258,7 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
 
         <Section title="follow-ups" testid="entity-followups">
           {followups.length === 0 ? (
-            <EmptyCard>no follow-ups yet. acts agent arrives v0.3.</EmptyCard>
+            <EmptyCard>no follow-ups yet — draft one from a capture, or tap draft check-in.</EmptyCard>
           ) : (
             followups.map((f) => <FollowupCard key={f.id} followup={f} />)
           )}
@@ -187,7 +292,7 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
 
         <Section title="related" testid="entity-related" last>
           {related.length === 0 ? (
-            <EmptyCard>nothing connected yet.</EmptyCard>
+            <EmptyCard>nothing connected yet — companies, events, and people from the same captures land here.</EmptyCard>
           ) : (
             related.map((r, i) => (
               <RelatedRow key={`${r.kind}-${r.id}`} item={r} isLast={i === related.length - 1} />
@@ -516,6 +621,29 @@ function CaptureCard({ capture }: { capture: EntityCapture }) {
       >
         {excerpt}
       </div>
+      {capture.topics && capture.topics.length > 0 ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+          {capture.topics.map((t) => (
+            <span
+              key={t}
+              className="mono"
+              style={{
+                padding: '3px 8px',
+                borderRadius: 999,
+                background: `${violet}1f`,
+                color: violet,
+                border: `1px solid ${violet}40`,
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: 0.8,
+                textTransform: 'uppercase',
+              }}
+            >
+              {t}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -625,6 +753,207 @@ function RelatedRow({ item, isLast }: { item: EntityRelated; isLast: boolean }) 
 
 function relatedHref(item: EntityRelated): string {
   return `/${item.kind}/${encodeURIComponent(item.id)}`;
+}
+
+function safeHref(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  try {
+    const u = new URL(raw.trim());
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+function PublicProfileCard({
+  profile,
+  name,
+  sub,
+  entityId,
+}: {
+  profile: EntityPublicProfile | null;
+  name: string;
+  sub: React.ReactNode;
+  entityId?: string;
+}) {
+  const linkedin = safeHref(profile?.linkedin);
+  const url = safeHref(profile?.url);
+  const sourceUrl = safeHref(profile?.sourceUrl);
+  const pressUrl =
+    url && url !== linkedin ? url : sourceUrl && sourceUrl !== linkedin ? sourceUrl : null;
+
+  if (!linkedin && !pressUrl) {
+    return <EmptyCard>no public sources yet.</EmptyCard>;
+  }
+
+  if (linkedin) {
+    const subLine = typeof sub === 'string' ? sub : null;
+    return (
+      <div data-testid="entity-public-profile-card">
+        <div
+          style={{
+            padding: 14,
+            borderRadius: 14,
+            background: 'var(--surface-1, rgba(255,255,255,0.025))',
+            border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
+            display: 'flex',
+            gap: 12,
+            alignItems: 'flex-start',
+          }}
+        >
+          <PersonAvatar name={name} seed={entityId ?? name} size={44} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ font: '600 14px Inter, system-ui, sans-serif', color: 'var(--ink)' }}>
+              {name}
+            </div>
+            {subLine && subLine !== 'no role yet' ? (
+              <div
+                className="mono"
+                style={{
+                  font: '400 11px JetBrains Mono, ui-monospace, monospace',
+                  color: 'var(--text-55)',
+                  marginTop: 4,
+                }}
+              >
+                {subLine}
+              </div>
+            ) : null}
+            <a
+              href={linkedin}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mono"
+              style={{
+                display: 'inline-block',
+                marginTop: 10,
+                color: accent,
+                fontSize: 12,
+                textDecoration: 'none',
+              }}
+            >
+              show their linkedin →
+            </a>
+          </div>
+        </div>
+        {pressUrl ? (
+          <a
+            href={pressUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mono"
+            style={{
+              display: 'inline-block',
+              marginTop: 8,
+              marginLeft: 2,
+              color: 'var(--text-55)',
+              fontSize: 11,
+              textDecoration: 'none',
+            }}
+          >
+            press mention → {hostLabel(pressUrl)}
+          </a>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid="entity-public-profile-links">
+      <a
+        href={pressUrl!}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mono"
+        style={{ color: 'var(--text-55)', fontSize: 11.5, textDecoration: 'none' }}
+      >
+        press mention → {hostLabel(pressUrl!)}
+      </a>
+    </div>
+  );
+}
+
+function hostLabel(href: string): string {
+  try {
+    return new URL(href).hostname.replace(/^www\./, '');
+  } catch {
+    return 'site';
+  }
+}
+
+function PossibleMatchCard({
+  match,
+  onMerge,
+  pending,
+}: {
+  match: EntityPossibleMatch;
+  onMerge?: (sourceId: string) => void;
+  pending?: boolean;
+}) {
+  const sub = [match.role, match.companyName].filter(Boolean).join(' · ');
+  return (
+    <div
+      data-testid="entity-possible-match"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '11px 0',
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+      }}
+    >
+      <PersonAvatar name={match.name} seed={match.id} size={28} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ font: '500 13.5px Inter, system-ui, sans-serif', color: 'var(--ink)' }}>
+          {match.name}
+        </div>
+        {sub ? (
+          <div
+            className="mono"
+            style={{
+              font: '400 11px JetBrains Mono, ui-monospace, monospace',
+              color: 'var(--text-40)',
+            }}
+          >
+            {sub}
+          </div>
+        ) : null}
+      </div>
+      {onMerge ? (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            if (
+              window.confirm(
+                `merge ${match.name} into this person? captures and facts move over. this can't be undone after 30s.`,
+              )
+            ) {
+              onMerge(match.id);
+            }
+          }}
+          className="mono"
+          style={{
+            color: accent,
+            fontSize: 11,
+            background: 'transparent',
+            border: 'none',
+            cursor: pending ? 'wait' : 'pointer',
+            opacity: pending ? 0.5 : 1,
+          }}
+        >
+          merge into this
+        </button>
+      ) : null}
+      <a
+        href={`/person/${encodeURIComponent(match.id)}`}
+        className="mono"
+        style={{ color: 'var(--text-40)', fontSize: 10, textDecoration: 'none' }}
+      >
+        open
+      </a>
+    </div>
+  );
 }
 
 function relatedAvatar(item: EntityRelated): React.ReactNode {

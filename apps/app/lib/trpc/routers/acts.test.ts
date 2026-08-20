@@ -93,18 +93,26 @@ describe('acts router', () => {
 
   async function insertAct(
     id: string,
-    opts: { userId?: string; status?: string; target?: string | null } = {},
+    opts: {
+      userId?: string;
+      status?: string;
+      target?: string | null;
+      source?: string | null;
+      kind?: string;
+    } = {},
   ) {
     await client.execute({
       sql: `INSERT INTO act VALUES (
-        ?, ?, 'email', ?, 'send the deck', null, 'tomorrow', null,
-        ?, null, null, 88, ?, ?
+        ?, ?, ?, ?, 'send the deck', null, 'tomorrow', null,
+        ?, null, ?, 88, ?, ?
       )`,
       args: [
         id,
         opts.userId ?? userId,
+        opts.kind ?? 'email',
         opts.status ?? 'drafted',
         opts.target === undefined ? 'e_ada' : opts.target,
+        opts.source ?? null,
         now,
         now,
       ],
@@ -124,6 +132,14 @@ describe('acts router', () => {
     const row = result.acts.find((a) => a.id === 'act_list_1');
     expect(row?.name).toBe('Ada Lovelace');
     expect(row?.actionKind).toBe('email');
+  });
+
+  it('collapses duplicate drafts from the same capture', async () => {
+    await insertAct('act_dup_a', { source: 'ix_sagar', target: 'e_ada' });
+    await insertAct('act_dup_b', { source: 'ix_sagar', target: 'e_ada' });
+    const result = await caller().list({ limit: 50 });
+    const dups = result.acts.filter((a) => a.id === 'act_dup_a' || a.id === 'act_dup_b');
+    expect(dups).toHaveLength(1);
   });
 
   it('includes targetEmail from entity facts when present', async () => {

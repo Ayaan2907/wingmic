@@ -20,6 +20,39 @@ export type GraphNode = { id: string; kind: NodeKind; label: string };
 export type GraphLink = { source: string; target: string; rel: LinkRel };
 export type GraphData = { nodes: GraphNode[]; links: GraphLink[] };
 
+/**
+ * When a person both works at a company (or attended an event) and discussed
+ * a topic, also draw company/event → topic so shared subjects form a hub
+ * instead of a lone spoke off one person.
+ */
+export function discussedHubLinks(
+  ec: Array<{ entityId: string; companyId: string }>,
+  ee: Array<{ entityId: string; eventId: string }>,
+  et: Array<{ entityId: string; topicId: string }>,
+): GraphLink[] {
+  const topicsByEntity = new Map<string, string[]>();
+  for (const row of et) {
+    const list = topicsByEntity.get(row.entityId) ?? [];
+    list.push(row.topicId);
+    topicsByEntity.set(row.entityId, list);
+  }
+  const seen = new Set<string>();
+  const links: GraphLink[] = [];
+  const add = (source: string, target: string) => {
+    const key = `${source}|${target}|discussed`;
+    if (seen.has(key) || source === target) return;
+    seen.add(key);
+    links.push({ source, target, rel: 'discussed' });
+  };
+  for (const row of ec) {
+    for (const topicId of topicsByEntity.get(row.entityId) ?? []) add(row.companyId, topicId);
+  }
+  for (const row of ee) {
+    for (const topicId of topicsByEntity.get(row.entityId) ?? []) add(row.eventId, topicId);
+  }
+  return links;
+}
+
 export const graphRouter = router({
   get: protectedProcedure.query(async ({ ctx }): Promise<GraphData> => {
     const userId = ctx.user.id;
@@ -89,6 +122,7 @@ export const graphRouter = router({
       ...ec.map((x: any) => ({ source: x.entityId as string, target: x.companyId as string, rel: 'works_at' as const })),
       ...ee.map((x: any) => ({ source: x.entityId as string, target: x.eventId as string, rel: 'attended' as const })),
       ...et.map((x: any) => ({ source: x.entityId as string, target: x.topicId as string, rel: 'discussed' as const })),
+      ...discussedHubLinks(ec, ee, et),
     ];
 
     return { nodes, links };

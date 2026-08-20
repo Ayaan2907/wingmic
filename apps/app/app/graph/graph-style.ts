@@ -2,7 +2,10 @@ import { accent, blue, violet } from '@/app/chat/_components/tokens';
 import {
   graphNodeCaption,
   graphNodeInitials,
+  graphLinkNeighborhoodAlpha,
+  graphNeighborhoodAlpha,
   isHighlightedGraphNode,
+  shouldShowGraphNodeCaption,
 } from './graph-node-label';
 import type { GraphNode, LinkRel, NodeKind } from './graph-types';
 
@@ -40,19 +43,40 @@ export function linkWidthOf(_rel?: LinkRel): number {
   return LINK_WIDTH;
 }
 
+export function paintGraphLinkColor(
+  rel: LinkRel | undefined,
+  sourceId: string,
+  targetId: string,
+  neighborhood: Set<string>,
+): string {
+  const base = linkColorOf(rel);
+  const alpha = graphLinkNeighborhoodAlpha(sourceId, targetId, neighborhood);
+  if (alpha >= 1) return base;
+  const hex = base.replace('#', '');
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 type CanvasNode = GraphNode & { x?: number; y?: number };
 
-/** Paint a node with initials inside the disc and a short name beside it. */
+/** Paint a node with initials inside the disc; caption when zoom/hover/select. */
 export function paintGraphNode(
   node: CanvasNode,
   ctx: CanvasRenderingContext2D,
   globalScale: number,
   selectedId: string | null,
+  hoveredId: string | null,
+  neighborhood: Set<string>,
 ): void {
   const x = node.x ?? 0;
   const y = node.y ?? 0;
   const highlighted = isHighlightedGraphNode(node.id, selectedId);
+  const alpha = graphNeighborhoodAlpha(node.id, neighborhood);
   const r = highlighted ? NODE_PAINT_RADIUS * 1.35 : NODE_PAINT_RADIUS;
+  ctx.save();
+  ctx.globalAlpha = alpha;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, 2 * Math.PI);
   ctx.fillStyle = KIND_COLOR[node.kind] ?? accent;
@@ -68,11 +92,14 @@ export function paintGraphNode(
   ctx.textBaseline = 'middle';
   ctx.fillText(graphNodeInitials(node.label), x, y);
 
-  const fontSize = Math.max(10, 12 / Math.max(globalScale, 0.7));
-  ctx.font = `600 ${fontSize}px Inter, system-ui, sans-serif`;
-  ctx.fillStyle = highlighted ? '#ffffff' : 'rgba(255,255,255,0.88)';
-  ctx.textBaseline = 'top';
-  ctx.fillText(graphNodeCaption(node.label), x, y + r + 4);
+  if (shouldShowGraphNodeCaption(node.id, selectedId, hoveredId, globalScale)) {
+    const fontSize = Math.max(10, 12 / Math.max(globalScale, 0.7));
+    ctx.font = `600 ${fontSize}px Inter, system-ui, sans-serif`;
+    ctx.fillStyle = highlighted ? '#ffffff' : 'rgba(255,255,255,0.88)';
+    ctx.textBaseline = 'top';
+    ctx.fillText(graphNodeCaption(node.label), x, y + r + 4);
+  }
+  ctx.restore();
 }
 
 export function paintGraphNodePointerArea(

@@ -3,7 +3,7 @@ import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import * as schema from '@wingmic/db/schema';
 
-import { graphRouter } from './graph';
+import { graphRouter, discussedHubLinks } from './graph';
 
 // graph.get — userId-scoped force-graph payload built from the entity edge
 // tables. Mirrors the in-memory libSQL harness from entity.test.ts: real
@@ -92,6 +92,11 @@ describe('graph.get', () => {
       sql: `INSERT INTO entity_topic (id, entity_id, topic_id, weight, source_interaction_id, created_at, source_deleted) VALUES ('et_1', 'en_marcus', 'tp_rust', 70, null, ?, 0)`,
       args: [now],
     });
+    // Sarah also discussed rust so company/event share the topic hub.
+    await client.execute({
+      sql: `INSERT INTO entity_topic (id, entity_id, topic_id, weight, source_interaction_id, created_at, source_deleted) VALUES ('et_sarah', 'en_sarah', 'tp_rust', 70, null, ?, 0)`,
+      args: [now],
+    });
     // Soft-deleted edge: Sarah → ghost topic. Must be excluded.
     await client.execute({
       sql: `INSERT INTO entity_topic (id, entity_id, topic_id, weight, source_interaction_id, created_at, source_deleted) VALUES ('et_ghost', 'en_sarah', 'tp_ghost', 70, null, ?, 1)`,
@@ -125,11 +130,27 @@ describe('graph.get', () => {
     expect(res.nodes.some((n) => n.kind === 'topic' && n.id === 'tp_rust')).toBe(true);
     expect(res.nodes).toHaveLength(5);
 
-    // Links: works_at, attended, discussed.
+    // Links: works_at, attended, discussed (+ company/event hubs).
     expect(res.links).toContainEqual({ source: 'en_sarah', target: 'co_acme', rel: 'works_at' });
     expect(res.links).toContainEqual({ source: 'en_sarah', target: 'ev_dc', rel: 'attended' });
     expect(res.links).toContainEqual({ source: 'en_marcus', target: 'tp_rust', rel: 'discussed' });
-    expect(res.links).toHaveLength(3);
+    expect(res.links).toContainEqual({ source: 'en_sarah', target: 'tp_rust', rel: 'discussed' });
+    expect(res.links).toContainEqual({ source: 'co_acme', target: 'tp_rust', rel: 'discussed' });
+    expect(res.links).toContainEqual({ source: 'ev_dc', target: 'tp_rust', rel: 'discussed' });
+    expect(res.links).toHaveLength(6);
+  });
+
+  it('draws company and event hub links when a person discussed a shared topic', () => {
+    expect(
+      discussedHubLinks(
+        [{ entityId: 'en_sarah', companyId: 'co_acme' }],
+        [{ entityId: 'en_sarah', eventId: 'ev_dc' }],
+        [{ entityId: 'en_sarah', topicId: 'tp_rust' }],
+      ),
+    ).toEqual([
+      { source: 'co_acme', target: 'tp_rust', rel: 'discussed' },
+      { source: 'ev_dc', target: 'tp_rust', rel: 'discussed' },
+    ]);
   });
 
   it('excludes soft-deleted entities and sourceDeleted edges', async () => {

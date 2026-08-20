@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { slugify, nameSimilarity } from '../slug';
+import { slugify, nameSimilarity, normalizePersonName, personNameEquals, entityMatchesPersonName } from '../slug';
 
 describe('slugify', () => {
   it('lowercases and hyphenates', () => {
@@ -33,6 +33,27 @@ describe('slugify', () => {
     // which is fine — caller must validate.
     expect(slugify('  ')).toBe('');
     expect(slugify('Sara—Chen')).toBe('sara-chen');
+  });
+});
+
+describe('normalizePersonName', () => {
+  it('joins lowercase tokens for exact matching', () => {
+    expect(normalizePersonName('Sarah Chen')).toBe('sarah chen');
+    expect(personNameEquals('Sarah Chen', 'sarah chen')).toBe(true);
+  });
+
+  it('does not treat partial names as equal', () => {
+    expect(personNameEquals('Jordan', 'Jordan Lee')).toBe(false);
+    expect(entityMatchesPersonName('Jordan', { name: 'Jordan Lee', aliases: [] })).toBe(false);
+  });
+
+  it('matches via alias on the entity', () => {
+    expect(
+      entityMatchesPersonName('Ada', {
+        name: 'Ada Lovelace',
+        aliases: ['Ada'],
+      }),
+    ).toBe(true);
   });
 });
 
