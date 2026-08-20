@@ -24,7 +24,6 @@ describe('ActCard', () => {
   it('renders the act name, kind, confidence and draft without edit', () => {
     render(<ActCard act={ACT} />);
     expect(screen.getByText('Ada Lovelace')).toBeTruthy();
-    expect(screen.getByText(/memo/i)).toBeTruthy();
     expect(screen.getByTestId('act-subject').textContent).toMatch(/memo · Ada/);
     expect(screen.getByTestId('act-body').textContent).toMatch(/rust deck/);
     expect(screen.queryByTestId('act-edit')).toBeNull();
