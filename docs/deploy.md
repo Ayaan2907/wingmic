@@ -3,7 +3,7 @@
 Wingmic ships two surfaces:
 
 - **wingmic.xyz** — static landing built from `apps/web`, served by Cloudflare Pages. No secrets, no runtime.
-- **app.wingmic.xyz** — dynamic product built from `apps/app`, served by Railway (Node.js, standard `next start`). Needs 8 secrets.
+- **app.wingmic.xyz** — dynamic product built from `apps/app`, served by Railway (Node.js, standard `next start`). Needs 7 secrets.
 
 This guide covers both. If you're just running locally for dev, jump to [§ Local development](#-local-development).
 
@@ -13,7 +13,7 @@ This guide covers both. If you're just running locally for dev, jump to [§ Loca
 
 - [§ Landing deploy (`wingmic.xyz`)](#-landing-deploy-wingmicxyz)
 - [§ Product deploy (`app.wingmic.xyz`)](#-product-deploy-appwingmicxyz)
-  - [The 8 secrets](#the-8-secrets)
+  - [The 7 secrets](#the-7-secrets)
   - [Acquire each secret](#acquire-each-secret)
   - [Set up the production database (Turso)](#set-up-the-production-database-turso)
   - [Set secrets on Railway](#set-secrets-on-railway)
@@ -60,11 +60,11 @@ Only `NEXT_PUBLIC_APP_URL=https://app.wingmic.xyz` (compile-time; set in `apps/w
 
 ## § Product deploy (`app.wingmic.xyz`)
 
-Dynamic Next.js app on Railway (Node.js runtime, standard `next start`). Needs 8 secrets.
+Dynamic Next.js app on Railway (Node.js runtime, standard `next start`). Needs 7 secrets.
 
-### the 8 secrets
+### the 7 secrets
 
-Wingmic v0.1.1 needs exactly 8 environment variables to run the product in production. Keep this table open while you work through the next subsection.
+Wingmic v0.1.1 needs exactly 7 environment variables to run the product in production. Keep this table open while you work through the next subsection.
 
 | Variable | What it is | How to get it | Required? |
 |---|---|---|---|
@@ -73,7 +73,6 @@ Wingmic v0.1.1 needs exactly 8 environment variables to run the product in produ
 | `BETTER_AUTH_SECRET` | 32+ byte random string for session signing | [openssl](#betterauth-secret) | ✅ |
 | `BETTER_AUTH_URL` | The deployed origin (no trailing slash) | You set this | ✅ |
 | `RESEND_API_KEY` | Sends magic-link emails | [Resend dashboard](#resend) | ✅ |
-| `RESEND_FROM` | Sender display + address | After domain verified at Resend | ✅ |
 | `OPENROUTER_API_KEY` | LLM extraction + embedding calls | [OpenRouter](https://openrouter.ai) | ✅ |
 | `ASSEMBLYAI_API_KEY` | Hosted audio transcription | [AssemblyAI](https://assemblyai.com) | ✅ |
 
@@ -82,6 +81,7 @@ Optional:
 | Variable | Default | When to override |
 |---|---|---|
 | `NEXT_PUBLIC_APP_URL` | `https://app.wingmic.xyz` | If you self-host on your own domain |
+| `RESEND_FROM` | `wingmic <info@mail.wingmic.xyz>` (code default) | **Dev/test only.** Production always uses the code default in `apps/app/lib/config/resend-from.ts` — a stale `RESEND_FROM` in Railway/Doppler is ignored. Remove it from prod variables. |
 | `EXTRACTION_MODEL` / `LINKER_MODEL` | OpenRouter model strings | Swap the LLM (e.g. `openai/gpt-4o-mini`) without code changes |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Try a different embedding model |
 | `WEB_SEARCH_PROVIDER` | `tavily` | `none` skips public-web enrich. `exa` once that adapter is registered. Not Brave. |
@@ -138,10 +138,7 @@ Save as `BETTER_AUTH_SECRET`. Don't rotate this casually — rotating invalidate
    - Wait ~5 minutes, click "Verify"
 3. Create an API key at [resend.com/api-keys](https://resend.com/api-keys). Choose **"Sending access"** (read-write isn't needed).
 4. Save the key as `RESEND_API_KEY`.
-5. Save your sender as `RESEND_FROM` in the format:
-   ```
-   wingmic <auth@your-domain.com>
-   ```
+5. **Verify `mail.wingmic.xyz`** (or your sending subdomain) in Resend. The outbound sender is **`wingmic <info@mail.wingmic.xyz>`**, defined as `DEFAULT_RESEND_FROM` in `apps/app/lib/config/resend-from.ts`. Production always uses that constant — do **not** set `RESEND_FROM` in Railway/Doppler for wingmic prod. To change the sender, update the code and redeploy.
 
 #### Anthropic
 
@@ -200,7 +197,7 @@ If you see all 17 user tables + `__drizzle_migrations`, you're done.
 
 **Dashboard** — [railway.com](https://railway.com) → your project → `wingmic-app` service → **Variables** tab → **+ New Variable** (Railway encrypts at rest).
 
-Add all 8:
+Add all 7:
 
 ```
 TURSO_DB_URL=libsql://wingmic-prod-<your-org>.turso.io
@@ -208,10 +205,11 @@ TURSO_AUTH_TOKEN=eyJhbGciOiJF...
 BETTER_AUTH_SECRET=<64-char random>
 BETTER_AUTH_URL=https://app.wingmic.xyz
 RESEND_API_KEY=re_...
-RESEND_FROM=wingmic <auth@your-domain.com>
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
+OPENROUTER_API_KEY=sk-or-...
+ASSEMBLYAI_API_KEY=...
 ```
+
+Do **not** set `RESEND_FROM` in production — the app uses `DEFAULT_RESEND_FROM` from code (`wingmic <info@mail.wingmic.xyz>`). A stale value in Railway variables is ignored but should be deleted.
 
 **CLI alternative** (after `npm i -g @railway/cli && railway login && railway link`):
 
