@@ -38,14 +38,46 @@ describe('templateDraft', () => {
     expect(draft.body).toContain('Acme');
   });
 
-  it('prefers seed body when provided', () => {
+  it('weaves seed into a sendable email instead of returning the seed alone', () => {
     const draft = templateDraft({
       kind: 'email',
       intent: 'follow-up',
       targetName: 'Ada',
       seedBody: 'send the deck tomorrow',
+      transcript: 'met Ada Lovelace at Analytical Engines, she asked for the rust deck',
     });
-    expect(draft.body).toBe('send the deck tomorrow');
+    expect(draft.body.toLowerCase()).toContain('send the deck tomorrow');
+    expect(draft.body.toLowerCase()).toContain('hey ada');
+    expect(draft.body).not.toBe('send the deck tomorrow');
+    expect(draft.body.toLowerCase()).toContain('analytical engines');
+  });
+
+  it('prefers the committed memo over the extractor seed as the story', () => {
+    const draft = templateDraft({
+      kind: 'email',
+      intent: 'follow-up',
+      targetName: 'Ada',
+      seedBody: 'send the deck tomorrow',
+      transcript: 'met Ada Lovelace at Analytical Engines, she asked for the rust deck',
+    });
+    const firstMention = draft.body.toLowerCase().indexOf('analytical engines');
+    const seedMention = draft.body.toLowerCase().indexOf('send the deck tomorrow');
+    expect(firstMention).toBeGreaterThanOrEqual(0);
+    expect(seedMention).toBeGreaterThan(firstMention);
+  });
+
+  it('frames a meeting fallback as a meeting, not a reminder title', () => {
+    const draft = templateDraft({
+      kind: 'meeting',
+      intent: 'reminder',
+      channel: 'meeting',
+      targetName: 'Ada Lovelace',
+      contextName: 'Analytical Engines',
+      seedBody: 'coffee next week',
+    });
+    expect(draft.subject.toLowerCase()).toContain('meet');
+    expect(draft.subject.toLowerCase()).not.toContain('coffee next week');
+    expect(draft.body.toLowerCase()).toContain('meeting with');
   });
 
   it('clamps long template subjects and seed bodies', () => {
@@ -58,6 +90,19 @@ describe('templateDraft', () => {
     });
     expect(draft.subject.length).toBeLessThanOrEqual(60);
     expect(draft.body.length).toBeLessThanOrEqual(2000);
+  });
+
+  it('writes a linkedin note without an email greeting block', () => {
+    const draft = templateDraft({
+      kind: 'email',
+      intent: 'linkedin-note',
+      channel: 'linkedin',
+      targetName: 'Ada Lovelace',
+      seedBody: 'talked rust at the booth',
+    });
+    expect(draft.subject.toLowerCase()).toContain('linkedin');
+    expect(draft.body.toLowerCase()).toContain('talked rust');
+    expect(draft.body.toLowerCase()).not.toContain('ping me if useful');
   });
 
   it('falls back whitespace-only context to the event / this company', () => {
