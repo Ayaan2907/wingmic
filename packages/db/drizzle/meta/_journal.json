@@ -43,6 +43,13 @@
       "when": 1786133746879,
       "tag": "0005_rich_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1787249758981,
+      "tag": "0006_tired_norrin_radd",
+      "breakpoints": true
     }
   ]
 }

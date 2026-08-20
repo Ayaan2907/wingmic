@@ -8,6 +8,10 @@ import { resolveIntroEntityIds } from '@/lib/acts/mapAction';
 import { polishDraft } from '@/lib/acts/draftAgent';
 import { chooseActChannel, hasUsableIdentityValue, intentForChannel } from '@/lib/acts/chooseActChannel';
 import { linkedinProfileHref } from '@/lib/acts/linkedinHref';
+import { webSearchProviderFromEnv } from '@/lib/web-search';
+import { enrichPersonsAfterCommit } from '@/lib/enrich/enrichPersons';
+import { enrichEventsAfterCommit } from '@/lib/enrich/enrichEvents';
+import { scheduleEnrich } from '@/lib/enrich/schedule';
 import * as schema from '@wingmic/db/schema';
 
 export const captureRouter = router({
@@ -258,6 +262,29 @@ export const captureRouter = router({
           } catch {
             // Capture committed; drafts can be created later via entity CTAs.
           }
+        }
+
+        const provider = webSearchProviderFromEnv();
+        if (provider) {
+          const capturedAt = input.capturedAt ?? new Date();
+          scheduleEnrich(async () => {
+            await Promise.all([
+              enrichPersonsAfterCommit({
+                db: ctx.db,
+                userId: ctx.user.id,
+                interactionId: result.interactionId,
+                extractedPersons: extracted.persons,
+                persons: result.persons,
+                provider,
+              }),
+              enrichEventsAfterCommit({
+                db: ctx.db,
+                eventIds: result.eventIds,
+                capturedAt,
+                provider,
+              }),
+            ]);
+          });
         }
 
         return { extracted, ...result };

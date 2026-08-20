@@ -166,11 +166,18 @@ export const events = sqliteTable(
     dateRangeEnd: integer('date_range_end', { mode: 'timestamp' }),
     location: text('location'),
     url: text('url'),
+    externalSource: text('external_source', {
+      enum: ['luma', 'partiful', 'web'],
+    }),
+    externalId: text('external_id'),
     observedCount: integer('observed_count').notNull().default(1),
     promotedAt: integer('promoted_at', { mode: 'timestamp' }),
     createdAt: ts('created_at'),
   },
-  (t) => [index('event_name_idx').on(t.name)],
+  (t) => [
+    index('event_name_idx').on(t.name),
+    uniqueIndex('event_external_idx').on(t.externalSource, t.externalId),
+  ],
 );
 
 export const topics = sqliteTable('topic', {

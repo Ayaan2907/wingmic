@@ -1,0 +1,42 @@
+import { describe, it, expect } from 'vitest';
+import { parseEventFields } from '../parseEventFields';
+
+describe('parseEventFields', () => {
+  it('fills official url, location, and date range from public hits', () => {
+    const parsed = parseEventFields([
+      {
+        title: 'ETH Denver 2026',
+        url: 'https://www.ethdenver.com',
+        snippet: 'Feb 27 – Mar 1, 2026 · Denver',
+      },
+    ]);
+    expect(parsed.url).toBe('https://www.ethdenver.com');
+    expect(parsed.location).toBe('Denver');
+    expect(parsed.dateRangeStart?.toISOString().startsWith('2026-02-27')).toBe(true);
+    expect(parsed.dateRangeEnd?.toISOString().startsWith('2026-03-01')).toBe(true);
+  });
+
+  it('reads a luma url as both official url and external id', () => {
+    const parsed = parseEventFields([
+      {
+        title: 'ETH Denver',
+        url: 'https://lu.ma/ethdenver',
+        snippet: 'tickets',
+      },
+    ]);
+    expect(parsed.url).toBe('https://lu.ma/ethdenver');
+    expect(parsed.external).toEqual({ source: 'luma', id: 'ethdenver' });
+  });
+
+  it('returns blanks when hits are unrelated', () => {
+    const parsed = parseEventFields([
+      {
+        title: 'Weekly standup notes',
+        url: 'https://internal.example/standup',
+        snippet: 'same as last week',
+      },
+    ]);
+    expect(parsed.dateRangeStart).toBeNull();
+    expect(parsed.external).toBeNull();
+  });
+});
