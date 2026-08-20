@@ -287,20 +287,19 @@ describe('ChatClient', () => {
     await waitFor(() => {
       expect(screen.getAllByText('sarah').length).toBeGreaterThanOrEqual(1);
     });
-    // PR ε / A6: agent reply with live draft follow-up when a person was extracted.
+    // #146: in-thread person card. dump-to-acts CTAs are gone.
     const reply = await waitFor(() => screen.getByTestId('agent-reply'));
     expect(reply.textContent).toMatch(/acknowledged/i);
     expect(reply.textContent).toMatch(/1 person/);
     expect(reply.textContent).toMatch(/1 company/);
-    const draftBtn = screen.getByRole('button', { name: /draft follow-up/i });
-    expect((draftBtn as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.click(draftBtn);
-    expect(createDraftMutate).toHaveBeenCalledWith({
-      kind: 'email',
-      intent: 'follow-up',
-      targetEntityId: 'en_sarah',
-      sourceInteractionId: 'int-1',
-    });
+    expect(screen.queryByRole('button', { name: /draft follow-up/i })).toBeNull();
+    expect(screen.queryByTestId('open-card')).toBeNull();
+    const card = screen.getByTestId('person-capture-card');
+    expect(card.textContent).toMatch(/sarah/i);
+    const photoBtn = screen.getByRole('button', { name: /add photo for sarah/i });
+    fireEvent.click(photoBtn);
+    expect(screen.getByTestId('open-capture-chip').textContent).toMatch(/adding to sarah/i);
+    expect(createDraftMutate).not.toHaveBeenCalled();
   });
 
   it('renders a soft agent reply when extracted entities are all empty', async () => {
@@ -658,6 +657,50 @@ describe('ChatClient', () => {
     expect(screen.getByText('met Ada Lovelace, rust lead')).toBeTruthy();
     expect(screen.getByText(/captured 1 person/i)).toBeTruthy();
     expect(screen.getAllByText(/Ada Lovelace/i).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders a person card for every extracted person, not only the first', () => {
+    renderChat({
+      userName: 'ada',
+      initialThread: [
+        {
+          id: 'ix_three',
+          transcript: 'met sara, priya, and marcus at the rust booth',
+          capturedAt: '2026-08-20T21:14:00Z',
+          graphResult: {
+            extracted: {
+              persons: [
+                { name: 'Sara Chen', role: 'rust lead', companyHint: 'Acme', topics: ['rust'] },
+                { name: 'Priya Mehta', role: 'hiring', companyHint: 'Linear', topics: [] },
+                { name: 'Marcus Kim', role: null, companyHint: 'Stripe', topics: ['deck'] },
+              ],
+              companies: [{ name: 'Acme' }, { name: 'Linear' }, { name: 'Stripe' }],
+              events: [{ name: 'eth denver' }],
+              topics: [],
+              actions: [
+                {
+                  kind: 'email',
+                  body: 'send the deck',
+                  whenHint: 'monday',
+                  targetPersonName: 'Marcus Kim',
+                },
+              ],
+            },
+            newEntities: 3,
+            matchedEntities: 0,
+            interactionId: 'ix_three',
+            entityIds: ['en_sara', 'en_priya', 'en_marcus'],
+          },
+        },
+      ],
+    });
+    const cards = screen.getAllByTestId('person-capture-card');
+    expect(cards).toHaveLength(3);
+    expect(screen.getByText('promised monday')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /draft follow-up/i })).toBeNull();
+    expect(screen.queryByTestId('open-card')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /add photo for Priya Mehta/i }));
+    expect(screen.getByTestId('open-capture-chip').textContent).toMatch(/adding to priya mehta/i);
   });
 
   it('thread dims (opacity 0.4, pointer-events none) when recorder transitions to recording', async () => {

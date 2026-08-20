@@ -53,7 +53,12 @@ export interface GraphResult {
     companies: Array<{ name: string }>;
     events: Array<{ name: string }>;
     topics: string[];
-    actions: Array<{ kind: string; body: string; whenHint: string | null }>;
+    actions: Array<{
+      kind: string;
+      body: string;
+      whenHint: string | null;
+      targetPersonName?: string | null;
+    }>;
   };
   newEntities: number;
   matchedEntities: number;

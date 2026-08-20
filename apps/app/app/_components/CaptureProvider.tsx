@@ -49,6 +49,12 @@ export interface UndoEntry {
   until: number;
 }
 
+export type OpenCaptureTarget = {
+  interactionId: string;
+  entityId: string;
+  name: string;
+};
+
 export interface CaptureContextValue {
   recorder: UseAudioRecorder;
   messages: ThreadMessage[];
@@ -57,6 +63,9 @@ export interface CaptureContextValue {
   pasteOpenForId: string | null;
   pasteDraft: string;
   setPasteDraft: (v: string) => void;
+  /** Selected person on a committed memo. Composer chip only until follow-up bind (#146 WP2). */
+  openTarget: OpenCaptureTarget | null;
+  setOpenTarget: (target: OpenCaptureTarget | null) => void;
   beginCapture: () => void | Promise<void>;
   retryBubble: (id: string) => void | Promise<void>;
   discardBubble: (id: string) => void;
@@ -129,6 +138,8 @@ const DEFAULT_VALUE: CaptureContextValue = {
   pasteOpenForId: null,
   pasteDraft: '',
   setPasteDraft: () => {},
+  openTarget: null,
+  setOpenTarget: () => {},
   beginCapture: () => {},
   retryBubble: () => {},
   discardBubble: () => {},
@@ -162,6 +173,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const [pasteOpenForId, setPasteOpenForId] = useState<string | null>(null);
   const [pasteDraft, setPasteDraft] = useState('');
   const [undoQueue, setUndoQueue] = useState<UndoEntry[]>([]);
+  const [openTarget, setOpenTarget] = useState<OpenCaptureTarget | null>(null);
 
   const activeIdRef = useRef<string | null>(null);
   /** Bubble id handed off when recorder enters encoding — frees the orb for the next take. */
@@ -823,6 +835,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       pasteOpenForId,
       pasteDraft,
       setPasteDraft,
+      openTarget,
+      setOpenTarget,
       beginCapture,
       retryBubble,
       discardBubble,
@@ -842,6 +856,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       undoQueue,
       pasteOpenForId,
       pasteDraft,
+      openTarget,
       beginCapture,
       retryBubble,
       discardBubble,

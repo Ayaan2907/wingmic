@@ -59,6 +59,7 @@ export async function hydrateThreadItems(
         kind: schema.acts.kind,
         body: schema.acts.body,
         whenHint: schema.acts.whenHint,
+        targetEntityId: schema.acts.targetEntityId,
       })
       .from(schema.acts)
       .where(
@@ -73,6 +74,7 @@ export async function hydrateThreadItems(
     ...new Set([
       ...factRows.map((f) => f.entityId),
       ...topicEdgeRows.map((t) => t.entityId),
+      ...actRows.map((a) => a.targetEntityId).filter((id): id is string => Boolean(id)),
     ]),
   ];
 
@@ -214,6 +216,9 @@ export async function hydrateThreadItems(
           kind: a.kind,
           body: a.body,
           whenHint: a.whenHint,
+          targetPersonName: a.targetEntityId
+            ? (entityById.get(a.targetEntityId)?.name ?? null)
+            : null,
         })),
       },
       newEntities: persons.length,

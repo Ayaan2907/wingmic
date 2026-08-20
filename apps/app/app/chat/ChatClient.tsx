@@ -28,7 +28,7 @@ interface ChatClientProps {
 }
 
 function ChatComposer() {
-  const { recorder, submitText } = useCapture();
+  const { recorder, submitText, openTarget, setOpenTarget } = useCapture();
   const [text, setText] = useState('');
   const hot =
     recorder.status === 'arming' ||
@@ -40,6 +40,11 @@ function ChatComposer() {
   if (hot) return null;
 
   const micUnavailable = !recorder.supported;
+  const placeholder = micUnavailable
+    ? 'log a memo or ask — mic unavailable'
+    : openTarget
+      ? `add to ${openTarget.name.toLowerCase()} · or start a new memo`
+      : 'log a memo or ask — "who was the rust person?"';
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -68,6 +73,41 @@ function ChatComposer() {
         pointerEvents: 'none',
       }}
     >
+      {openTarget ? (
+        <div
+          data-testid="open-capture-chip"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            marginBottom: 8,
+            padding: '6px 10px',
+            borderRadius: 8,
+            border: `1px solid ${accent}66`,
+            background: `${accent}14`,
+            pointerEvents: 'auto',
+          }}
+        >
+          <span className="mono" style={{ fontSize: 11, color: accent, letterSpacing: 0.3 }}>
+            adding to {openTarget.name.toLowerCase()}
+          </span>
+          <button
+            type="button"
+            aria-label="clear selected person"
+            onClick={() => setOpenTarget(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-55)',
+              cursor: 'pointer',
+              font: '700 12px Inter, system-ui, sans-serif',
+            }}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
       <div
         style={{
           display: 'flex',
@@ -83,11 +123,7 @@ function ChatComposer() {
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={
-            micUnavailable
-              ? 'log a memo or ask — mic unavailable'
-              : 'log a memo or ask — "who was the rust person?"'
-          }
+          placeholder={placeholder}
           aria-label="chat composer"
           style={{
             flex: 1,
