@@ -99,8 +99,6 @@ describe('commit() sourceInteractionId', () => {
     }
   });
 
-  });
-
   it('attaches capture-level topics even when the person candidate has none', async () => {
     const topicUserId = 'user_commit_topics';
     const now = Date.now();
