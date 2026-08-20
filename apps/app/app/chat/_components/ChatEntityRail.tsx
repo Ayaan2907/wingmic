@@ -2,7 +2,7 @@
 
 /**
  * ChatEntityRail — desktop "in this thread" column.
- * Built from committed messages' graphResult (live only — no fixtures).
+ * Hidden below 1120px (`.desktop-pane`); chat is full-width on mobile.
  */
 
 import * as React from 'react';
@@ -91,7 +91,7 @@ export function ChatEntityRail() {
   if (!hasAnything) {
     return (
       <aside
-        className="surface-secondary"
+        className="desktop-pane entity-rail"
         data-testid="chat-entity-rail"
         data-empty="true"
         style={{
@@ -122,7 +122,7 @@ export function ChatEntityRail() {
 
   return (
     <aside
-      className="surface-secondary"
+      className="desktop-pane entity-rail"
       data-testid="chat-entity-rail"
       style={{
         padding: 20,

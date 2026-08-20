@@ -201,11 +201,11 @@ async function loadPerson(
   const mostRecent = interactions[0] ? toDate(interactions[0].capturedAt) : null;
   const since = daysSince(mostRecent);
 
-  // Related: other people sharing an event/company/topic with this person.
+  // Related: other people sharing a company or event — not a topic.
+  // Overlapping "rust" (etc.) pulls in strangers and clutters the card.
   const related = await findRelatedPeople(db, userId, entityId, {
     companyIds,
     eventIds,
-    topicIds,
     companyById,
     eventById,
   });
@@ -255,14 +255,13 @@ async function findRelatedPeople(
   ctxInfo: {
     companyIds: string[];
     eventIds: string[];
-    topicIds: string[];
     companyById: Map<string, any>;
     eventById: Map<string, any>;
   },
 ): Promise<Related[]> {
-  const { companyIds, eventIds, topicIds, companyById, eventById } = ctxInfo;
+  const { companyIds, eventIds, companyById, eventById } = ctxInfo;
 
-  const [otherEc, otherEe, otherEt] = await Promise.all([
+  const [otherEc, otherEe] = await Promise.all([
     companyIds.length
       ? db.query.entityCompanies.findMany({
           where: and(
@@ -276,14 +275,6 @@ async function findRelatedPeople(
           where: and(
             inArray(schema.entityEvents.eventId, eventIds),
             eq(schema.entityEvents.sourceDeleted, false),
-          ),
-        })
-      : Promise.resolve([] as any[]),
-    topicIds.length
-      ? db.query.entityTopics.findMany({
-          where: and(
-            inArray(schema.entityTopics.topicId, topicIds),
-            eq(schema.entityTopics.sourceDeleted, false),
           ),
         })
       : Promise.resolve([] as any[]),
@@ -302,10 +293,6 @@ async function findRelatedPeople(
     if (row.entityId === selfEntityId) continue;
     const e = eventById.get(row.eventId);
     addRole(row.entityId, e ? `co-attended ${e.name}` : 'shared event');
-  }
-  for (const row of otherEt) {
-    if (row.entityId === selfEntityId) continue;
-    addRole(row.entityId, 'overlapping topic');
   }
 
   const ids = [...roleByEntityId.keys()].slice(0, 20);

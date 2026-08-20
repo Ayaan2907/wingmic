@@ -26,42 +26,6 @@ import { micOrbStateFor, type MicOrbState } from '@/app/capture/micOrbState';
 const accent = '#FFC452';
 const coral = '#FF6B6B';
 
-/** localStorage key — first-run teaching beat for the capture orb (U5). */
-export const ORB_HINT_STORAGE_KEY = 'wingmic.orb-hint-seen';
-
-/** Session fallback when localStorage is blocked (private browsing). */
-let orbHintSessionSeen = false;
-
-/** @internal Vitest-only — module session flag survives across cases. */
-export function resetOrbHintSessionState() {
-  orbHintSessionSeen = false;
-}
-
-function useOrbHint() {
-  const [show, setShow] = React.useState(false);
-
-  React.useEffect(() => {
-    if (orbHintSessionSeen) return;
-    try {
-      if (localStorage.getItem(ORB_HINT_STORAGE_KEY) !== '1') setShow(true);
-    } catch {
-      if (!orbHintSessionSeen) setShow(true);
-    }
-  }, []);
-
-  const dismiss = React.useCallback(() => {
-    orbHintSessionSeen = true;
-    setShow(false);
-    try {
-      localStorage.setItem(ORB_HINT_STORAGE_KEY, '1');
-    } catch {
-      // session flag covers private browsing
-    }
-  }, []);
-
-  return { show, dismiss };
-}
-
 /** Bottom-nav height — kept in sync with chat/_components/tokens.ts. */
 export const TAB_BAR_HEIGHT_PX = 56;
 
@@ -105,13 +69,31 @@ export function NavLink({ tab, active }: { tab: (typeof NAV_TABS)[number]; activ
         fontSize: 9,
         letterSpacing: 0.5,
         textTransform: 'uppercase',
+        transition: 'color 0.16s ease-out',
       }}
     >
       {active && (
         <span aria-hidden="true" style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: 18, height: 2, background: accent, borderRadius: 999 }} />
       )}
-      <span aria-hidden="true" style={{ fontSize: 20, color: active ? accent : 'var(--text-55)' }}>{tab.glyph}</span>
-      <span style={{ color: active ? accent : 'var(--text-40)' }}>{tab.label}</span>
+      <span
+        aria-hidden="true"
+        style={{
+          fontSize: 20,
+          color: active ? accent : 'var(--text-55)',
+          transform: active ? 'translateY(-1px)' : 'none',
+          transition: 'color 0.16s ease-out, transform 0.16s ease-out',
+        }}
+      >
+        {tab.glyph}
+      </span>
+      <span
+        style={{
+          color: active ? accent : 'var(--text-40)',
+          transition: 'color 0.16s ease-out',
+        }}
+      >
+        {tab.label}
+      </span>
     </Link>
   );
 }
@@ -125,7 +107,6 @@ interface CaptureOrbProps {
 
 export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureOrbProps) {
   const [isHovered, setIsHovered] = React.useState(false);
-  const { show: showHint, dismiss: dismissHint } = useOrbHint();
 
   const status = recorder.status;
   const orbState: MicOrbState = micOrbStateFor(status, isHovered);
@@ -137,7 +118,6 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
   // stale closure), leaving the recorder running with no way to stop. A plain
   // toggle reads the live status on each tap, so it can't get stuck.
   function onOrbClick() {
-    dismissHint();
     const s = recorder.status;
     if (s === 'idle' || s === 'ready' || s === 'error' || s === 'encoding') {
       vibrate(8);
@@ -160,34 +140,6 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
         position: 'relative',
       }}
     >
-      {showHint && !isActiveRec ? (
-        <div
-          role="status"
-          data-testid="orb-hint"
-          className="mono"
-          style={{
-            position: 'absolute',
-            top: -52,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            padding: '6px 10px',
-            borderRadius: 8,
-            background: accent,
-            color: '#000',
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: 0.4,
-            textTransform: 'lowercase',
-            border: '1.5px solid #000',
-            boxShadow: '2px 2px 0 #000',
-            whiteSpace: 'nowrap',
-            pointerEvents: 'none',
-            zIndex: 2,
-          }}
-        >
-          tap to talk
-        </div>
-      ) : null}
       <button
         type="button"
         aria-label={
@@ -204,7 +156,7 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
         onBlur={() => setIsHovered(false)}
         style={{
           position: 'relative',
-          top: -28,
+          top: -18,
           width: 52,
           height: 52,
           borderRadius: '50%',
