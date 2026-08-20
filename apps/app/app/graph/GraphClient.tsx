@@ -102,7 +102,9 @@ export function GraphClient({ data }: { data: GraphData }) {
   }, [selected, data.links, nodeById]);
 
   useEffect(() => {
-    fgRef.current?.refresh?.();
+    // react-force-graph redraws via refresh() at runtime; it is missing from ForceGraphMethods.
+    const graph = fgRef.current as (ForceGraphMethods & { refresh?: () => void }) | undefined;
+    graph?.refresh?.();
     if (!selected) return;
     const node = filtered.nodes.find((n) => n.id === selected.id) as
       | (GraphNode & { x?: number; y?: number })

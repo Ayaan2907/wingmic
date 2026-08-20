@@ -1,7 +1,16 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import * as schema from '@wingmic/db/schema';
+
+vi.mock('@/lib/acts/draftAgent', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../../acts/draftAgent')>();
+  return {
+    ...mod,
+    polishDraft: async (input: Parameters<typeof mod.polishDraft>[0]) =>
+      mod.templateDraft(input),
+  };
+});
 
 import { actsRouter } from './acts';
 
@@ -63,6 +72,14 @@ describe('acts router', () => {
       sql: `INSERT INTO entity VALUES ('e_ada', ?, 'person', 'Ada Lovelace', '[]', null, null, ?, ?, null)`,
       args: [userId, now, now],
     });
+    await client.execute({
+      sql: `INSERT INTO entity VALUES ('e_li', ?, 'person', 'Grace Hopper', '[]', null, null, ?, ?, null)`,
+      args: [userId, now, now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity VALUES ('e_blank', ?, 'person', 'Blank Fact', '[]', null, null, ?, ?, null)`,
+      args: [userId, now, now],
+    });
   });
 
   function caller() {
@@ -118,6 +135,32 @@ describe('acts router', () => {
     const result = await caller().list({ limit: 20 });
     const row = result.acts.find((a) => a.id === 'act_email_1');
     expect(row?.targetEmail).toBe('ada@example.com');
+    expect(row?.channel).toBe('email');
+  });
+
+  it('includes targetLinkedin and linkedin channel when there is no email', async () => {
+    await client.execute({
+      sql: `INSERT INTO entity_fact VALUES ('fact_li', 'e_li', 'linkedin', 'https://www.linkedin.com/in/grace', null, 90, null, ?)`,
+      args: [now],
+    });
+    await insertAct('act_li_1', { target: 'e_li' });
+    const result = await caller().list({ limit: 20 });
+    const row = result.acts.find((a) => a.id === 'act_li_1');
+    expect(row?.name).toBe('Grace Hopper');
+    expect(row?.targetLinkedin).toBe('https://www.linkedin.com/in/grace');
+    expect(row?.channel).toBe('linkedin');
+  });
+
+  it('ignores whitespace-only identifier facts when choosing a channel', async () => {
+    await client.execute({
+      sql: `INSERT INTO entity_fact VALUES ('fact_blank', 'e_blank', 'email', '   ', null, 90, null, ?)`,
+      args: [now],
+    });
+    await insertAct('act_blank_1', { target: 'e_blank' });
+    const result = await caller().list({ limit: 20 });
+    const row = result.acts.find((a) => a.id === 'act_blank_1');
+    expect(row?.targetEmail).toBeNull();
+    expect(row?.channel).toBe('memo');
   });
 
   it('omits targetEmail when the target entity is soft-deleted', async () => {
@@ -175,6 +218,45 @@ describe('acts router', () => {
     expect(row?.actionKind).toBe('email');
     expect(row?.subject).toBeTruthy();
     expect(row?.body.toLowerCase()).toContain('check in with ada');
+  });
+
+  it('createDraft grounds the body in the committed memo', async () => {
+    await client.execute({
+      sql: `INSERT INTO interaction VALUES (
+        'int_acts', ?, 'met Ada Lovelace at Analytical Engines, she asked for the rust deck',
+        ?, null, ?, null, null, null, null, null, 'committed', null
+      )`,
+      args: [userId, now, now],
+    });
+    const res = await caller().createDraft({
+      kind: 'email',
+      intent: 'follow-up',
+      targetEntityId: 'e_ada',
+      seedBody: 'send the deck',
+      sourceInteractionId: 'int_acts',
+    });
+    expect(res.ok).toBe(true);
+    const listed = await caller().list({ limit: 50 });
+    const row = listed.acts.find((a) => a.id === res.id);
+    expect(row?.body.toLowerCase()).toContain('analytical engines');
+    expect(row?.body.toLowerCase()).not.toBe('send the deck');
+  });
+
+  it('createDraft refuses a non-committed source interaction', async () => {
+    await client.execute({
+      sql: `INSERT INTO interaction VALUES (
+        'int_draft', ?, 'uncommitted memo',
+        ?, null, ?, null, null, null, null, null, 'draft', null
+      )`,
+      args: [userId, now, now],
+    });
+    const res = await caller().createDraft({
+      kind: 'email',
+      intent: 'follow-up',
+      targetEntityId: 'e_ada',
+      sourceInteractionId: 'int_draft',
+    });
+    expect(res.ok).toBe(false);
   });
 
   it('createDraft refuses unknown target entities', async () => {

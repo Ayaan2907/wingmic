@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { slugify } from './slug';
+import { canonicalizeLinkedin } from './linkedin';
 import type { PersonCandidate } from './schema';
 
 /**
@@ -52,43 +53,7 @@ export function isStrongFingerprint(kind: FingerprintKind): boolean {
   return kind === 'linkedin_url_normalized' || kind === 'email_lower';
 }
 
-/**
- * Normalize LinkedIn profile URLs / handles.
- * Query params, www, and trailing slashes collapse. Non-profile URLs return null.
- */
-export function canonicalizeLinkedin(raw: string): string | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-
-  let input = trimmed.toLowerCase().replace(/^@/, '');
-  if (!input.includes('.') && !input.includes('/')) {
-    input = `https://www.linkedin.com/in/${input}`;
-  }
-
-  const withProto = /^https?:\/\//.test(input)
-    ? input
-    : `https://${input.replace(/^\/\//, '')}`;
-
-  let url: URL;
-  try {
-    url = new URL(withProto);
-  } catch {
-    return null;
-  }
-
-  const host = url.hostname.replace(/^www\./, '').toLowerCase();
-  if (host !== 'linkedin.com' && !host.endsWith('.linkedin.com')) return null;
-
-  const parts = url.pathname.split('/').filter(Boolean);
-  // Profile URLs are `/in/{handle}` only — do not treat `/company/…/in/…` as a person.
-  if (parts[0] !== 'in' || !parts[1]) return null;
-  const handle = parts[1];
-
-  const clean = handle.replace(/\/+$/, '');
-  if (!clean || !/^[a-z0-9_-]+$/i.test(clean)) return null;
-
-  return `https://www.linkedin.com/in/${clean}`;
-}
+export { canonicalizeLinkedin } from './linkedin';
 
 /** Trim + lowercase. Rejects strings that are not a plausible email. */
 export function canonicalizeEmail(raw: string): string | null {

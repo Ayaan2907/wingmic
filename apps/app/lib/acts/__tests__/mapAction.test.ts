@@ -15,15 +15,31 @@ describe('toPendingAct', () => {
       whenHint: 'tomorrow',
       confidence: 88.4,
       targetName: 'Ada Lovelace',
+      hasEmail: true,
     });
     expect(pending.kind).toBe('email');
-    expect(pending.glyph).toBe('↗');
+    expect(pending.glyph).toBe('✉');
     expect(pending.name).toBe('Ada Lovelace');
-    expect(pending.why).toContain('send the deck');
-    expect(pending.why).toContain('tomorrow');
+    expect(pending.body).toContain('send the deck');
+    expect(pending.whenHint).toBe('tomorrow');
+    expect(pending.why).toBe('tomorrow');
     expect(pending.conf).toBe(88);
     expect(pending.actionKind).toBe('email');
     expect(pending.accent).toBe('amber');
+    expect(pending.channel).toBe('email');
+  });
+
+  it('maps email without an address to a linkedin note when a profile exists', () => {
+    const pending = toPendingAct({
+      kind: 'email',
+      body: 'talked rust at the booth',
+      confidence: 80,
+      targetName: 'Ada Lovelace',
+      hasLinkedin: true,
+    });
+    expect(pending.channel).toBe('linkedin');
+    expect(pending.kind).toBe('linkedin');
+    expect(pending.glyph).toBe('in');
   });
 
   it('formats intro names as target → secondary', () => {
@@ -46,6 +62,8 @@ describe('toPendingAct', () => {
       confidence: 200,
     });
     expect(pending.actionKind).toBe('todo');
+    expect(pending.channel).toBe('memo');
+    expect(pending.kind).toBe('memo');
     expect(pending.conf).toBe(100);
   });
 });
