@@ -8,7 +8,9 @@ export function canonicalizeLinkedin(raw: string): string | null {
   if (!trimmed) return null;
 
   let input = trimmed.toLowerCase().replace(/^@/, '');
-  if (!input.includes('.') && !input.includes('/')) {
+  if (/^in\/[a-z0-9_-]+$/.test(input)) {
+    input = `https://www.linkedin.com/${input}`;
+  } else if (!input.includes('.') && !input.includes('/')) {
     input = `https://www.linkedin.com/in/${input}`;
   }
 
@@ -27,8 +29,8 @@ export function canonicalizeLinkedin(raw: string): string | null {
   if (host !== 'linkedin.com' && !host.endsWith('.linkedin.com')) return null;
 
   const parts = url.pathname.split('/').filter(Boolean);
-  // Profile URLs are `/in/{handle}` only — do not treat `/company/…/in/…` as a person.
-  if (parts[0] !== 'in' || !parts[1]) return null;
+  // Profile URLs are exactly `/in/{handle}` — drop company, posts, and extra path.
+  if (parts.length !== 2 || parts[0] !== 'in' || !parts[1]) return null;
   const handle = parts[1];
 
   const clean = handle.replace(/\/+$/, '');

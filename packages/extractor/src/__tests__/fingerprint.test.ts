@@ -32,12 +32,14 @@ describe('canonicalizeLinkedin', () => {
   it('accepts a bare handle', () => {
     expect(canonicalizeLinkedin('ada-lovelace')).toBe('https://www.linkedin.com/in/ada-lovelace');
     expect(canonicalizeLinkedin('@ada-lovelace')).toBe('https://www.linkedin.com/in/ada-lovelace');
+    expect(canonicalizeLinkedin('in/ada-lovelace')).toBe('https://www.linkedin.com/in/ada-lovelace');
   });
 
   it('rejects non-profile URLs', () => {
     expect(canonicalizeLinkedin('https://linkedin.com/company/analytical-engines')).toBeNull();
     expect(canonicalizeLinkedin('https://example.com/in/ada-lovelace')).toBeNull();
     expect(canonicalizeLinkedin('https://linkedin.com/company/foo/in/ada-lovelace')).toBeNull();
+    expect(canonicalizeLinkedin('https://www.linkedin.com/in/ada-lovelace/details')).toBeNull();
     expect(canonicalizeLinkedin('')).toBeNull();
   });
 
