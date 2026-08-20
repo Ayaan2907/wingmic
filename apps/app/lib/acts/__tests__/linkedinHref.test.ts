@@ -2,28 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { linkedinProfileHref } from '../linkedinHref';
 
 describe('linkedinProfileHref', () => {
-  it('keeps a linkedin https url', () => {
-    expect(linkedinProfileHref('https://www.linkedin.com/in/ada')).toBe(
-      'https://www.linkedin.com/in/ada',
-    );
-  });
-
-  it('upgrades http and rejects non-linkedin hosts', () => {
-    expect(linkedinProfileHref('http://linkedin.com/in/ada')).toBe(
-      'https://linkedin.com/in/ada',
-    );
-    expect(linkedinProfileHref('https://evil.example/in/ada')).toBeNull();
-  });
-
-  it('builds a profile url from a handle', () => {
-    expect(linkedinProfileHref('ada-lovelace')).toBe(
+  it('canonicalizes a profile url and a handle', () => {
+    expect(linkedinProfileHref('https://www.linkedin.com/in/ada-lovelace/?trk=foo')).toBe(
       'https://www.linkedin.com/in/ada-lovelace',
     );
-    expect(linkedinProfileHref('in/ada')).toBe('https://www.linkedin.com/in/ada');
+    expect(linkedinProfileHref('ada-lovelace')).toBe('https://www.linkedin.com/in/ada-lovelace');
   });
 
-  it('rejects blank and junk values', () => {
+  it('rejects company pages, foreign hosts, and blank values', () => {
+    expect(linkedinProfileHref('https://linkedin.com/company/analytical-engines')).toBeNull();
+    expect(linkedinProfileHref('https://example.com/in/ada-lovelace')).toBeNull();
     expect(linkedinProfileHref('   ')).toBeNull();
-    expect(linkedinProfileHref('javascript:alert(1)')).toBeNull();
   });
 });

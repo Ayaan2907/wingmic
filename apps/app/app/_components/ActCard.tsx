@@ -88,6 +88,7 @@ export function ActCard({
 
   function handleSend() {
     if (!a.id) return;
+    setCopyError(null);
     const body = draftBody;
     switch (channel) {
       case 'email':
@@ -121,9 +122,10 @@ export function ActCard({
       case 'linkedin': {
         const href = linkedinProfileHref(a.targetLinkedin);
         if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-          void navigator.clipboard.writeText(body).catch(() => {
-            setCopyError('could not copy — select the draft');
-          });
+          void navigator.clipboard.writeText(body).then(
+            () => setCopyError(null),
+            () => setCopyError('could not copy — select the draft'),
+          );
         }
         if (href) window.open(href, '_blank', 'noopener,noreferrer');
         return;
