@@ -44,7 +44,7 @@ export function toPendingAct(row: {
   const name =
     kind === 'intro' && row.targetName && row.secondaryName
       ? `${row.targetName} → ${row.secondaryName}`
-      : row.targetName?.trim() || (kind === 'intro' ? 'intro' : 'follow-up');
+      : row.targetName?.trim() || ui.label;
   return {
     kind: ui.label,
     glyph: ui.glyph,

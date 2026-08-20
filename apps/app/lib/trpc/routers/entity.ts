@@ -263,28 +263,14 @@ async function loadPerson(
   const mostRecent = interactions[0] ? toDate(interactions[0].capturedAt) : null;
   const since = daysSince(mostRecent);
 
-  const relatedPeople = await findRelatedPeople(db, userId, entityId, {
+  // Related: other people sharing a company or event — not a topic.
+  // Overlapping "rust" (etc.) pulls in strangers and clutters the card.
+  const related = await findRelatedPeople(db, userId, entityId, {
     companyIds,
     eventIds,
     companyById,
     eventById,
   });
-
-  const related: Related[] = [
-    ...companies.map((c: any) => ({
-      kind: 'company' as const,
-      id: c.id as string,
-      name: c.name as string,
-      role: 'works at',
-    })),
-    ...events.map((e: any) => ({
-      kind: 'event' as const,
-      id: e.id as string,
-      name: e.name as string,
-      role: eventPublicRole(e),
-    })),
-    ...relatedPeople,
-  ].slice(0, 8);
 
   const possibleMatches = await findPossibleMatches(db, userId, entityId, entity.name);
   const publicProfile = publicProfileFromFacts(facts);

@@ -185,8 +185,6 @@ describe('entity.detail', () => {
     expect(res.related.some((r) => r.id === 'en_marcus')).toBe(true);
     expect(res.related.every((r) => r.id !== 'en_sarah')).toBe(true);
     expect(res.related.every((r) => r.id !== 'en_priya')).toBe(true);
-    expect(res.related.some((r) => r.kind === 'company' && r.id === 'co_acme')).toBe(true);
-    expect(res.related.some((r) => r.kind === 'event' && r.id === 'ev_dc')).toBe(true);
     expect(res.topics.map((t) => t.name)).toContain('rust');
     expect((res as { publicProfile?: { linkedin: string | null } }).publicProfile).toEqual({
       linkedin: null,

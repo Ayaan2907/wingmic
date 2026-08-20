@@ -17,6 +17,12 @@ export interface CommitPersonResolution {
   score: number | null;
 }
 
+export interface CommitPersonResolution {
+  entityId: string;
+  created: boolean;
+  score: number | null;
+}
+
 export interface CommitResult {
   interactionId: string;
   entityIds: string[];
