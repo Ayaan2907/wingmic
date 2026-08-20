@@ -3,6 +3,16 @@ export { embedText, embedTexts, cosine, EmbeddingError } from './embeddings';
 export { commit, type CommitResult } from './resolution';
 export { slugify, nameSimilarity } from './slug';
 export {
+  fingerprint,
+  personaDraftFromPerson,
+  canonicalizeEmail,
+  canonicalizeLinkedin,
+  isStrongFingerprint,
+  type Fingerprint,
+  type FingerprintKind,
+  type PersonaDraft,
+} from './fingerprint';
+export {
   ExtractionResult,
   PersonCandidate,
   CompanyCandidate,

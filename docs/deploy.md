@@ -84,6 +84,8 @@ Optional:
 | `RESEND_FROM` | `wingmic <info@mail.wingmic.xyz>` (code default) | **Dev/test only.** Production always uses the code default in `apps/app/lib/config/resend-from.ts` — a stale `RESEND_FROM` in Railway/Doppler is ignored. Remove it from prod variables. |
 | `EXTRACTION_MODEL` / `LINKER_MODEL` | OpenRouter model strings | Swap the LLM (e.g. `openai/gpt-4o-mini`) without code changes |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Try a different embedding model |
+| `WEB_SEARCH_PROVIDER` | `tavily` | `none` skips public-web enrich. `exa` once that adapter is registered. Not Brave. |
+| `TAVILY_API_KEY` | unset | Optional. Reserved for public-web search/extract. **No runtime effect until capture/event enrich wiring lands.** App boots without it. |
 
 ### acquire each secret
 

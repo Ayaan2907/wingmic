@@ -18,6 +18,8 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { signOut } from '@/lib/auth-client';
 import { trpc } from '@/lib/trpc/client';
 import { accent } from '@/app/chat/_components/tokens';
 
@@ -81,6 +83,8 @@ export default function SettingsClient({
 }) {
   const { data } = trpc.settings.get.useQuery(undefined, { initialData: initialSettings });
   const update = trpc.settings.update.useMutation();
+  const router = useRouter();
+  const [signingOut, setSigningOut] = React.useState(false);
 
   // Optimistic local mirror — seeded from server prefetch + query cache.
   const [local, setLocal] = React.useState<{
@@ -167,6 +171,35 @@ export default function SettingsClient({
             <span style={labelStyle}>email</span>
             <span style={{ fontSize: 14, color: 'var(--text-85)' }}>{email}</span>
           </div>
+          <button
+            type="button"
+            data-testid="settings-sign-out"
+            disabled={signingOut}
+            onClick={async () => {
+              setSigningOut(true);
+              try {
+                await signOut();
+                router.push('/signin');
+              } finally {
+                setSigningOut(false);
+              }
+            }}
+            className="mono"
+            style={{
+              alignSelf: 'flex-start',
+              padding: '8px 14px',
+              borderRadius: 10,
+              border: '1px solid var(--border-soft)',
+              background: 'transparent',
+              color: 'var(--ink)',
+              fontSize: 12,
+              letterSpacing: 0.6,
+              textTransform: 'uppercase',
+              cursor: signingOut ? 'wait' : 'pointer',
+            }}
+          >
+            {signingOut ? 'signing out…' : 'sign out'}
+          </button>
         </Section>
 
         {/* audio retention ───────────────────────────────────── */}
