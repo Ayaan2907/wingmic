@@ -10,6 +10,12 @@ import {
 import { embedText, embedTexts, cosine } from './embeddings';
 import { nameSimilarity, slugify } from './slug';
 
+export interface CommitPersonResolution {
+  entityId: string;
+  created: boolean;
+  score: number | null;
+}
+
 export interface CommitResult {
   interactionId: string;
   entityIds: string[];
@@ -18,6 +24,7 @@ export interface CommitResult {
   topicIds: string[];
   newEntities: number;
   matchedEntities: number;
+  persons: CommitPersonResolution[];
 }
 
 interface ResolveContext {
@@ -136,6 +143,7 @@ export async function commit(
   }
 
   const entityIds: string[] = [];
+  const persons: CommitPersonResolution[] = [];
   let newEntities = 0;
   let matchedEntities = 0;
 
@@ -156,6 +164,7 @@ export async function commit(
     if (match && match.score >= 0.85) {
       entityId = match.entityId;
       matchedEntities++;
+      persons.push({ entityId, created: false, score: match.score });
       // Refresh the cached entity's embedding when we have a stronger signal
       await writeDb
         .update(schema.entities)
@@ -175,6 +184,7 @@ export async function commit(
         .returning({ id: schema.entities.id });
       entityId = inserted[0].id;
       newEntities++;
+      persons.push({ entityId, created: true, score: match?.score ?? null });
     }
     entityIds.push(entityId);
 
@@ -263,6 +273,7 @@ export async function commit(
     topicIds: [...topicIds.values()],
     newEntities,
     matchedEntities,
+    persons,
   };
   });
 }
@@ -324,12 +335,11 @@ async function upsertCompany(db: DB, c: CompanyCandidate): Promise<string> {
 async function upsertEvent(
   db: DB,
   e: EventCandidate,
-  capturedAt: Date,
+  _capturedAt: Date,
 ): Promise<string> {
   const slug = slugify(e.name);
-  const dateGuess = e.dateHint && /^\d{4}-\d{2}-\d{2}/.test(e.dateHint)
-    ? new Date(e.dateHint)
-    : capturedAt;
+  const dateGuess =
+    e.dateHint && /^\d{4}-\d{2}-\d{2}/.test(e.dateHint) ? new Date(e.dateHint) : null;
 
   const existing = await db.query.events.findFirst({
     where: eq(schema.events.slug, slug),

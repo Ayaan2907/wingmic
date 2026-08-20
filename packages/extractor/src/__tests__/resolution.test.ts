@@ -78,6 +78,10 @@ describe('commit() sourceInteractionId', () => {
     expect(result.newEntities).toBe(1);
     expect(result.entityIds).toHaveLength(1);
 
+    expect(result.persons).toHaveLength(1);
+    expect(result.persons[0]!.created).toBe(true);
+    expect(result.persons[0]!.entityId).toBe(result.entityIds[0]);
+
     const facts = await db.query.entityFacts.findMany({
       where: eq(schema.entityFacts.entityId, result.entityIds[0]),
     });
@@ -93,6 +97,30 @@ describe('commit() sourceInteractionId', () => {
     for (const t of topics) {
       expect(t.sourceInteractionId).toBe(result.interactionId);
     }
+  });
+
+  it('leaves event dates blank when speech has no date hint', async () => {
+    const result = await commit(
+      {
+        persons: [],
+        companies: [],
+        events: [{ name: 'ETH Denver', dateHint: null, location: null }],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId,
+        transcript: 'heading to eth denver',
+        capturedAt: new Date('2026-08-20T12:00:00Z'),
+      },
+    );
+    expect(result.eventIds).toHaveLength(1);
+    const event = await db.query.events.findFirst({
+      where: eq(schema.events.id, result.eventIds[0]!),
+    });
+    expect(event?.dateRangeStart).toBeNull();
+    expect(event?.dateRangeEnd).toBeNull();
   });
 
   afterAll(async () => {

@@ -1,6 +1,6 @@
 export { extract, ExtractionError } from './client';
 export { embedText, embedTexts, cosine, EmbeddingError } from './embeddings';
-export { commit, type CommitResult } from './resolution';
+export { commit, type CommitResult, type CommitPersonResolution } from './resolution';
 export { slugify, nameSimilarity } from './slug';
 export {
   fingerprint,
