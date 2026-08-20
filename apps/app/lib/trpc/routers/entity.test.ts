@@ -106,6 +106,7 @@ describe('entity.detail', () => {
     await insertEnt('en_sarah', 'Sarah Chen', userId);
     await insertEnt('en_marcus', 'Marcus Rivera', userId);
     await insertEnt('en_other', 'Other Person', otherUserId);
+    await insertEnt('en_priya', 'Priya Nair', userId);
 
     // Interactions
     await client.execute({
@@ -142,6 +143,10 @@ describe('entity.detail', () => {
       sql: `INSERT INTO entity_topic (id, entity_id, topic_id, weight, source_interaction_id, created_at, source_deleted) VALUES (?, ?, ?, 70, ?, ?, 0)`,
       args: ['et_2', 'en_marcus', 'tp_rust', 'it_2', now],
     });
+    await client.execute({
+      sql: `INSERT INTO entity_topic (id, entity_id, topic_id, weight, source_interaction_id, created_at, source_deleted) VALUES (?, ?, ?, 70, ?, ?, 0)`,
+      args: ['et_3', 'en_priya', 'tp_rust', 'it_1', now],
+    });
 
     await client.execute({
       sql: `INSERT INTO entity_fact (id, entity_id, key, value, source_interaction_id, confidence, created_at) VALUES (?, ?, ?, ?, ?, 80, ?)`,
@@ -170,6 +175,7 @@ describe('entity.detail', () => {
     expect(res.captures[0]!.transcript).toContain('sarah');
     expect(res.related.some((r) => r.id === 'en_marcus')).toBe(true);
     expect(res.related.every((r) => r.id !== 'en_sarah')).toBe(true);
+    expect(res.related.every((r) => r.id !== 'en_priya')).toBe(true);
     expect(res.topics.map((t) => t.name)).toContain('rust');
   });
 
