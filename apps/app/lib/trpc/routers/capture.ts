@@ -6,6 +6,7 @@ import { TRPCError } from '@trpc/server';
 import { transcribeEntities } from '@/lib/capture/transcribe-entities';
 import { resolveIntroEntityIds } from '@/lib/acts/mapAction';
 import { polishDraft } from '@/lib/acts/draftAgent';
+import { chooseActChannel, intentForChannel } from '@/lib/acts/chooseActChannel';
 import * as schema from '@wingmic/db/schema';
 
 export const captureRouter = router({
@@ -90,8 +91,9 @@ export const captureRouter = router({
         const entityIds = recentEntities.map((e) => e.id);
         let companyNames: string[] = [];
         const emailByEntity = new Map<string, string>();
+        const linkedinByEntity = new Map<string, string>();
         if (entityIds.length > 0) {
-          const [links, emailFacts] = await Promise.all([
+          const [links, idFacts] = await Promise.all([
             ctx.db.query.entityCompanies.findMany({
               where: inArray(schema.entityCompanies.entityId, entityIds),
               columns: { companyId: true },
@@ -100,14 +102,17 @@ export const captureRouter = router({
             ctx.db.query.entityFacts.findMany({
               where: and(
                 inArray(schema.entityFacts.entityId, entityIds),
-                eq(schema.entityFacts.key, 'email'),
+                inArray(schema.entityFacts.key, ['email', 'linkedin']),
               ),
-              columns: { entityId: true, value: true },
+              columns: { entityId: true, key: true, value: true },
             }),
           ]);
-          for (const f of emailFacts) {
-            if (!emailByEntity.has(f.entityId)) {
+          for (const f of idFacts) {
+            if (f.key === 'email' && !emailByEntity.has(f.entityId)) {
               emailByEntity.set(f.entityId, f.value.trim().toLowerCase());
+            }
+            if (f.key === 'linkedin' && !linkedinByEntity.has(f.entityId)) {
+              linkedinByEntity.set(f.entityId, f.value.trim());
             }
           }
           const companyIds = [...new Set(links.map((l) => l.companyId))].slice(0, 20);
@@ -169,6 +174,24 @@ export const captureRouter = router({
                 ).map((e) => e.id),
               );
 
+              const committedIds = result.entityIds.filter((id) => ownedEntityIds.has(id));
+              const committedFacts =
+                committedIds.length > 0
+                  ? await ctx.db.query.entityFacts.findMany({
+                      where: and(
+                        inArray(schema.entityFacts.entityId, committedIds),
+                        inArray(schema.entityFacts.key, ['email', 'linkedin']),
+                      ),
+                      columns: { entityId: true, key: true },
+                    })
+                  : [];
+              const emailByCommitted = new Set(
+                committedFacts.filter((f) => f.key === 'email').map((f) => f.entityId),
+              );
+              const linkedinByCommitted = new Set(
+                committedFacts.filter((f) => f.key === 'linkedin').map((f) => f.entityId),
+              );
+
               const actRows = await Promise.all(
                 extracted.actions.map(async (action) => {
                   const { targetEntityId, secondaryEntityId } = resolveIntroEntityIds(
@@ -189,22 +212,27 @@ export const captureRouter = router({
                     ownedTarget != null
                       ? extracted.persons.find((_, i) => result.entityIds[i] === ownedTarget)?.name
                       : action.targetPersonName;
-                  const intent =
-                    action.kind === 'intro'
-                      ? ('intro' as const)
-                      : action.kind === 'reminder' || action.kind === 'meeting'
-                        ? ('reminder' as const)
-                        : ('follow-up' as const);
+                  const targetPerson = extracted.persons.find(
+                    (_, i) => result.entityIds[i] === ownedTarget,
+                  );
+                  const channel = chooseActChannel({
+                    kind: action.kind,
+                    hasEmail: Boolean(ownedTarget && emailByCommitted.has(ownedTarget)),
+                    hasLinkedin: Boolean(ownedTarget && linkedinByCommitted.has(ownedTarget)),
+                  });
                   const polished = await polishDraft({
                     kind: action.kind,
-                    intent,
+                    intent: intentForChannel(channel),
+                    channel,
                     targetName: targetName ?? null,
                     secondaryName:
                       ownedSecondary != null
                         ? extracted.persons.find((_, i) => result.entityIds[i] === ownedSecondary)
                             ?.name ?? null
                         : null,
+                    contextName: targetPerson?.companyHint ?? null,
                     seedBody: action.body,
+                    transcript: input.transcript,
                   });
                   return {
                     userId: ctx.user.id,

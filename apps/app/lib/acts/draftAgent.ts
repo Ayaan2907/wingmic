@@ -16,7 +16,15 @@ export const draftOutputSchema = z.object({
 
 export type DraftOutput = z.infer<typeof draftOutputSchema>;
 
-export type DraftIntent = 'check-in' | 'follow-up' | 'intro' | 'recap' | 'warm-path' | 'reminder';
+export type DraftIntent =
+  | 'check-in'
+  | 'follow-up'
+  | 'intro'
+  | 'recap'
+  | 'warm-path'
+  | 'reminder'
+  | 'linkedin-note'
+  | 'memo';
 
 export type PolishDraftInput = {
   kind: 'reminder' | 'email' | 'meeting' | 'todo' | 'intro';
@@ -25,6 +33,10 @@ export type PolishDraftInput = {
   secondaryName?: string | null;
   contextName?: string | null;
   seedBody?: string | null;
+  /** Committed memo — the conversation the draft must be grounded in. */
+  transcript?: string | null;
+  /** Email / linkedin / reminder / memo / intro / meeting. */
+  channel?: 'email' | 'linkedin' | 'reminder' | 'meeting' | 'intro' | 'memo';
 };
 
 /** Hard cap so OpenRouter stalls never block capture / createDraft. */
@@ -33,13 +45,22 @@ export const POLISH_TIMEOUT_MS = 8_000;
 const DRAFT_INSTRUCTIONS = `You draft short outbound follow-ups for wingmic, a voice-first networking memory app.
 Permission-first: drafts are reviewed by the user; nothing auto-sends.
 
+The committed memo is the source of truth. Pull 1–2 concrete details from it.
+
+Channel:
+- email: sendable email. greeting, specifics from the memo, one clear ask, no signature block.
+- linkedin: pasteable LinkedIn message. shorter than email. no "dear" / "best regards".
+- reminder: calendar reminder. subject is the title; body is what to remember and why.
+- meeting: same as reminder, framed as a meeting.
+- intro: email introducing two people. only name both when both are provided.
+- memo: private note to self. not outbound. capture the beat so the user can come back to it.
+
 Rules:
 1. Warm, lowercase-confident tone. No corporate fluff. No emojis.
 2. Keep body under 120 words. Subject under 60 chars.
-3. Never invent facts, emails, companies, or meeting details not in the prompt.
-4. If the seed is already fine, lightly polish — do not rewrite into a novel.
-5. For intros: mention both people only when both names are provided.
-6. Output must match the structured schema (subject + body).`;
+3. Never invent facts, emails, companies, dates, or meeting details not in the prompt.
+4. Do not return the extractor seed unchanged — write a real draft for the channel.
+5. Output must match the structured schema (subject + body).`;
 
 function actsDraftModelId(): string {
   const base = env.ACTS_DRAFT_MODEL ?? env.LINKER_MODEL ?? 'anthropic/claude-sonnet-4.6';
@@ -67,50 +88,96 @@ function clampSeed(seed: string | null | undefined): string | null {
   return seed.trim().slice(0, 2000);
 }
 
+function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] || name;
+}
+
+function excerpt(text: string | null | undefined, max = 280): string | null {
+  const trimmed = text?.trim();
+  if (!trimmed) return null;
+  if (trimmed.length <= max) return trimmed;
+  const slice = trimmed.slice(0, max);
+  const lastStop = Math.max(slice.lastIndexOf('. '), slice.lastIndexOf('? '), slice.lastIndexOf(' '));
+  return `${(lastStop > 80 ? slice.slice(0, lastStop) : slice).trim()}…`;
+}
+
 /** Deterministic template used when LLM polish is unavailable. */
 export function templateDraft(input: PolishDraftInput): DraftOutput {
   const name = input.targetName?.trim() || 'there';
+  const first = name === 'there' ? 'there' : firstName(name);
   const secondary = input.secondaryName?.trim();
   const ctx = input.contextName?.trim();
   const seed = clampSeed(input.seedBody);
+  const memo = excerpt(input.transcript);
+  const beat = seed || memo;
+  const channel = input.channel ?? 'email';
 
   switch (input.intent) {
     case 'intro': {
       const pair = secondary ? `${name} → ${secondary}` : name;
       return clampDraft({
         subject: `intro: ${pair}`,
-        body:
-          seed ||
-          (secondary
-            ? `wanted to intro ${name} and ${secondary}${ctx ? ` (via ${ctx})` : ''}. happy to connect you two.`
-            : `wanted to make an intro${ctx ? ` around ${ctx}` : ''}.`),
+        body: secondary
+          ? `wanted to intro you two${ctx ? ` (${ctx})` : ''}.\n\n${name} — ${beat || 'you crossed paths recently'}.\n${secondary} — sharing this so you can take it from here.`
+          : `wanted to make an intro${ctx ? ` around ${ctx}` : ''}.${beat ? `\n\n${beat}` : ''}`,
       });
     }
     case 'recap':
       return clampDraft({
         subject: ctx ? `recap · ${ctx}` : 'event recap',
-        body: seed || `quick recap notes from ${ctx || 'the event'} — capture follow-ups while they're fresh.`,
+        body: [beat, memo && memo !== beat ? memo : null]
+          .filter(Boolean)
+          .join('\n\n') || `quick recap notes from ${ctx || 'the event'} — capture follow-ups while they're fresh.`,
       });
     case 'warm-path':
       return clampDraft({
         subject: ctx ? `warm path · ${ctx}` : 'find a warm path',
         body:
-          seed ||
+          beat ||
           `look for a warm intro into ${ctx || 'this company'} from people already in your graph.`,
       });
     case 'reminder':
       return clampDraft({
-        subject: ctx ? `remind · ${ctx}` : 'reminder',
-        body: seed || `follow up with ${name}${ctx ? ` about ${ctx}` : ''}.`,
+        subject: (seed || (ctx ? `remind · ${ctx}` : `follow up · ${first}`)).slice(0, 60),
+        body: [`follow up with ${name}${ctx ? ` (${ctx})` : ''}.`, beat, memo && memo !== beat ? memo : null]
+          .filter(Boolean)
+          .join('\n\n'),
+      });
+    case 'linkedin-note':
+      return clampDraft({
+        subject: `linkedin · ${first}`,
+        body: `hey ${first} — ${beat || 'great crossing paths'}${ctx ? ` (${ctx})` : ''}. would love to stay in touch.`,
+      });
+    case 'memo':
+      return clampDraft({
+        subject: name !== 'there' ? `memo · ${first}` : 'memo',
+        body: [beat, memo && memo !== beat ? memo : null].filter(Boolean).join('\n\n') || 'note this while it is fresh.',
       });
     case 'check-in':
-    case 'follow-up':
+    case 'follow-up': {
+      if (channel === 'linkedin') {
+        return clampDraft({
+          subject: `linkedin · ${first}`,
+          body: `hey ${first} — ${beat || 'great meeting you'}${ctx ? ` at ${ctx}` : ''}.`,
+        });
+      }
+      if (channel === 'memo') {
+        return clampDraft({
+          subject: name !== 'there' ? `memo · ${first}` : 'memo',
+          body: [beat, memo && memo !== beat ? memo : null].filter(Boolean).join('\n\n') || 'note this while it is fresh.',
+        });
+      }
       return clampDraft({
-        subject: `great meeting you${name !== 'there' ? `, ${name.split(/\s+/)[0]}` : ''}`,
-        body:
-          seed ||
-          `hey ${name} — great meeting you${ctx ? ` at ${ctx}` : ''}. wanted to follow up while it's fresh.`,
+        subject: `great meeting you${name !== 'there' ? `, ${first}` : ''}`,
+        body: [
+          `hey ${name} — ${beat || 'great meeting you'}${ctx ? ` at ${ctx}` : ''}.`,
+          memo && memo !== beat ? memo : null,
+          'wanted to follow up while it is fresh — ping me if useful to keep going.',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
       });
+    }
     default: {
       const _exhaustive: never = input.intent;
       return _exhaustive;
@@ -122,12 +189,16 @@ function buildPrompt(input: PolishDraftInput): string {
   return [
     `kind: ${input.kind}`,
     `intent: ${input.intent}`,
+    `channel: ${input.channel ?? 'email'}`,
     `target: ${input.targetName ?? '(none)'}`,
     `secondary: ${input.secondaryName ?? '(none)'}`,
     `context: ${input.contextName ?? '(none)'}`,
-    `seed body: ${input.seedBody ?? '(none)'}`,
+    `extractor seed: ${input.seedBody ?? '(none)'}`,
     '',
-    'Draft subject + body for the user to review and send themselves.',
+    'committed memo:',
+    input.transcript?.trim() || '(none)',
+    '',
+    'Draft subject + body for the user to review. Ground every concrete detail in the memo.',
   ].join('\n');
 }
 

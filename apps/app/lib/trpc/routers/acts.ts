@@ -4,6 +4,7 @@ import * as schema from '@wingmic/db/schema';
 import { router, protectedProcedure } from '../trpc';
 import { toPendingAct } from '@/lib/acts/mapAction';
 import { polishDraft, type DraftIntent } from '@/lib/acts/draftAgent';
+import { chooseActChannel, intentForChannel } from '@/lib/acts/chooseActChannel';
 
 const actKindSchema = z.enum(['reminder', 'email', 'meeting', 'todo', 'intro']);
 const draftIntentSchema = z.enum([
@@ -13,6 +14,8 @@ const draftIntentSchema = z.enum([
   'recap',
   'warm-path',
   'reminder',
+  'linkedin-note',
+  'memo',
 ]);
 
 /**
@@ -92,26 +95,36 @@ export const actsRouter = router({
       // Only active (non-deleted, owner-scoped) entities may expose mailto targets.
       const activeIds = entities.map((e) => e.id);
 
-      const emailFacts =
+      const idFacts =
         activeIds.length > 0
           ? await ctx.db.query.entityFacts.findMany({
               where: and(
                 inArray(schema.entityFacts.entityId, activeIds),
-                eq(schema.entityFacts.key, 'email'),
+                inArray(schema.entityFacts.key, ['email', 'linkedin']),
               ),
-              columns: { entityId: true, value: true },
+              columns: { entityId: true, key: true, value: true },
               orderBy: [desc(schema.entityFacts.confidence)],
             })
           : [];
       const emailByEntityId = new Map<string, string>();
-      for (const fact of emailFacts) {
-        if (!emailByEntityId.has(fact.entityId)) {
+      const linkedinByEntityId = new Map<string, string>();
+      for (const fact of idFacts) {
+        if (fact.key === 'email' && !emailByEntityId.has(fact.entityId)) {
           emailByEntityId.set(fact.entityId, fact.value);
+        }
+        if (fact.key === 'linkedin' && !linkedinByEntityId.has(fact.entityId)) {
+          linkedinByEntityId.set(fact.entityId, fact.value);
         }
       }
 
       return {
         acts: rows.map((r) => {
+          const targetEmail = r.targetEntityId
+            ? emailByEntityId.get(r.targetEntityId) ?? null
+            : null;
+          const targetLinkedin = r.targetEntityId
+            ? linkedinByEntityId.get(r.targetEntityId) ?? null
+            : null;
           const pending = toPendingAct({
             kind: r.kind,
             body: r.body,
@@ -121,10 +134,10 @@ export const actsRouter = router({
             secondaryName: r.secondaryEntityId
               ? nameById.get(r.secondaryEntityId) ?? null
               : null,
+            subject: r.subject,
+            hasEmail: Boolean(targetEmail),
+            hasLinkedin: Boolean(targetLinkedin),
           });
-          const targetEmail = r.targetEntityId
-            ? emailByEntityId.get(r.targetEntityId) ?? null
-            : null;
           return {
             ...pending,
             id: r.id,
@@ -134,6 +147,7 @@ export const actsRouter = router({
             status: r.status,
             createdAt: r.createdAt,
             targetEmail,
+            targetLinkedin,
             targetEntityId: r.targetEntityId,
           };
         }),
@@ -186,24 +200,51 @@ export const actsRouter = router({
         secondaryName = secondary.name;
       }
 
+      let transcript: string | null = null;
       if (input.sourceInteractionId) {
         const interaction = await ctx.db.query.interactions.findFirst({
           where: and(
             eq(schema.interactions.id, input.sourceInteractionId),
             eq(schema.interactions.userId, ctx.user.id),
           ),
-          columns: { id: true },
+          columns: { id: true, transcript: true },
         });
         if (!interaction) return { ok: false as const, id: null };
+        transcript = interaction.transcript;
       }
 
+      let hasEmail = false;
+      let hasLinkedin = false;
+      if (input.targetEntityId) {
+        const facts = await ctx.db.query.entityFacts.findMany({
+          where: and(
+            inArray(schema.entityFacts.entityId, [input.targetEntityId]),
+            inArray(schema.entityFacts.key, ['email', 'linkedin']),
+          ),
+          columns: { key: true },
+        });
+        hasEmail = facts.some((f) => f.key === 'email');
+        hasLinkedin = facts.some((f) => f.key === 'linkedin');
+      }
+
+      const channel = chooseActChannel({
+        kind: input.kind,
+        hasEmail,
+        hasLinkedin,
+      });
+      const intent =
+        channel === 'email' || channel === 'intro'
+          ? (input.intent as DraftIntent)
+          : intentForChannel(channel);
       const polished = await polishDraft({
         kind: input.kind,
-        intent: input.intent as DraftIntent,
+        intent,
+        channel,
         targetName,
         secondaryName,
         contextName: input.contextName ?? null,
         seedBody: input.seedBody ?? null,
+        transcript,
       });
 
       const [row] = await ctx.db

@@ -63,6 +63,10 @@ describe('acts router', () => {
       sql: `INSERT INTO entity VALUES ('e_ada', ?, 'person', 'Ada Lovelace', '[]', null, null, ?, ?, null)`,
       args: [userId, now, now],
     });
+    await client.execute({
+      sql: `INSERT INTO entity VALUES ('e_li', ?, 'person', 'Grace Hopper', '[]', null, null, ?, ?, null)`,
+      args: [userId, now, now],
+    });
   });
 
   function caller() {
@@ -118,6 +122,20 @@ describe('acts router', () => {
     const result = await caller().list({ limit: 20 });
     const row = result.acts.find((a) => a.id === 'act_email_1');
     expect(row?.targetEmail).toBe('ada@example.com');
+    expect(row?.channel).toBe('email');
+  });
+
+  it('includes targetLinkedin and linkedin channel when there is no email', async () => {
+    await client.execute({
+      sql: `INSERT INTO entity_fact VALUES ('fact_li', 'e_li', 'linkedin', 'https://www.linkedin.com/in/grace', null, 90, null, ?)`,
+      args: [now],
+    });
+    await insertAct('act_li_1', { target: 'e_li' });
+    const result = await caller().list({ limit: 20 });
+    const row = result.acts.find((a) => a.id === 'act_li_1');
+    expect(row?.name).toBe('Grace Hopper');
+    expect(row?.targetLinkedin).toBe('https://www.linkedin.com/in/grace');
+    expect(row?.channel).toBe('linkedin');
   });
 
   it('omits targetEmail when the target entity is soft-deleted', async () => {
@@ -175,6 +193,28 @@ describe('acts router', () => {
     expect(row?.actionKind).toBe('email');
     expect(row?.subject).toBeTruthy();
     expect(row?.body.toLowerCase()).toContain('check in with ada');
+  });
+
+  it('createDraft grounds the body in the committed memo', async () => {
+    await client.execute({
+      sql: `INSERT INTO interaction VALUES (
+        'int_acts', ?, 'met Ada Lovelace at Analytical Engines, she asked for the rust deck',
+        ?, null, ?, null, null, null, null, null, 'committed', null
+      )`,
+      args: [userId, now, now],
+    });
+    const res = await caller().createDraft({
+      kind: 'email',
+      intent: 'follow-up',
+      targetEntityId: 'e_ada',
+      seedBody: 'send the deck',
+      sourceInteractionId: 'int_acts',
+    });
+    expect(res.ok).toBe(true);
+    const listed = await caller().list({ limit: 50 });
+    const row = listed.acts.find((a) => a.id === res.id);
+    expect(row?.body.toLowerCase()).toContain('analytical engines');
+    expect(row?.body.toLowerCase()).not.toBe('send the deck');
   });
 
   it('createDraft refuses unknown target entities', async () => {

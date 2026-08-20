@@ -1,21 +1,23 @@
 import type { ActionCandidate } from '@wingmic/extractor';
 import type { PendingAct } from '@/app/_components/ActCard';
+import { chooseActChannel, type ActChannel, type ActKind } from './chooseActChannel';
+
+export type { ActChannel, ActKind };
 
 const accent = '#FFC452';
 const blue = '#7DD3FC';
 const violet = '#A78BFA';
 
-export type ActKind = ActionCandidate['kind'];
-
-const KIND_UI: Record<
-  ActKind,
+const CHANNEL_UI: Record<
+  ActChannel,
   { glyph: string; label: string; accent: PendingAct['accent']; color: string }
 > = {
-  email: { glyph: '↗', label: 'email', accent: 'amber', color: accent },
+  email: { glyph: '✉', label: 'email', accent: 'amber', color: accent },
+  linkedin: { glyph: 'in', label: 'linkedin', accent: 'blue', color: blue },
   reminder: { glyph: '◷', label: 'reminder', accent: 'blue', color: blue },
   meeting: { glyph: '◷', label: 'meeting', accent: 'blue', color: blue },
-  todo: { glyph: '✓', label: 'todo', accent: 'amber', color: accent },
   intro: { glyph: '⇌', label: 'intro', accent: 'violet', color: violet },
+  memo: { glyph: '✎', label: 'memo', accent: 'amber', color: accent },
 };
 
 /** Map a DB/API act row into the shared ActCard shape. */
@@ -26,27 +28,34 @@ export function toPendingAct(row: {
   confidence: number;
   targetName?: string | null;
   secondaryName?: string | null;
+  subject?: string | null;
+  hasEmail?: boolean;
+  hasLinkedin?: boolean;
 }): PendingAct {
   const kind = (['reminder', 'email', 'meeting', 'todo', 'intro'].includes(row.kind)
     ? row.kind
     : 'todo') as ActKind;
-  const ui = KIND_UI[kind];
+  const channel = chooseActChannel({
+    kind,
+    hasEmail: Boolean(row.hasEmail),
+    hasLinkedin: Boolean(row.hasLinkedin),
+  });
+  const ui = CHANNEL_UI[channel];
   const name =
     kind === 'intro' && row.targetName && row.secondaryName
       ? `${row.targetName} → ${row.secondaryName}`
       : row.targetName?.trim() || ui.label;
-  const whyParts = [row.body.trim()];
-  if (row.whenHint?.trim()) whyParts.push(row.whenHint.trim());
   return {
     kind: ui.label,
     glyph: ui.glyph,
     name,
-    why: whyParts.filter(Boolean).join(' · '),
+    why: row.whenHint?.trim() || '',
     conf: Math.max(0, Math.min(100, Math.round(row.confidence))),
     accent: ui.accent,
     color: ui.color,
     actionKind: kind,
-    subject: null,
+    channel,
+    subject: row.subject ?? null,
     whenHint: row.whenHint ?? null,
     body: row.body,
   };

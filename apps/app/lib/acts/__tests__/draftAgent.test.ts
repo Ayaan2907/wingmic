@@ -38,14 +38,18 @@ describe('templateDraft', () => {
     expect(draft.body).toContain('Acme');
   });
 
-  it('prefers seed body when provided', () => {
+  it('weaves seed into a sendable email instead of returning the seed alone', () => {
     const draft = templateDraft({
       kind: 'email',
       intent: 'follow-up',
       targetName: 'Ada',
       seedBody: 'send the deck tomorrow',
+      transcript: 'met Ada Lovelace at Analytical Engines, she asked for the rust deck',
     });
-    expect(draft.body).toBe('send the deck tomorrow');
+    expect(draft.body.toLowerCase()).toContain('send the deck tomorrow');
+    expect(draft.body.toLowerCase()).toContain('hey ada');
+    expect(draft.body).not.toBe('send the deck tomorrow');
+    expect(draft.body.toLowerCase()).toContain('analytical engines');
   });
 
   it('clamps long template subjects and seed bodies', () => {
@@ -58,6 +62,19 @@ describe('templateDraft', () => {
     });
     expect(draft.subject.length).toBeLessThanOrEqual(60);
     expect(draft.body.length).toBeLessThanOrEqual(2000);
+  });
+
+  it('writes a linkedin note without an email greeting block', () => {
+    const draft = templateDraft({
+      kind: 'email',
+      intent: 'linkedin-note',
+      channel: 'linkedin',
+      targetName: 'Ada Lovelace',
+      seedBody: 'talked rust at the booth',
+    });
+    expect(draft.subject.toLowerCase()).toContain('linkedin');
+    expect(draft.body.toLowerCase()).toContain('talked rust');
+    expect(draft.body.toLowerCase()).not.toContain('ping me if useful');
   });
 
   it('falls back whitespace-only context to the event / this company', () => {
