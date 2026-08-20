@@ -6,6 +6,7 @@ import type { DB } from '@wingmic/db';
 import * as schema from '@wingmic/db/schema';
 import { linkedinProfileHref } from '@/lib/acts/linkedinHref';
 import { namesOverlap } from '@/lib/entity/namesOverlap';
+import { mergePersonEntities, undoPersonMerge } from '@/lib/entity/mergePerson';
 
 // entity.detail — single procedure powering /person/[id], /company/[id],
 // /event/[id]. Source of truth: docs/superpowers/plans/2026-05-23-...md §18
@@ -40,10 +41,8 @@ type Capture = {
   interactionId: string;
   capturedAt: string; // ISO
   transcript: string;
-  // eventName intentionally omitted — there's no reliable interaction→event
-  // mapping today (sourceInteractionId lives on entityFacts/entityTopics but
-  // not on entityEvents). Don't fake it from events[0]; add the proper mapping
-  // when the extractor stamps event linkage onto interactions.
+  topics: string[];
+  eventName?: string | null;
 };
 
 type Related = {
@@ -89,6 +88,41 @@ export const entityRouter = router({
         return await loadCompany(db, userId, id);
       }
       return await loadEvent(db, userId, id);
+    }),
+
+  merge: protectedProcedure
+    .input(z.object({ sourceId: z.string().min(1), targetId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await mergePersonEntities(
+          ctx.db,
+          ctx.user.id,
+          input.sourceId,
+          input.targetId,
+        );
+      } catch (e) {
+        if (e instanceof Error && e.message === 'MERGE_NOT_ALLOWED') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'cannot merge these people' });
+        }
+        throw e;
+      }
+    }),
+
+  undoMerge: protectedProcedure
+    .input(z.object({ mergeId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await undoPersonMerge(ctx.db, ctx.user.id, input.mergeId);
+        return { ok: true as const };
+      } catch (e) {
+        if (e instanceof Error && e.message === 'MERGE_UNDO_EXPIRED') {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'undo window closed' });
+        }
+        if (e instanceof Error && e.message === 'MERGE_NOT_FOUND') {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'merge not found' });
+        }
+        throw e;
+      }
     }),
 
   /** Desktop person rail — owned people, newest first. */
@@ -204,10 +238,23 @@ async function loadPerson(
       })
     : [];
 
+  const topicById = new Map(topics.map((t: any) => [t.id as string, t.name as string]));
+  const topicsByInteraction = new Map<string, string[]>();
+  for (const link of et) {
+    const iid = (link as { sourceInteractionId?: string | null }).sourceInteractionId;
+    if (!iid) continue;
+    const name = topicById.get((link as { topicId: string }).topicId);
+    if (!name) continue;
+    const list = topicsByInteraction.get(iid) ?? [];
+    if (!list.includes(name)) list.push(name);
+    topicsByInteraction.set(iid, list);
+  }
+
   const captures: Capture[] = interactions.map((i: any) => ({
     interactionId: i.id,
     capturedAt: (toDate(i.capturedAt) ?? new Date()).toISOString(),
     transcript: i.transcript ?? '',
+    topics: topicsByInteraction.get(i.id) ?? [],
   }));
 
   // Stats
@@ -428,6 +475,7 @@ async function loadCompany(db: DB, userId: string, companyId: string) {
     interactionId: i.id,
     capturedAt: (toDate(i.capturedAt) ?? new Date()).toISOString(),
     transcript: i.transcript ?? '',
+    topics: [],
   }));
 
   // Topics raised
@@ -560,6 +608,7 @@ async function loadEvent(db: DB, userId: string, eventId: string) {
     interactionId: i.id,
     capturedAt: (toDate(i.capturedAt) ?? new Date()).toISOString(),
     transcript: i.transcript ?? '',
+    topics: [],
     eventName: event.name,
   }));
 

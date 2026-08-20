@@ -23,6 +23,7 @@ export interface EntityCapture {
   interactionId: string;
   capturedAt: string;
   transcript: string;
+  topics?: string[];
   eventName?: string | null;
 }
 
@@ -81,6 +82,10 @@ export interface EntityDetailScaffoldProps {
   topics?: Array<{ id: string; name: string }>;
   publicProfile?: EntityPublicProfile | null;
   possibleMatches?: EntityPossibleMatch[];
+  onMergePossibleMatch?: (sourceId: string) => void;
+  mergePendingId?: string | null;
+  mergeUndo?: { mergeId: string; sourceName: string; expiresAt: number } | null;
+  onUndoMerge?: () => void;
 }
 
 const STAT_COLORS = [accent, '#86efac', third];
@@ -102,6 +107,10 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
     topics,
     publicProfile,
     possibleMatches,
+    onMergePossibleMatch,
+    mergePendingId,
+    mergeUndo,
+    onUndoMerge,
   } = props;
 
   return (
@@ -158,6 +167,47 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
 
         <CtaRow primary={primaryCta} ghost={ghostCta} />
 
+        {mergeUndo && onUndoMerge ? (
+          <div
+            data-testid="entity-merge-undo"
+            className="mono"
+            style={{
+              marginBottom: 14,
+              padding: '10px 12px',
+              borderRadius: 10,
+              background: 'rgba(255,107,107,0.12)',
+              border: '1px solid rgba(255,107,107,0.35)',
+              fontSize: 12,
+              color: 'var(--text-85)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+            }}
+          >
+            <span>
+              <span className="serif" style={{ fontStyle: 'italic' }}>
+                {mergeUndo.sourceName}
+              </span>{' '}
+              merged
+            </span>
+            <button
+              type="button"
+              onClick={onUndoMerge}
+              className="mono"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: accent,
+                cursor: 'pointer',
+                fontSize: 12,
+              }}
+            >
+              ↶ undo
+            </button>
+          </div>
+        ) : null}
+
         <StatTrio stats={stats} />
 
         {kind === 'person' && (
@@ -180,7 +230,12 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
               same name — pick who you actually met.
             </p>
             {possibleMatches.map((m) => (
-              <PossibleMatchCard key={m.id} match={m} />
+              <PossibleMatchCard
+                key={m.id}
+                match={m}
+                onMerge={onMergePossibleMatch}
+                pending={mergePendingId === m.id}
+              />
             ))}
           </Section>
         )}
@@ -558,6 +613,29 @@ function CaptureCard({ capture }: { capture: EntityCapture }) {
       >
         {excerpt}
       </div>
+      {capture.topics && capture.topics.length > 0 ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+          {capture.topics.map((t) => (
+            <span
+              key={t}
+              className="mono"
+              style={{
+                padding: '3px 8px',
+                borderRadius: 999,
+                background: `${violet}1f`,
+                color: violet,
+                border: `1px solid ${violet}40`,
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: 0.8,
+                textTransform: 'uppercase',
+              }}
+            >
+              {t}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -745,11 +823,18 @@ function hostLabel(href: string): string {
   }
 }
 
-function PossibleMatchCard({ match }: { match: EntityPossibleMatch }) {
+function PossibleMatchCard({
+  match,
+  onMerge,
+  pending,
+}: {
+  match: EntityPossibleMatch;
+  onMerge?: (sourceId: string) => void;
+  pending?: boolean;
+}) {
   const sub = [match.role, match.companyName].filter(Boolean).join(' · ');
   return (
-    <a
-      href={`/person/${encodeURIComponent(match.id)}`}
+    <div
       data-testid="entity-possible-match"
       style={{
         display: 'flex',
@@ -757,8 +842,6 @@ function PossibleMatchCard({ match }: { match: EntityPossibleMatch }) {
         gap: 12,
         padding: '11px 0',
         borderBottom: '1px solid rgba(255,255,255,0.05)',
-        textDecoration: 'none',
-        color: 'inherit',
       }}
     >
       <PersonAvatar name={match.name} seed={match.id} size={28} />
@@ -778,10 +861,40 @@ function PossibleMatchCard({ match }: { match: EntityPossibleMatch }) {
           </div>
         ) : null}
       </div>
-      <span className="mono" style={{ color: accent, fontSize: 11 }}>
-        open →
-      </span>
-    </a>
+      {onMerge ? (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            if (
+              window.confirm(
+                `merge ${match.name} into this person? captures and facts move over. this can't be undone after 30s.`,
+              )
+            ) {
+              onMerge(match.id);
+            }
+          }}
+          className="mono"
+          style={{
+            color: accent,
+            fontSize: 11,
+            background: 'transparent',
+            border: 'none',
+            cursor: pending ? 'wait' : 'pointer',
+            opacity: pending ? 0.5 : 1,
+          }}
+        >
+          merge into this
+        </button>
+      ) : null}
+      <a
+        href={`/person/${encodeURIComponent(match.id)}`}
+        className="mono"
+        style={{ color: 'var(--text-40)', fontSize: 10, textDecoration: 'none' }}
+      >
+        open
+      </a>
+    </div>
   );
 }
 

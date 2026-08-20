@@ -67,6 +67,15 @@ describe('entity.detail', () => {
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
+      CREATE TABLE entity_merge (
+        id TEXT PRIMARY KEY,
+        source_entity_id TEXT NOT NULL,
+        target_entity_id TEXT NOT NULL,
+        merged_by_user_id TEXT,
+        merged_at INTEGER NOT NULL,
+        reversed_at INTEGER,
+        moves TEXT
+      );
     `);
 
     const now = Date.now();
@@ -243,6 +252,11 @@ describe('entity.detail', () => {
   it('NOT_FOUND on missing ids', async () => {
     await expect(caller().detail({ kind: 'company', id: 'co_nope' })).rejects.toThrow();
     await expect(caller().detail({ kind: 'event', id: 'ev_nope' })).rejects.toThrow();
+  });
+
+  it('includes per-capture topic chips on person detail', async () => {
+    const res = await caller().detail({ kind: 'person', id: 'en_sarah' });
+    expect(res.captures[0]!.topics).toEqual(['rust']);
   });
 
   it('respects soft-deleted entities (deletedAt)', async () => {
