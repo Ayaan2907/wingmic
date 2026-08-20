@@ -72,11 +72,11 @@ describe('mergePersonEntities', () => {
     });
     await client.execute({
       sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, created_at, updated_at) VALUES (?, ?, 'person', ?, '[]', ?, ?)`,
-      args: ['en_keep', userId, 'Tomo Matsuo', now, now],
+      args: ['en_keep', userId, 'Jordan Lee', now, now],
     });
     await client.execute({
       sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, created_at, updated_at) VALUES (?, ?, 'person', ?, '[]', ?, ?)`,
-      args: ['en_src', userId, 'Tomo Matsuo', now, now],
+      args: ['en_src', userId, 'Jordan Lee', now, now],
     });
     await client.execute({
       sql: `INSERT INTO entity_fact (id, entity_id, key, value, source_interaction_id, confidence, created_at) VALUES (?, ?, 'note', 'from source', null, 80, ?)`,
@@ -94,7 +94,7 @@ describe('mergePersonEntities', () => {
 
   it('re-points facts, edges, acts and soft-deletes source', async () => {
     const res = await mergePersonEntities(db, userId, 'en_src', 'en_keep');
-    expect(res.sourceName).toBe('Tomo Matsuo');
+    expect(res.sourceName).toBe('Jordan Lee');
     expect(res.mergeId).toBeTruthy();
 
     const source = await db.query.entities.findFirst({
@@ -120,7 +120,7 @@ describe('mergePersonEntities', () => {
     const target = await db.query.entities.findFirst({
       where: (t, { eq }) => eq(t.id, 'en_keep'),
     });
-    expect(target?.aliases).toContain('Tomo Matsuo');
+    expect(target?.aliases).toContain('Jordan Lee');
 
     await undoPersonMerge(db, userId, res.mergeId);
 

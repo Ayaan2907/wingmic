@@ -43,8 +43,8 @@ describe('normalizePersonName', () => {
   });
 
   it('does not treat partial names as equal', () => {
-    expect(personNameEquals('Tomo', 'Tomo Matsuo')).toBe(false);
-    expect(entityMatchesPersonName('Tomo', { name: 'Tomo Matsuo', aliases: [] })).toBe(false);
+    expect(personNameEquals('Jordan', 'Jordan Lee')).toBe(false);
+    expect(entityMatchesPersonName('Jordan', { name: 'Jordan Lee', aliases: [] })).toBe(false);
   });
 
   it('matches via alias on the entity', () => {

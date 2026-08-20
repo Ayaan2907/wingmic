@@ -285,7 +285,7 @@ For each PersonCandidate from the extractor:
     6. fuzzy resolvePerson; link iff score ≥ 0.85
 
   normalizePersonName = lowercase tokens, punctuation stripped, space-joined.
-  Partial names ("Tomo" vs "Tomo Matsuo") do NOT auto-link.
+  Partial names ("Jordan" vs "Jordan Lee") do NOT auto-link.
 
   resolvePerson score (when fuzzy runs):
     nameScore = max(nameSimilarity(cand.name, entity.name), alias scores)

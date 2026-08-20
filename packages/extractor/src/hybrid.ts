@@ -587,7 +587,7 @@ export function sanitizeTopics(
   // Only single-token *company/event* names suppress same-token topics
   // ("lucas" ↔ Lucas). Multi-word orgs (e.g. "Research Labs") must not erase
   // independent subjects like "research". Person first/last tokens do suppress
-  // unigram topics so "Tomo Matsuo" does not mint a "tomo" topic.
+  // unigram topics so "Jordan Lee" does not mint a "jordan" topic.
   const entityTokens = new Set<string>();
   const personTokens = new Set<string>();
   for (const e of [...entities.persons, ...entities.companies, ...entities.events]) {
