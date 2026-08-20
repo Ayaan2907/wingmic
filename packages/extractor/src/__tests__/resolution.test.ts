@@ -405,6 +405,220 @@ describe('commit() sourceInteractionId', () => {
     expect(second.persons[0]!.entityId).not.toBe(first.entityIds[0]);
   });
 
+  it('reuses the selected person when two same-name people exist', async () => {
+    const bindUserId = 'user_commit_preferred_dup';
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO user (id, email, email_verified, name, image, created_at, updated_at)
+            VALUES (?, 'preferred-dup@example.com', 1, 'Ada', null, ?, ?)`,
+      args: [bindUserId, now, now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, import_source, embedding, created_at, updated_at)
+            VALUES ('pref_tomo_a', ?, 'person', 'Tomo Matsuo', '[]', 'voice-capture', NULL, ?, ?),
+                   ('pref_tomo_b', ?, 'person', 'Tomo Matsuo', '[]', 'voice-capture', NULL, ?, ?)`,
+      args: [bindUserId, now, now, bindUserId, now, now],
+    });
+
+    const result = await commit(
+      {
+        persons: [
+          {
+            name: 'Tomo Matsuo',
+            role: null,
+            companyHint: null,
+            topics: [],
+            notes: 'add to the one I just opened',
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId: bindUserId,
+        transcript: 'add to the one I just opened',
+        capturedAt: new Date(),
+        preferredEntityId: 'pref_tomo_a',
+      },
+    );
+
+    expect(result.newEntities).toBe(0);
+    expect(result.persons[0]!.created).toBe(false);
+    expect(result.persons[0]!.entityId).toBe('pref_tomo_a');
+  });
+
+  it('injects and links the preferred person when extraction returns none', async () => {
+    const bindUserId = 'user_commit_preferred_empty';
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO user (id, email, email_verified, name, image, created_at, updated_at)
+            VALUES (?, 'preferred-empty@example.com', 1, 'Ada', null, ?, ?)`,
+      args: [bindUserId, now, now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, import_source, embedding, created_at, updated_at)
+            VALUES ('pref_grace', ?, 'person', 'Grace Hopper', '[]', 'voice-capture', NULL, ?, ?)`,
+      args: [bindUserId, now, now],
+    });
+
+    const result = await commit(
+      {
+        persons: [],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId: bindUserId,
+        transcript: 'her linkedin is /in/gracehopper',
+        capturedAt: new Date(),
+        preferredEntityId: 'pref_grace',
+      },
+    );
+
+    expect(result.newEntities).toBe(0);
+    expect(result.matchedEntities).toBe(1);
+    expect(result.entityIds).toEqual(['pref_grace']);
+    expect(result.persons[0]!.created).toBe(false);
+
+    const notes = await db.query.entityFacts.findMany({
+      where: and(
+        eq(schema.entityFacts.entityId, 'pref_grace'),
+        eq(schema.entityFacts.key, 'note'),
+      ),
+    });
+    expect(notes.some((f) => f.value === 'her linkedin is /in/gracehopper')).toBe(true);
+  });
+
+  it('does not force preferred onto a differently named unique person', async () => {
+    const bindUserId = 'user_commit_preferred_other';
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO user (id, email, email_verified, name, image, created_at, updated_at)
+            VALUES (?, 'preferred-other@example.com', 1, 'Ada', null, ?, ?)`,
+      args: [bindUserId, now, now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, import_source, embedding, created_at, updated_at)
+            VALUES ('pref_open_grace', ?, 'person', 'Grace Hopper', '[]', 'voice-capture', NULL, ?, ?),
+                   ('pref_named_ada', ?, 'person', 'Ada Lovelace', '[]', 'voice-capture', NULL, ?, ?)`,
+      args: [bindUserId, now, now, bindUserId, now, now],
+    });
+
+    const result = await commit(
+      {
+        persons: [
+          {
+            name: 'Ada Lovelace',
+            role: null,
+            companyHint: null,
+            topics: [],
+            notes: 'also met ada',
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId: bindUserId,
+        transcript: 'also met ada lovelace',
+        capturedAt: new Date(),
+        preferredEntityId: 'pref_open_grace',
+      },
+    );
+
+    expect(result.persons[0]!.entityId).toBe('pref_named_ada');
+    expect(result.persons[0]!.created).toBe(false);
+  });
+
+  it('writes parentInteractionId and threadRootId on a follow-up capture', async () => {
+    const bindUserId = 'user_commit_parent';
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO user (id, email, email_verified, name, image, created_at, updated_at)
+            VALUES (?, 'parent@example.com', 1, 'Ada', null, ?, ?)`,
+      args: [bindUserId, now, now],
+    });
+
+    const first = await commit(
+      {
+        persons: [
+          {
+            name: 'Grace Hopper',
+            role: null,
+            companyHint: null,
+            topics: [],
+            notes: 'first take',
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId: bindUserId,
+        transcript: 'met grace hopper',
+        capturedAt: new Date(),
+      },
+    );
+
+    const second = await commit(
+      {
+        persons: [
+          {
+            name: 'Grace Hopper',
+            role: null,
+            companyHint: null,
+            topics: [],
+            notes: 'linkedin follow-up',
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId: bindUserId,
+        transcript: 'her linkedin is /in/gracehopper',
+        capturedAt: new Date(),
+        parentInteractionId: first.interactionId,
+        threadRootId: first.interactionId,
+        preferredEntityId: first.entityIds[0],
+      },
+    );
+
+    const child = await db.query.interactions.findFirst({
+      where: eq(schema.interactions.id, second.interactionId),
+    });
+    expect(child?.parentInteractionId).toBe(first.interactionId);
+    expect(child?.threadRootId).toBe(first.interactionId);
+    expect(second.persons[0]!.entityId).toBe(first.entityIds[0]);
+  });
+
   it('leaves event dates blank when speech has no date hint', async () => {
     const result = await commit(
       {

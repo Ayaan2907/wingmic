@@ -35,6 +35,15 @@ interface ResolveContext {
   capturedAt: Date;
   /** Optional client-generated idempotency key (interactions.client_capture_id). */
   clientCaptureId?: string | null;
+  /** Prior capture this memo replies to. Written onto the new interaction. */
+  parentInteractionId?: string | null;
+  /** Root of the follow-up chain (`parent.threadRootId ?? parent.id`). */
+  threadRootId?: string | null;
+  /**
+   * Person the user opened in chat. Applied to person index 0 unless that
+   * candidate uniquely names someone else (email / LinkedIn / exact name).
+   */
+  preferredEntityId?: string | null;
 }
 
 /**
@@ -44,8 +53,9 @@ interface ResolveContext {
  *   2. Upsert canonical Event rows (slug + date-proximity match)
  *   3. Upsert canonical Topic rows
  *   4. Persist Interaction (needed before facts/topics for sourceInteractionId)
- *   5. Resolve Person candidates: strong keys + unique same-owner name first,
- *      then fuzzy score ≥ 0.85, else create
+ *   5. Resolve Person candidates: preferredEntityId on person 0 unless that
+ *      candidate uniquely names someone else; then strong keys + unique
+ *      same-owner name, then fuzzy score ≥ 0.85, else create
  *   6. Wire EntityCompany / EntityEvent / EntityTopic edges
  *   7. Persist notes/email/linkedin as EntityFact rows (stamped with interaction)
  *
@@ -56,6 +66,31 @@ export async function commit(
   ctx: ResolveContext,
 ): Promise<CommitResult> {
   const { db, userId, transcript, capturedAt, clientCaptureId } = ctx;
+
+  if (ctx.preferredEntityId && extracted.persons.length === 0) {
+    const preferred = await db.query.entities.findFirst({
+      where: and(
+        eq(schema.entities.id, ctx.preferredEntityId),
+        eq(schema.entities.ownerUserId, userId),
+        isNull(schema.entities.deletedAt),
+      ),
+    });
+    if (preferred) {
+      const aliases = Array.isArray(preferred.aliases)
+        ? preferred.aliases.filter(Boolean)
+        : [];
+      extracted.persons.push({
+        name: preferred.name,
+        role: null,
+        companyHint: null,
+        topics: [],
+        notes: transcript,
+        email: null,
+        linkedin: null,
+        aliases,
+      });
+    }
+  }
 
   // ── Embeddings (parallel) ────────────────────────────────────────────
   const transcriptEmbedding = await embedText(transcript);
@@ -113,6 +148,8 @@ export async function commit(
       capturedAt,
       embedding: transcriptEmbedding,
       ...(clientCaptureId ? { clientCaptureId } : {}),
+      ...(ctx.parentInteractionId ? { parentInteractionId: ctx.parentInteractionId } : {}),
+      ...(ctx.threadRootId ? { threadRootId: ctx.threadRootId } : {}),
     })
     .returning({ id: schema.interactions.id });
   const interactionId = insertedInteraction[0].id;
@@ -193,6 +230,7 @@ export async function commit(
       emailsByEntity,
       linkedinsByEntity,
       companiesByEntity,
+      i === 0 ? ctx.preferredEntityId : undefined,
     );
 
     let entityId: string;
@@ -459,7 +497,15 @@ type LocalMatchReason =
   | 'collidingIdentifier'
   | 'uniqueNameAtCompany'
   | 'uniqueName'
-  | 'fuzzy';
+  | 'fuzzy'
+  | 'preferred';
+
+const STRONG_FOREIGN_REASONS: ReadonlySet<LocalMatchReason> = new Set([
+  'uniqueEmail',
+  'uniqueLinkedin',
+  'uniqueName',
+  'uniqueNameAtCompany',
+]);
 
 interface LocalMatch extends ResolvedMatch {
   reason: LocalMatchReason;
@@ -508,6 +554,45 @@ async function maybeAppendAlias(
 
 /** Strong-key and unique-name match before fuzzy score. Same owner only. */
 export function matchLocalPerson(
+  cand: PersonCandidate,
+  userEntities: schema.Entity[],
+  candEmbedding: number[],
+  companyIds: Map<string, string>,
+  emailsByEntity: Map<string, string[]>,
+  linkedinsByEntity: Map<string, string[]>,
+  companiesByEntity: Map<string, Set<string>>,
+  preferredEntityId?: string | null,
+): LocalMatch | null {
+  const natural = matchLocalPersonNatural(
+    cand,
+    userEntities,
+    candEmbedding,
+    companyIds,
+    emailsByEntity,
+    linkedinsByEntity,
+    companiesByEntity,
+  );
+  if (
+    preferredEntityId &&
+    userEntities.some((e) => e.id === preferredEntityId)
+  ) {
+    const steal =
+      natural != null &&
+      natural.entityId !== preferredEntityId &&
+      STRONG_FOREIGN_REASONS.has(natural.reason);
+    if (!steal) {
+      return {
+        entityId: preferredEntityId,
+        score: 1,
+        reason: 'preferred',
+        appendAlias: true,
+      };
+    }
+  }
+  return natural;
+}
+
+function matchLocalPersonNatural(
   cand: PersonCandidate,
   userEntities: schema.Entity[],
   candEmbedding: number[],

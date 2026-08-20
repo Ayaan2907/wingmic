@@ -703,6 +703,70 @@ describe('ChatClient', () => {
     expect(screen.getByTestId('open-capture-chip').textContent).toMatch(/adding to priya mehta/i);
   });
 
+  it('sends parentInteractionId and targetEntityId on the next memo after photo', async () => {
+    mutateAsyncMock.mockResolvedValue({
+      extracted: {
+        persons: [{ name: 'Ada Lovelace', role: null, companyHint: null, topics: [] }],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      newEntities: 0,
+      matchedEntities: 1,
+      interactionId: 'ix_followup',
+      entityIds: ['en_ada'],
+    });
+
+    renderChat({
+      userName: 'ada',
+      initialThread: [
+        {
+          id: 'ix_hydrated',
+          transcript: 'met Ada Lovelace, rust lead',
+          capturedAt: '2026-06-01T14:00:00Z',
+          graphResult: {
+            extracted: {
+              persons: [
+                {
+                  name: 'Ada Lovelace',
+                  role: 'rust lead',
+                  companyHint: null,
+                  topics: ['rust'],
+                },
+              ],
+              companies: [],
+              events: [],
+              topics: ['rust'],
+              actions: [],
+            },
+            newEntities: 1,
+            matchedEntities: 0,
+            interactionId: 'ix_hydrated',
+            entityIds: ['en_ada'],
+          },
+        },
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /add photo for Ada Lovelace/i }));
+    expect(screen.getByTestId('open-capture-chip').textContent).toMatch(/adding to ada lovelace/i);
+
+    const input = screen.getByLabelText('chat composer');
+    fireEvent.change(input, { target: { value: 'her linkedin is /in/adalovelace' } });
+    fireEvent.submit(screen.getByTestId('chat-composer'));
+
+    await waitFor(() => {
+      expect(mutateAsyncMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          transcript: 'her linkedin is /in/adalovelace',
+          parentInteractionId: 'ix_hydrated',
+          targetEntityId: 'en_ada',
+        }),
+      );
+    });
+  });
+
   it('thread dims (opacity 0.4, pointer-events none) when recorder transitions to recording', async () => {
     renderChat({
       userName: 'ada',

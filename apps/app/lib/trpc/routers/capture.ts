@@ -36,6 +36,10 @@ export const captureRouter = router({
         capturedAt: z.coerce.date().optional(),
         /** Client-generated capture id for retry idempotency (wired into interactions). */
         clientCaptureId: z.string().min(1).max(128).optional(),
+        /** Prior capture this memo replies to. Must be owned by the caller. */
+        parentInteractionId: z.string().min(1).max(128).optional(),
+        /** Person the user opened in chat. Must be an owned, living person. */
+        targetEntityId: z.string().min(1).max(128).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -79,6 +83,46 @@ export const captureRouter = router({
               duplicate: true as const,
             };
           }
+        }
+
+        let parentInteractionId: string | undefined;
+        let threadRootId: string | undefined;
+        let preferredEntity: {
+          id: string;
+          name: string;
+          aliases: string[] | null;
+          importSource: string | null;
+        } | null = null;
+
+        if (input.parentInteractionId) {
+          const parent = await ctx.db.query.interactions.findFirst({
+            where: and(
+              eq(schema.interactions.id, input.parentInteractionId),
+              eq(schema.interactions.userId, ctx.user.id),
+            ),
+            columns: { id: true, threadRootId: true, deletedAt: true },
+          });
+          if (!parent || parent.deletedAt) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'parent capture not found' });
+          }
+          parentInteractionId = parent.id;
+          threadRootId = parent.threadRootId ?? parent.id;
+        }
+
+        if (input.targetEntityId) {
+          const target = await ctx.db.query.entities.findFirst({
+            where: and(
+              eq(schema.entities.id, input.targetEntityId),
+              eq(schema.entities.ownerUserId, ctx.user.id),
+              eq(schema.entities.kind, 'person'),
+              isNull(schema.entities.deletedAt),
+            ),
+            columns: { id: true, name: true, aliases: true, importSource: true },
+          });
+          if (!target) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'target person not found' });
+          }
+          preferredEntity = target;
         }
 
         const providerEntities = await transcribeEntities(input.transcript);
@@ -130,7 +174,11 @@ export const captureRouter = router({
           }
         }
 
-        const knownPersons = recentEntities.map((e) => {
+        const contactEntities = preferredEntity
+          ? [preferredEntity, ...recentEntities.filter((e) => e.id !== preferredEntity.id)]
+          : recentEntities;
+
+        const knownPersons = contactEntities.map((e) => {
           const aliases = Array.isArray(e.aliases) ? e.aliases.filter(Boolean) : [];
           const email = emailByEntity.get(e.id);
           const bits = [e.name, ...aliases.slice(0, 3)];
@@ -154,6 +202,9 @@ export const captureRouter = router({
           transcript: input.transcript,
           capturedAt: input.capturedAt ?? new Date(),
           clientCaptureId: input.clientCaptureId,
+          parentInteractionId,
+          threadRootId,
+          preferredEntityId: preferredEntity?.id,
         });
 
         // Acts insert is best-effort after commit() — graph already persisted.

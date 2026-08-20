@@ -63,7 +63,7 @@ export interface CaptureContextValue {
   pasteOpenForId: string | null;
   pasteDraft: string;
   setPasteDraft: (v: string) => void;
-  /** Selected person on a committed memo. Composer chip only until follow-up bind (#146 WP2). */
+  /** Selected person on a committed memo. Next memo binds as a follow-up. */
   openTarget: OpenCaptureTarget | null;
   setOpenTarget: (target: OpenCaptureTarget | null) => void;
   beginCapture: () => void | Promise<void>;
@@ -174,6 +174,10 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const [pasteDraft, setPasteDraft] = useState('');
   const [undoQueue, setUndoQueue] = useState<UndoEntry[]>([]);
   const [openTarget, setOpenTarget] = useState<OpenCaptureTarget | null>(null);
+  const openTargetRef = useRef<OpenCaptureTarget | null>(null);
+  useEffect(() => {
+    openTargetRef.current = openTarget;
+  }, [openTarget]);
 
   const activeIdRef = useRef<string | null>(null);
   /** Bubble id handed off when recorder enters encoding — frees the orb for the next take. */
@@ -196,6 +200,27 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const patch = useCallback((id: string, p: Partial<ThreadMessage>) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...p } : m)));
   }, []);
+
+  function followUpCommitFields(): {
+    parentInteractionId?: string;
+    targetEntityId?: string;
+  } {
+    const target = openTargetRef.current;
+    if (!target) return {};
+    return {
+      parentInteractionId: target.interactionId,
+      targetEntityId: target.entityId,
+    };
+  }
+
+  function advanceOpenTarget(result: GraphResult) {
+    const target = openTargetRef.current;
+    if (!target) return;
+    if (result.entityIds && !result.entityIds.includes(target.entityId)) return;
+    const next = { ...target, interactionId: result.interactionId };
+    openTargetRef.current = next;
+    setOpenTarget(next);
+  }
 
   /** Schedule an undo chip + auto-expire timer for a soft-deleted bubble. */
   const enqueueUndo = useCallback((id: string) => {
@@ -367,7 +392,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       const c0 = performance.now();
       try {
         const result = await commitMutation.mutateAsync(
-          { transcript, clientCaptureId: id },
+          { transcript, clientCaptureId: id, ...followUpCommitFields() },
           { signal } as unknown as Parameters<typeof commitMutation.mutateAsync>[1],
         );
         if (signal.aborted) {
@@ -379,6 +404,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           commitMs: Math.round(performance.now() - c0),
           graphResult: result as GraphResult,
         });
+        advanceOpenTarget(result as GraphResult);
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
           cleanupController();
@@ -578,12 +604,14 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         const result = await commitMutation.mutateAsync({
           transcript: text,
           clientCaptureId: id,
+          ...followUpCommitFields(),
         });
         patch(id, {
           status: 'committed',
           commitMs: Math.round(performance.now() - c0),
           graphResult: result as GraphResult,
         });
+        advanceOpenTarget(result as GraphResult);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'commit failed.';
         patch(id, {
@@ -623,12 +651,14 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           const result = await commitMutation.mutateAsync({
             transcript: msg.transcript,
             clientCaptureId: id,
+            ...followUpCommitFields(),
           });
           patch(id, {
             status: 'committed',
             commitMs: Math.round(performance.now() - c0),
             graphResult: result as GraphResult,
           });
+          advanceOpenTarget(result as GraphResult);
         } catch (err) {
           const message = err instanceof Error ? err.message : 'commit failed.';
           patch(id, {
@@ -694,12 +724,14 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         const result = await commitMutation.mutateAsync({
           transcript: trimmed,
           clientCaptureId: id,
+          ...followUpCommitFields(),
         });
         patch(id, {
           status: 'committed',
           commitMs: Math.round(performance.now() - c0),
           graphResult: result as GraphResult,
         });
+        advanceOpenTarget(result as GraphResult);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'commit failed.';
         patch(id, {
@@ -722,12 +754,14 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         const result = await commitMutation.mutateAsync({
           transcript: msg.transcript,
           clientCaptureId: id,
+          ...followUpCommitFields(),
         });
         patch(id, {
           status: 'committed',
           commitMs: Math.round(performance.now() - c0),
           graphResult: result as GraphResult,
         });
+        advanceOpenTarget(result as GraphResult);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'commit failed.';
         patch(id, {

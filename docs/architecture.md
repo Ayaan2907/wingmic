@@ -277,12 +277,20 @@ Runs in `apps/app`, same as capture.
 For each PersonCandidate from the extractor:
   Pull all entities owned by this user (deletedAt IS NULL).
   Match in strict order (same owner only):
+    0. explicit preferredEntityId on person 0 (chat follow-up bind), unless
+       that candidate uniquely names someone else via email / LinkedIn / exact name
     1. unique email (trim + lowercase)
     2. unique normalized LinkedIn (/in/ profile)
     3. colliding email/LinkedIn → best fuzzy score among hits (never create)
     4. exact normalized name + exactly one works_at companyHint
     5. exact normalized name, set size === 1 (aliases count)
     6. fuzzy resolvePerson; link iff score ≥ 0.85
+
+  Empty extractor persons + preferredEntityId injects a candidate from the
+  opened person so notes/facts still stamp on them.
+
+  Follow-up captures write parentInteractionId + threadRootId
+  (parent.threadRootId ?? parent.id). Append-only; parent transcript is not mutated.
 
   normalizePersonName = lowercase tokens, punctuation stripped, space-joined.
   Partial names ("Tomo" vs "Tomo Matsuo") do NOT auto-link.
