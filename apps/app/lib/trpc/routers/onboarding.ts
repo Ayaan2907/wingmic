@@ -4,6 +4,9 @@ import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import * as schema from '@wingmic/db/schema';
 import { normalizeLinkedInUrl } from '@/lib/imports';
+import { webSearchProviderFromEnv } from '@/lib/web-search';
+import { enrichOwnerAfterLinkedin } from '@/lib/enrich/enrichOwner';
+import { scheduleEnrich } from '@/lib/enrich/schedule';
 
 const optionalLabel = z
   .string()
@@ -34,9 +37,10 @@ function joinDisplayName(first?: string, last?: string): string | null {
 // the /onboarding flow on "get started" and on skip. SECURITY: the write is
 // scoped `WHERE id = ctx.user.id`; a userId is NEVER accepted from input.
 //
-// Optional profile: first+last compose `user.name` (BetterAuth already has
-// this column — no schema change). LinkedIn URL writes a self-asserted
-// identity_claim(kind='linkedin', verified=false). Skip may send empty input.
+// Optional profile: first+last compose `user.name`. LinkedIn URL writes a
+// self-asserted identity_claim(kind='linkedin', verified=false). After the
+// transaction, Tavily may fill identity_claim(kind='url') from public hits
+// (never LinkedIn HTML extract). Skip may send empty input.
 
 export const onboardingRouter = router({
   acknowledge: protectedProcedure.input(acknowledgeInput.optional()).mutation(async ({ ctx, input }) => {
@@ -98,6 +102,21 @@ export const onboardingRouter = router({
         });
       }
     });
+
+    if (linkedin) {
+      const provider = webSearchProviderFromEnv();
+      if (provider) {
+        scheduleEnrich(() =>
+          enrichOwnerAfterLinkedin({
+            db: ctx.db,
+            userId: ctx.user.id,
+            linkedinUrl: linkedin,
+            name: displayName,
+            provider,
+          }),
+        );
+      }
+    }
 
     return { ok: true as const };
   }),
