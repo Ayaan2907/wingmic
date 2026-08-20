@@ -219,7 +219,7 @@ describe('ChatClient', () => {
     const composer = screen.getByTestId('chat-composer');
     expect(composer.style.background).toMatch(/var\(--bg-page\)|#0a0a0a/);
     const pill = composer.firstElementChild as HTMLElement;
-    expect(pill.style.background).toBe('#141414');
+    expect(pill.style.background).toMatch(/#141414|rgb\(20,\s*20,\s*20\)/);
   });
 
   it('runs the full record → transcribe → commit cycle and renders a committed bubble + graph card', async () => {
