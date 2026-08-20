@@ -4,7 +4,12 @@ import * as schema from '@wingmic/db/schema';
 import { router, protectedProcedure } from '../trpc';
 import { toPendingAct } from '@/lib/acts/mapAction';
 import { polishDraft, type DraftIntent } from '@/lib/acts/draftAgent';
-import { chooseActChannel, intentForChannel } from '@/lib/acts/chooseActChannel';
+import {
+  chooseActChannel,
+  hasUsableIdentityValue,
+  intentForChannel,
+} from '@/lib/acts/chooseActChannel';
+import { linkedinProfileHref } from '@/lib/acts/linkedinHref';
 
 const actKindSchema = z.enum(['reminder', 'email', 'meeting', 'todo', 'intro']);
 const draftIntentSchema = z.enum([
@@ -109,11 +114,16 @@ export const actsRouter = router({
       const emailByEntityId = new Map<string, string>();
       const linkedinByEntityId = new Map<string, string>();
       for (const fact of idFacts) {
-        if (fact.key === 'email' && !emailByEntityId.has(fact.entityId)) {
-          emailByEntityId.set(fact.entityId, fact.value);
+        if (
+          fact.key === 'email' &&
+          hasUsableIdentityValue(fact.value) &&
+          !emailByEntityId.has(fact.entityId)
+        ) {
+          emailByEntityId.set(fact.entityId, fact.value.trim());
         }
         if (fact.key === 'linkedin' && !linkedinByEntityId.has(fact.entityId)) {
-          linkedinByEntityId.set(fact.entityId, fact.value);
+          const href = linkedinProfileHref(fact.value);
+          if (href) linkedinByEntityId.set(fact.entityId, href);
         }
       }
 
@@ -206,6 +216,8 @@ export const actsRouter = router({
           where: and(
             eq(schema.interactions.id, input.sourceInteractionId),
             eq(schema.interactions.userId, ctx.user.id),
+            eq(schema.interactions.status, 'committed'),
+            isNull(schema.interactions.deletedAt),
           ),
           columns: { id: true, transcript: true },
         });
@@ -221,10 +233,10 @@ export const actsRouter = router({
             inArray(schema.entityFacts.entityId, [input.targetEntityId]),
             inArray(schema.entityFacts.key, ['email', 'linkedin']),
           ),
-          columns: { key: true },
+          columns: { key: true, value: true },
         });
-        hasEmail = facts.some((f) => f.key === 'email');
-        hasLinkedin = facts.some((f) => f.key === 'linkedin');
+        hasEmail = facts.some((f) => f.key === 'email' && hasUsableIdentityValue(f.value));
+        hasLinkedin = facts.some((f) => f.key === 'linkedin' && Boolean(linkedinProfileHref(f.value)));
       }
 
       const channel = chooseActChannel({

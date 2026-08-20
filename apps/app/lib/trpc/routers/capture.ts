@@ -6,7 +6,8 @@ import { TRPCError } from '@trpc/server';
 import { transcribeEntities } from '@/lib/capture/transcribe-entities';
 import { resolveIntroEntityIds } from '@/lib/acts/mapAction';
 import { polishDraft } from '@/lib/acts/draftAgent';
-import { chooseActChannel, intentForChannel } from '@/lib/acts/chooseActChannel';
+import { chooseActChannel, hasUsableIdentityValue, intentForChannel } from '@/lib/acts/chooseActChannel';
+import { linkedinProfileHref } from '@/lib/acts/linkedinHref';
 import * as schema from '@wingmic/db/schema';
 
 export const captureRouter = router({
@@ -182,14 +183,18 @@ export const captureRouter = router({
                         inArray(schema.entityFacts.entityId, committedIds),
                         inArray(schema.entityFacts.key, ['email', 'linkedin']),
                       ),
-                      columns: { entityId: true, key: true },
+                      columns: { entityId: true, key: true, value: true },
                     })
                   : [];
               const emailByCommitted = new Set(
-                committedFacts.filter((f) => f.key === 'email').map((f) => f.entityId),
+                committedFacts
+                  .filter((f) => f.key === 'email' && hasUsableIdentityValue(f.value))
+                  .map((f) => f.entityId),
               );
               const linkedinByCommitted = new Set(
-                committedFacts.filter((f) => f.key === 'linkedin').map((f) => f.entityId),
+                committedFacts
+                  .filter((f) => f.key === 'linkedin' && Boolean(linkedinProfileHref(f.value)))
+                  .map((f) => f.entityId),
               );
 
               const actRows = await Promise.all(

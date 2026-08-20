@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { chooseActChannel, intentForChannel } from '../chooseActChannel';
+import { chooseActChannel, hasUsableIdentityValue, intentForChannel } from '../chooseActChannel';
 
 describe('chooseActChannel', () => {
   it('uses email when an address is on file', () => {
@@ -34,5 +34,10 @@ describe('chooseActChannel', () => {
     expect(intentForChannel('reminder')).toBe('reminder');
     expect(intentForChannel('meeting')).toBe('reminder');
     expect(intentForChannel('intro')).toBe('intro');
+  });
+
+  it('treats blank identity values as missing', () => {
+    expect(hasUsableIdentityValue('  ')).toBe(false);
+    expect(hasUsableIdentityValue('ada@example.com')).toBe(true);
   });
 });

@@ -109,7 +109,13 @@ export function templateDraft(input: PolishDraftInput): DraftOutput {
   const ctx = input.contextName?.trim();
   const seed = clampSeed(input.seedBody);
   const memo = excerpt(input.transcript);
-  const beat = seed || memo;
+  const story = memo || seed;
+  const ask =
+    seed &&
+    memo &&
+    !memo.toLowerCase().includes(seed.toLowerCase().slice(0, Math.min(48, seed.length)))
+      ? seed
+      : null;
   const channel = input.channel ?? 'email';
 
   switch (input.intent) {
@@ -118,60 +124,74 @@ export function templateDraft(input: PolishDraftInput): DraftOutput {
       return clampDraft({
         subject: `intro: ${pair}`,
         body: secondary
-          ? `wanted to intro you two${ctx ? ` (${ctx})` : ''}.\n\n${name} — ${beat || 'you crossed paths recently'}.\n${secondary} — sharing this so you can take it from here.`
-          : `wanted to make an intro${ctx ? ` around ${ctx}` : ''}.${beat ? `\n\n${beat}` : ''}`,
+          ? `wanted to intro you two${ctx ? ` (${ctx})` : ''}.\n\n${name} — ${story || 'you crossed paths recently'}.\n${secondary} — sharing this so you can take it from here.`
+          : `wanted to make an intro${ctx ? ` around ${ctx}` : ''}.${story ? `\n\n${story}` : ''}`,
       });
     }
     case 'recap':
       return clampDraft({
         subject: ctx ? `recap · ${ctx}` : 'event recap',
-        body: [beat, memo && memo !== beat ? memo : null]
-          .filter(Boolean)
-          .join('\n\n') || `quick recap notes from ${ctx || 'the event'} — capture follow-ups while they're fresh.`,
+        body: story || `quick recap notes from ${ctx || 'the event'} — capture follow-ups while they're fresh.`,
       });
     case 'warm-path':
       return clampDraft({
         subject: ctx ? `warm path · ${ctx}` : 'find a warm path',
         body:
-          beat ||
+          story ||
           `look for a warm intro into ${ctx || 'this company'} from people already in your graph.`,
       });
     case 'reminder':
       return clampDraft({
-        subject: (seed || (ctx ? `remind · ${ctx}` : `follow up · ${first}`)).slice(0, 60),
-        body: [`follow up with ${name}${ctx ? ` (${ctx})` : ''}.`, beat, memo && memo !== beat ? memo : null]
+        subject: (
+          ctx
+            ? `${channel === 'meeting' ? 'meet' : 'remind'} · ${ctx}`
+            : channel === 'meeting'
+              ? `meet · ${first}`
+              : `follow up · ${first}`
+        ).slice(0, 60),
+        body: [
+          channel === 'meeting'
+            ? `meeting with ${name}${ctx ? ` (${ctx})` : ''}.`
+            : `follow up with ${name}${ctx ? ` (${ctx})` : ''}.`,
+          story,
+          ask,
+        ]
           .filter(Boolean)
           .join('\n\n'),
       });
     case 'linkedin-note':
       return clampDraft({
         subject: `linkedin · ${first}`,
-        body: `hey ${first} — ${beat || 'great crossing paths'}${ctx ? ` (${ctx})` : ''}. would love to stay in touch.`,
+        body: [`hey ${first} — ${story || 'great crossing paths'}${ctx ? ` (${ctx})` : ''}.`, ask, 'would love to stay in touch.']
+          .filter(Boolean)
+          .join('\n\n'),
       });
     case 'memo':
       return clampDraft({
         subject: name !== 'there' ? `memo · ${first}` : 'memo',
-        body: [beat, memo && memo !== beat ? memo : null].filter(Boolean).join('\n\n') || 'note this while it is fresh.',
+        body: [story, ask].filter(Boolean).join('\n\n') || 'note this while it is fresh.',
       });
     case 'check-in':
     case 'follow-up': {
       if (channel === 'linkedin') {
         return clampDraft({
           subject: `linkedin · ${first}`,
-          body: `hey ${first} — ${beat || 'great meeting you'}${ctx ? ` at ${ctx}` : ''}.`,
+          body: [`hey ${first} — ${story || 'great meeting you'}${ctx ? ` at ${ctx}` : ''}.`, ask]
+            .filter(Boolean)
+            .join('\n\n'),
         });
       }
       if (channel === 'memo') {
         return clampDraft({
           subject: name !== 'there' ? `memo · ${first}` : 'memo',
-          body: [beat, memo && memo !== beat ? memo : null].filter(Boolean).join('\n\n') || 'note this while it is fresh.',
+          body: [story, ask].filter(Boolean).join('\n\n') || 'note this while it is fresh.',
         });
       }
       return clampDraft({
         subject: `great meeting you${name !== 'there' ? `, ${first}` : ''}`,
         body: [
-          `hey ${name} — ${beat || 'great meeting you'}${ctx ? ` at ${ctx}` : ''}.`,
-          memo && memo !== beat ? memo : null,
+          `hey ${name} — ${story || 'great meeting you'}${ctx ? ` at ${ctx}` : ''}.`,
+          ask,
           'wanted to follow up while it is fresh — ping me if useful to keep going.',
         ]
           .filter(Boolean)

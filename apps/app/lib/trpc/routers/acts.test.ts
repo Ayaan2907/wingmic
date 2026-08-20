@@ -1,7 +1,16 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import * as schema from '@wingmic/db/schema';
+
+vi.mock('@/lib/acts/draftAgent', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../../acts/draftAgent')>();
+  return {
+    ...mod,
+    polishDraft: async (input: Parameters<typeof mod.polishDraft>[0]) =>
+      mod.templateDraft(input),
+  };
+});
 
 import { actsRouter } from './acts';
 
@@ -65,6 +74,10 @@ describe('acts router', () => {
     });
     await client.execute({
       sql: `INSERT INTO entity VALUES ('e_li', ?, 'person', 'Grace Hopper', '[]', null, null, ?, ?, null)`,
+      args: [userId, now, now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity VALUES ('e_blank', ?, 'person', 'Blank Fact', '[]', null, null, ?, ?, null)`,
       args: [userId, now, now],
     });
   });
@@ -136,6 +149,18 @@ describe('acts router', () => {
     expect(row?.name).toBe('Grace Hopper');
     expect(row?.targetLinkedin).toBe('https://www.linkedin.com/in/grace');
     expect(row?.channel).toBe('linkedin');
+  });
+
+  it('ignores whitespace-only identifier facts when choosing a channel', async () => {
+    await client.execute({
+      sql: `INSERT INTO entity_fact VALUES ('fact_blank', 'e_blank', 'email', '   ', null, 90, null, ?)`,
+      args: [now],
+    });
+    await insertAct('act_blank_1', { target: 'e_blank' });
+    const result = await caller().list({ limit: 20 });
+    const row = result.acts.find((a) => a.id === 'act_blank_1');
+    expect(row?.targetEmail).toBeNull();
+    expect(row?.channel).toBe('memo');
   });
 
   it('omits targetEmail when the target entity is soft-deleted', async () => {
@@ -215,6 +240,23 @@ describe('acts router', () => {
     const row = listed.acts.find((a) => a.id === res.id);
     expect(row?.body.toLowerCase()).toContain('analytical engines');
     expect(row?.body.toLowerCase()).not.toBe('send the deck');
+  });
+
+  it('createDraft refuses a non-committed source interaction', async () => {
+    await client.execute({
+      sql: `INSERT INTO interaction VALUES (
+        'int_draft', ?, 'uncommitted memo',
+        ?, null, ?, null, null, null, null, null, 'draft', null
+      )`,
+      args: [userId, now, now],
+    });
+    const res = await caller().createDraft({
+      kind: 'email',
+      intent: 'follow-up',
+      targetEntityId: 'e_ada',
+      sourceInteractionId: 'int_draft',
+    });
+    expect(res.ok).toBe(false);
   });
 
   it('createDraft refuses unknown target entities', async () => {

@@ -2,6 +2,10 @@ export type ActKind = 'reminder' | 'email' | 'meeting' | 'todo' | 'intro';
 
 export type ActChannel = 'email' | 'linkedin' | 'reminder' | 'meeting' | 'intro' | 'memo';
 
+export function hasUsableIdentityValue(value: string | null | undefined): boolean {
+  return Boolean(value?.trim());
+}
+
 export function chooseActChannel(opts: {
   kind: ActKind;
   hasEmail: boolean;
@@ -15,9 +19,6 @@ export function chooseActChannel(opts: {
     case 'reminder':
       return 'reminder';
     case 'email':
-      if (opts.hasEmail) return 'email';
-      if (opts.hasLinkedin) return 'linkedin';
-      return 'memo';
     case 'todo':
       if (opts.hasEmail) return 'email';
       if (opts.hasLinkedin) return 'linkedin';

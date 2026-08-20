@@ -77,7 +77,7 @@ describe('ActCard', () => {
           actionKind: 'email',
           channel: 'linkedin',
           kind: 'linkedin',
-          targetLinkedin: 'https://www.linkedin.com/in/ada',
+          targetLinkedin: 'ada-lovelace',
           body: 'hey Ada — rust at the booth',
         }}
         onSent={onSent}
@@ -85,7 +85,11 @@ describe('ActCard', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /copy note/i }));
     expect(writeText).toHaveBeenCalledWith('hey Ada — rust at the booth');
-    expect(open).toHaveBeenCalled();
+    expect(open).toHaveBeenCalledWith(
+      'https://www.linkedin.com/in/ada-lovelace',
+      '_blank',
+      'noopener,noreferrer',
+    );
     expect(onSent).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });

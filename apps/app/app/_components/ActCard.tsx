@@ -11,6 +11,7 @@
 import * as React from 'react';
 import { buildIcs, mailtoHref } from '@/lib/acts/mapAction';
 import { chooseActChannel, type ActChannel } from '@/lib/acts/chooseActChannel';
+import { linkedinProfileHref } from '@/lib/acts/linkedinHref';
 import { PersonAvatar } from './entity/EntityAvatar';
 
 const accent = '#FFC452';
@@ -75,6 +76,7 @@ export function ActCard({
   const [editing, setEditing] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [editError, setEditError] = React.useState<string | null>(null);
+  const [copyError, setCopyError] = React.useState<string | null>(null);
   const [editBody, setEditBody] = React.useState(a.body ?? a.why);
   const [editSubject, setEditSubject] = React.useState(a.subject ?? '');
 
@@ -117,9 +119,11 @@ export function ActCard({
         return;
       }
       case 'linkedin': {
-        const href = a.targetLinkedin?.trim();
+        const href = linkedinProfileHref(a.targetLinkedin);
         if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-          void navigator.clipboard.writeText(body);
+          void navigator.clipboard.writeText(body).catch(() => {
+            setCopyError('could not copy — select the draft');
+          });
         }
         if (href) window.open(href, '_blank', 'noopener,noreferrer');
         return;
@@ -239,13 +243,13 @@ export function ActCard({
           >
             {sendLabel}
           </button>
-          {sendError ? (
+          {sendError || copyError ? (
             <span
               className="mono"
               role="alert"
               style={{ fontSize: 9, color: '#FF6B6B', letterSpacing: 0.3, textAlign: 'right' }}
             >
-              {sendError}
+              {sendError || copyError}
             </span>
           ) : null}
         </div>
@@ -296,7 +300,7 @@ export function ActCard({
             <div className="mono" style={{ fontSize: 10, color: 'var(--text-40)' }}>
               when · {a.whenHint}
             </div>
-          ) : a.why ? (
+          ) : a.body && a.why ? (
             <div className="mono" style={{ fontSize: 10, color: 'var(--text-40)' }}>
               {a.why}
             </div>
