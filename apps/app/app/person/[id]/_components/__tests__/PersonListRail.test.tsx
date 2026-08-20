@@ -39,7 +39,8 @@ describe('PersonListRail', () => {
   it('shows empty copy when the user has no people', () => {
     listState = { data: { people: [] }, isLoading: false };
     render(<PersonListRail />);
-    expect(screen.getByLabelText(/^people$/i)).toBeTruthy();
+    expect(screen.getByTestId('person-list-rail').className).toContain('desktop-pane');
+    expect(screen.getByTestId('person-list-rail').className).toContain('people-rail');
     expect(screen.getByText(/no people yet/i)).toBeTruthy();
     expect(screen.queryByText(/sarah chen/i)).toBeNull();
   });
