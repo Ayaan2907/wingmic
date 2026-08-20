@@ -7,7 +7,7 @@ export function canonicalizeLinkedin(raw: string): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
-  let input = trimmed.toLowerCase().replace(/^@/, '');
+  let input = trimmed.toLowerCase().replace(/^@/, '').replace(/\/+$/, '');
   if (/^in\/[a-z0-9_-]+$/.test(input)) {
     input = `https://www.linkedin.com/${input}`;
   } else if (!input.includes('.') && !input.includes('/')) {

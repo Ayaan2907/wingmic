@@ -8,6 +8,7 @@ describe('linkedinProfileHref', () => {
     );
     expect(linkedinProfileHref('ada-lovelace')).toBe('https://www.linkedin.com/in/ada-lovelace');
     expect(linkedinProfileHref('in/ada-lovelace')).toBe('https://www.linkedin.com/in/ada-lovelace');
+    expect(linkedinProfileHref('in/ada-lovelace/')).toBe('https://www.linkedin.com/in/ada-lovelace');
   });
 
   it('rejects company pages, extra path, foreign hosts, and blank values', () => {

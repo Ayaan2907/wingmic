@@ -33,6 +33,7 @@ describe('canonicalizeLinkedin', () => {
     expect(canonicalizeLinkedin('ada-lovelace')).toBe('https://www.linkedin.com/in/ada-lovelace');
     expect(canonicalizeLinkedin('@ada-lovelace')).toBe('https://www.linkedin.com/in/ada-lovelace');
     expect(canonicalizeLinkedin('in/ada-lovelace')).toBe('https://www.linkedin.com/in/ada-lovelace');
+    expect(canonicalizeLinkedin('in/ada-lovelace/')).toBe('https://www.linkedin.com/in/ada-lovelace');
   });
 
   it('rejects non-profile URLs', () => {
