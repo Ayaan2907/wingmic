@@ -35,9 +35,11 @@
   --rail-width: 248px;
   --nav-bar-height: 56px;
   --orb-protrusion: 54px;
-  --chrome-bottom: calc(var(--nav-bar-height) + var(--orb-protrusion) + env(safe-area-inset-bottom, 0px));
+  --dock-bottom-offset: 10px;
+  --chrome-bottom: calc(var(--nav-bar-height) + var(--orb-protrusion) + env(safe-area-inset-bottom, 0px) + var(--dock-bottom-offset));
+  --dock-control-clearance: calc(var(--nav-bar-height) + env(safe-area-inset-bottom, 0px) + var(--dock-bottom-offset) + 8px);
   --thread-scroll-pad: calc(var(--chrome-bottom) + 48px);
-  --chat-composer-bottom: calc(var(--nav-bar-height) + env(safe-area-inset-bottom, 0px) + 12px);
+  --chat-composer-bottom: calc(var(--nav-bar-height) + env(safe-area-inset-bottom, 0px) + var(--dock-bottom-offset) + 12px);
   --chat-composer-side-pad: 16px;
   --surface-max-width: 720px;
   --surface-max-width-compact: 640px;
@@ -301,19 +303,21 @@ a:focus-visible {
 
 .app-nav {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 8px;
+  right: 8px;
+  bottom: var(--dock-bottom-offset);
   height: var(--nav-bar-height);
   padding-top: 12px;
   padding-bottom: env(safe-area-inset-bottom);
   background: rgba(10, 10, 10, 0.92);
   backdrop-filter: blur(20px);
-  border-top: 1px solid var(--border-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
   display: flex;
   align-items: flex-start;
   z-index: 50;
   touch-action: manipulation;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.42);
 }
 
 /* Content gets bottom room for the bar on mobile. */
@@ -352,16 +356,14 @@ a:focus-visible {
 @media (min-width: 1120px) {
   :root {
     --thread-scroll-pad: calc(var(--chrome-bottom) + 42px);
+    --dock-bottom-offset: 14px;
     --chat-composer-side-pad: 20px;
   }
   .app-nav {
     left: 50%;
     right: auto;
     transform: translateX(-50%);
-    width: min(860px, calc(100% - 24px));
-    border: 1px solid var(--border-soft);
-    border-bottom: none;
-    border-radius: 14px 14px 0 0;
+    width: min(860px, calc(100% - 28px));
     padding-left: 8px;
     padding-right: 8px;
   }
