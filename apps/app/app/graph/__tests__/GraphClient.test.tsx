@@ -184,12 +184,12 @@ describe('GraphClient', () => {
     const attended = screen.getByTestId('graph-link-1');
     const discussed = screen.getByTestId('graph-link-2');
     expect(worksAt.getAttribute('data-rel')).toBe('works_at');
-    expect(worksAt.getAttribute('data-color')).toMatch(/^#/);
+    expect(worksAt.getAttribute('data-color')).toMatch(/^rgba\(/);
     expect(Number(worksAt.getAttribute('data-width'))).toBeGreaterThan(0);
     expect(attended.getAttribute('data-rel')).toBe('attended');
-    expect(attended.getAttribute('data-color')).toMatch(/^#/);
+    expect(attended.getAttribute('data-color')).toMatch(/^rgba\(/);
     expect(discussed.getAttribute('data-rel')).toBe('discussed');
-    expect(discussed.getAttribute('data-color')).toMatch(/^#/);
+    expect(discussed.getAttribute('data-color')).toMatch(/^rgba\(/);
   });
 
   it('keeps remaining edges after force-graph mutates ends and a chip toggles', () => {
@@ -216,6 +216,12 @@ describe('GraphClient', () => {
   it('paints on-canvas node labels via nodeCanvasObject', () => {
     render(<GraphClient data={DATA} />);
     expect(screen.getByTestId('force-graph').getAttribute('data-has-node-paint')).toBe('1');
+  });
+
+  it('renders toolbar and canvas controls outside the force graph', () => {
+    render(<GraphClient data={DATA} />);
+    expect(screen.getByTestId('graph-toolbar')).toBeTruthy();
+    expect(screen.getByTestId('graph-canvas-controls')).toBeTruthy();
   });
 
   it('highlights the matching canvas node when a search hit is picked', () => {

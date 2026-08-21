@@ -3,17 +3,14 @@
 // GraphClient — force-directed canvas of the user's entity graph (PR ι-graph).
 // Source of truth: docs/superpowers/plans/2026-06-06-v0.1.2-pr-iota-graph.md,
 // design/v2/proto-screens-b.jsx ScreenGraph + design.md §14.3.
-//
-// react-force-graph-2d touches `window`/canvas, so it MUST be dynamically
-// imported with `ssr: false` — a static import breaks SSR/build. The test
-// mocks `next/dynamic` so jsdom never instantiates the real canvas.
 
 import dynamic from 'next/dynamic';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ForceGraphMethods } from 'react-force-graph-2d';
 import { accent } from '@/app/chat/_components/tokens';
 import { trpc } from '@/lib/trpc/client';
+import { GraphCanvasControls } from './GraphCanvasControls';
 import { GraphHoverCard } from './GraphHoverCard';
 import { GraphSearch } from './GraphSearch';
 import {
@@ -33,11 +30,14 @@ import {
   GRAPH_COOLDOWN_TICKS,
   GRAPH_VELOCITY_DECAY,
   GRAPH_WARMUP_TICKS,
+  type GraphSpacingPreset,
 } from './graph-force';
 
 export type { GraphData, GraphLink, GraphNode, LinkRel, NodeKind };
 
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), { ssr: false });
+
+const ZOOM_STEP = 1.28;
 
 export function GraphClient({ data }: { data: GraphData }) {
   const router = useRouter();
@@ -52,9 +52,12 @@ export function GraphClient({ data }: { data: GraphData }) {
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [hovered, setHovered] = useState<GraphNode | null>(null);
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
+  const [spacing, setSpacing] = useState<GraphSpacingPreset>('normal');
+  const [viewportSize, setViewportSize] = useState({ width: 640, height: 480 });
   const hoveredRef = useRef<GraphNode | null>(null);
   const pointerRef = useRef(pointer);
   const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
   const hasFitRef = useRef(false);
 
   const selectNode = (node: GraphNode) => {
@@ -76,12 +79,9 @@ export function GraphClient({ data }: { data: GraphData }) {
     });
   };
 
-  // Filter nodes by active kinds; drop links whose endpoints fell away.
   const filtered = useMemo(() => {
     const nodes = data.nodes.filter((n) => active.has(n.kind));
     const visibleIds = new Set(nodes.map((n) => n.id));
-    // Copy + stringify ends so d3-force mutation of link.source/target
-    // cannot poison `data.links` or break the next filter pass.
     const links = data.links
       .filter(
         (l) => visibleIds.has(graphEndId(l.source)) && visibleIds.has(graphEndId(l.target)),
@@ -90,13 +90,11 @@ export function GraphClient({ data }: { data: GraphData }) {
         source: graphEndId(l.source),
         target: graphEndId(l.target),
         rel: l.rel,
+        hub: l.hub,
       }));
     return { nodes, links };
   }, [data, active]);
 
-  // Edges touching the selected node, for the desktop detail rail. Real data,
-  // derived from data.links. react-force-graph mutates link.source/target from
-  // id strings into node objects after first render, so normalise both.
   const nodeById = useMemo(() => new Map(data.nodes.map((n) => [n.id, n])), [data.nodes]);
   const neighborhood = useMemo(
     () => graphNeighborhoodIds(selected?.id ?? null, data.links),
@@ -113,8 +111,47 @@ export function GraphClient({ data }: { data: GraphData }) {
       });
   }, [selected, data.links, nodeById]);
 
+  const fitGraphToCanvas = useCallback(() => {
+    if (filtered.nodes.length === 0) return;
+    fgRef.current?.zoomToFit(400, 48);
+    hasFitRef.current = true;
+  }, [filtered.nodes.length]);
+
+  const reheatLayout = useCallback(() => {
+    hasFitRef.current = false;
+    configureGraphForces(fgRef.current, spacing);
+    (fgRef.current as { d3ReheatSimulation?: () => void } | undefined)?.d3ReheatSimulation?.();
+  }, [spacing]);
+
+  const handleZoomIn = () => {
+    const fg = fgRef.current as (ForceGraphMethods & { zoom?: () => number }) | undefined;
+    if (!fg?.zoom) return;
+    fg.zoom(fg.zoom() * ZOOM_STEP, 280);
+  };
+
+  const handleZoomOut = () => {
+    const fg = fgRef.current as (ForceGraphMethods & { zoom?: () => number }) | undefined;
+    if (!fg?.zoom) return;
+    fg.zoom(fg.zoom() / ZOOM_STEP, 280);
+  };
+
+  const handleReset = () => {
+    hasFitRef.current = false;
+    reheatLayout();
+    window.setTimeout(() => fitGraphToCanvas(), 520);
+  };
+
+  const handleFullscreen = () => {
+    const el = viewportRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+      return;
+    }
+    void el.requestFullscreen?.();
+  };
+
   useEffect(() => {
-    // react-force-graph redraws via refresh() at runtime; it is missing from ForceGraphMethods.
     const graph = fgRef.current as (ForceGraphMethods & { refresh?: () => void }) | undefined;
     graph?.refresh?.();
     if (!selected) return;
@@ -123,20 +160,30 @@ export function GraphClient({ data }: { data: GraphData }) {
       | undefined;
     if (node?.x == null || node.y == null) return;
     fgRef.current?.centerAt(node.x, node.y, 480);
-    fgRef.current?.zoom(2.4, 480);
+    fgRef.current?.zoom(2.2, 480);
   }, [selected, filtered.nodes]);
 
   useEffect(() => {
-    hasFitRef.current = false;
-    configureGraphForces(fgRef.current);
-    (fgRef.current as { d3ReheatSimulation?: () => void } | undefined)?.d3ReheatSimulation?.();
-  }, [filtered.nodes.length, filtered.links.length]);
+    reheatLayout();
+  }, [filtered.nodes.length, filtered.links.length, spacing, reheatLayout]);
 
-  const fitGraphToCanvas = () => {
-    if (hasFitRef.current || filtered.nodes.length === 0) return;
-    fgRef.current?.zoomToFit(480, 72);
-    hasFitRef.current = true;
-  };
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    if (typeof ResizeObserver === 'undefined') {
+      setViewportSize({ width: 800, height: 520 });
+      return;
+    }
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) {
+        setViewportSize({ width: Math.floor(width), height: Math.floor(height) });
+        hasFitRef.current = false;
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   if (data.nodes.length === 0) {
     return (
@@ -177,184 +224,181 @@ export function GraphClient({ data }: { data: GraphData }) {
   }
 
   return (
-    // Desktop (≥1120px) splits into [canvas | detail rail]; on mobile the
-    // rail is display:none and the selected node uses the floating card.
-    <div className="surface-split">
-    <main
-      className="surface-primary"
-      data-testid="graph-canvas"
-      data-highlighted-id={selected?.id ?? ''}
-      style={{
-        position: 'relative',
-        minHeight: '100dvh',
-        background: 'var(--bg-page)',
-        color: 'var(--ink)',
-        overflow: 'hidden',
-      }}
-      onMouseMove={(e) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        pointerRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-        if (hoveredRef.current) setPointer(pointerRef.current);
-      }}
-    >
-      {/* Filter chips + in-canvas search. Dropdown overflows the canvas. */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 16,
-          left: 16,
-          right: 16,
-          zIndex: 4,
-          display: 'flex',
-          gap: 8,
-          flexWrap: 'wrap',
-          alignItems: 'center',
-        }}
-      >
-        {FILTERS.map(({ kind, label }) => {
-          const on = active.has(kind);
-          return (
-            <button
-              key={kind}
-              type="button"
-              onClick={() => toggle(kind)}
-              aria-pressed={on}
-              className="mono"
-              style={{
-                fontSize: 11,
-                letterSpacing: 1,
-                textTransform: 'uppercase',
-                padding: '5px 11px',
-                borderRadius: 999,
-                border: `1px solid ${on ? KIND_COLOR[kind] : 'var(--border-soft)'}`,
-                background: on ? `${KIND_COLOR[kind]}22` : 'transparent',
-                color: on ? KIND_COLOR[kind] : 'var(--text-55)',
-                cursor: 'pointer',
-              }}
-            >
-              {label}
-            </button>
-          );
-        })}
-        <GraphSearch nodes={data.nodes} onSelect={selectNode} />
-      </div>
+    <div className="surface-split graph-shell">
+      <main className="surface-primary graph-surface">
+        <header className="graph-toolbar" data-testid="graph-toolbar">
+          <div className="graph-toolbar-filters">
+            {FILTERS.map(({ kind, label }) => {
+              const on = active.has(kind);
+              return (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => toggle(kind)}
+                  aria-pressed={on}
+                  className="mono"
+                  style={{
+                    fontSize: 11,
+                    letterSpacing: 1,
+                    textTransform: 'uppercase',
+                    padding: '5px 11px',
+                    borderRadius: 999,
+                    border: `1px solid ${on ? KIND_COLOR[kind] : 'var(--border-soft)'}`,
+                    background: on ? `${KIND_COLOR[kind]}22` : 'transparent',
+                    color: on ? KIND_COLOR[kind] : 'var(--text-55)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <GraphSearch nodes={data.nodes} onSelect={selectNode} />
+        </header>
 
-      <ForceGraph2D
-        ref={fgRef}
-        graphData={filtered}
-        warmupTicks={GRAPH_WARMUP_TICKS}
-        cooldownTicks={GRAPH_COOLDOWN_TICKS}
-        d3VelocityDecay={GRAPH_VELOCITY_DECAY}
-        onEngineStop={fitGraphToCanvas}
-        nodeColor={(n: any) => KIND_COLOR[(n as GraphNode).kind] ?? accent}
-        nodeRelSize={NODE_REL_SIZE}
-        nodeLabel={() => ''}
-        nodeCanvasObjectMode={() => 'replace'}
-        nodeCanvasObject={(n: any, ctx: CanvasRenderingContext2D, scale: number) =>
-          paintGraphNode(
-            n as GraphNode,
-            ctx,
-            scale,
-            selected?.id ?? null,
-            hovered?.id ?? null,
-            neighborhood,
-          )
-        }
-        nodePointerAreaPaint={(n: any, color: string, ctx: CanvasRenderingContext2D) =>
-          paintGraphNodePointerArea(n as GraphNode, color, ctx, selected?.id ?? null)
-        }
-        linkColor={(l: any) =>
-          paintGraphLinkColor(
-            (l as GraphLink).rel,
-            graphEndId((l as GraphLink).source),
-            graphEndId((l as GraphLink).target),
-            neighborhood,
-          )
-        }
-        linkWidth={(l: any) => linkWidthOf((l as GraphLink).rel)}
-        linkDirectionalArrowLength={4}
-        linkDirectionalArrowRelPos={1}
-        onNodeClick={(n: any) => selectNode(n as GraphNode)}
-        onNodeHover={(n: any) => {
-          const next = n ? (n as GraphNode) : null;
-          hoveredRef.current = next;
-          setHovered(next);
-          if (next) setPointer(pointerRef.current);
-        }}
-        backgroundColor="rgba(0,0,0,0)"
-      />
-
-      <GraphHoverCard node={hovered} x={pointer.x} y={pointer.y} />
-
-      {/* Selected-node floating card (above the nav on mobile). Hidden on
-          desktop — the persistent detail rail replaces it there. */}
-      {selected && (
         <div
-          className="graph-mobile-card"
-          style={{
-            position: 'absolute',
-            left: 16,
-            right: 16,
-            bottom: 96,
-            zIndex: 3,
-            maxWidth: 360,
-            margin: '0 auto',
-            padding: 16,
-            borderRadius: 14,
-            background: 'var(--bg-elev, #111)',
-            border: '1px solid var(--border-soft)',
-            boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+          ref={viewportRef}
+          className="graph-viewport"
+          data-testid="graph-canvas"
+          data-highlighted-id={selected?.id ?? ''}
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            pointerRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            if (hoveredRef.current) setPointer(pointerRef.current);
           }}
         >
-          <button
-            type="button"
-            onClick={() => setSelected(null)}
-            aria-label="close"
-            className="mono"
-            style={{
-              position: 'absolute',
-              top: 10,
-              right: 12,
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-55)',
-              cursor: 'pointer',
-              fontSize: 14,
+          <ForceGraph2D
+            ref={fgRef}
+            width={viewportSize.width}
+            height={viewportSize.height}
+            graphData={filtered}
+            warmupTicks={GRAPH_WARMUP_TICKS}
+            cooldownTicks={GRAPH_COOLDOWN_TICKS}
+            d3VelocityDecay={GRAPH_VELOCITY_DECAY}
+            onEngineStop={fitGraphToCanvas}
+            nodeColor={(n: any) => KIND_COLOR[(n as GraphNode).kind] ?? accent}
+            nodeRelSize={NODE_REL_SIZE}
+            nodeLabel={() => ''}
+            nodeCanvasObjectMode={() => 'replace'}
+            nodeCanvasObject={(n: any, ctx: CanvasRenderingContext2D, scale: number) =>
+              paintGraphNode(
+                n as GraphNode,
+                ctx,
+                scale,
+                selected?.id ?? null,
+                hovered?.id ?? null,
+                neighborhood,
+              )
+            }
+            nodePointerAreaPaint={(n: any, color: string, ctx: CanvasRenderingContext2D) =>
+              paintGraphNodePointerArea(n as GraphNode, color, ctx, selected?.id ?? null)
+            }
+            linkColor={(l: any) =>
+              paintGraphLinkColor(
+                (l as GraphLink).rel,
+                graphEndId((l as GraphLink).source),
+                graphEndId((l as GraphLink).target),
+                neighborhood,
+              )
+            }
+            linkWidth={(l: any) =>
+              linkWidthOf(
+                (l as GraphLink).rel,
+                neighborhood,
+                graphEndId((l as GraphLink).source),
+                graphEndId((l as GraphLink).target),
+              )
+            }
+            linkDirectionalArrowLength={0}
+            onNodeClick={(n: any) => selectNode(n as GraphNode)}
+            onNodeHover={(n: any) => {
+              const next = n ? (n as GraphNode) : null;
+              hoveredRef.current = next;
+              setHovered(next);
+              if (next) setPointer(pointerRef.current);
             }}
-          >
-            ×
-          </button>
-          <div
-            className="mono"
-            style={{
-              fontSize: 10,
-              letterSpacing: 1.5,
-              textTransform: 'uppercase',
-              color: KIND_COLOR[selected.kind],
-              marginBottom: 6,
-            }}
-          >
-            {selected.kind}
-          </div>
-          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>
-            {selected.label}
-          </div>
-          <a
-            href={'/' + selected.kind + '/' + selected.id}
-            style={{
-              color: accent,
-              fontSize: 14,
-              textDecoration: 'none',
-              fontWeight: 600,
-            }}
-          >
-            → open
-          </a>
-        </div>
-      )}
-    </main>
+            backgroundColor="rgba(0,0,0,0)"
+          />
 
-      {/* Desktop detail rail (proto-desktop.jsx ScreenDesktopGraph 265–291). */}
+          <GraphCanvasControls
+            spacing={spacing}
+            onSpacingChange={setSpacing}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onReset={handleReset}
+            onFullscreen={handleFullscreen}
+          />
+
+          <GraphHoverCard node={hovered} x={pointer.x} y={pointer.y} />
+
+          {selected && (
+            <div
+              className="graph-mobile-card"
+              style={{
+                position: 'absolute',
+                left: 16,
+                right: 16,
+                bottom: 16,
+                zIndex: 3,
+                maxWidth: 360,
+                margin: '0 auto',
+                padding: 16,
+                borderRadius: 14,
+                background: 'var(--bg-elev, #111)',
+                border: '1px solid var(--border-soft)',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                aria-label="close"
+                className="mono"
+                style={{
+                  position: 'absolute',
+                  top: 10,
+                  right: 12,
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-55)',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                }}
+              >
+                ×
+              </button>
+              <div
+                className="mono"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: 1.5,
+                  textTransform: 'uppercase',
+                  color: KIND_COLOR[selected.kind],
+                  marginBottom: 6,
+                }}
+              >
+                {selected.kind}
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>
+                {selected.label}
+              </div>
+              <a
+                href={'/' + selected.kind + '/' + selected.id}
+                style={{
+                  color: accent,
+                  fontSize: 14,
+                  textDecoration: 'none',
+                  fontWeight: 600,
+                }}
+              >
+                → open
+              </a>
+            </div>
+          )}
+        </div>
+      </main>
+
       <aside
         className="desktop-pane detail-rail"
         style={{ padding: '20px 18px', background: 'rgba(255,255,255,0.01)' }}
