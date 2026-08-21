@@ -22,12 +22,11 @@
 // slide-cancel hint, which only applies to the held-finger gesture.
 
 import { useCapture } from './CaptureProvider';
-import { TAB_BAR_HEIGHT_PX } from './BottomTabBar';
 
 const accent = '#FFC452';
 const coral = '#FF6B6B';
 
-const PHANTOM_BOTTOM_PX = TAB_BAR_HEIGHT_PX + 96;
+const PHANTOM_BOTTOM = 'calc(var(--chat-composer-bottom) + 88px)';
 
 export function RecordingOverlay() {
   const { recorder } = useCapture();
@@ -80,7 +79,7 @@ function PhantomBubble({ level, duration }: { level: number[]; duration: number 
       style={{
         position: 'fixed',
         left: '50%',
-        bottom: PHANTOM_BOTTOM_PX,
+        bottom: PHANTOM_BOTTOM,
         transform: 'translateX(-50%)',
         maxWidth: 'min(560px, calc(100% - 32px))',
         width: '86%',
@@ -94,6 +93,7 @@ function PhantomBubble({ level, duration }: { level: number[]; duration: number 
         animation: 'wm-rise 0.4s ease-out',
         zIndex: 56,
         pointerEvents: 'none',
+        contain: 'layout paint',
       }}
     >
       <div
@@ -154,7 +154,7 @@ function TapStopHint() {
       style={{
         position: 'fixed',
         left: '50%',
-        bottom: TAB_BAR_HEIGHT_PX + 44,
+        bottom: 'calc(var(--nav-bar-height) + env(safe-area-inset-bottom, 0px) + 32px)',
         transform: 'translateX(-50%)',
         pointerEvents: 'none',
         zIndex: 56,

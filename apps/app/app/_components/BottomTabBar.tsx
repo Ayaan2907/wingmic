@@ -143,6 +143,7 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
     >
       <button
         type="button"
+        className="capture-orb"
         aria-label={
           isActiveRec ? 'recording — tap to stop and send' : 'tap to record voice memo'
         }
@@ -157,7 +158,6 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
         onBlur={() => setIsHovered(false)}
         style={{
           position: 'relative',
-          top: -18,
           width: 52,
           height: 52,
           borderRadius: '50%',
@@ -172,7 +172,7 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
               ? '5px 5px 0 #000'
               : '3px 3px 0 #000',
           cursor: 'pointer',
-          touchAction: 'none',
+          touchAction: 'manipulation',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

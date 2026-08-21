@@ -37,6 +37,9 @@
   --orb-protrusion: 54px;
   --chrome-bottom: calc(var(--nav-bar-height) + var(--orb-protrusion) + env(safe-area-inset-bottom, 0px));
   --thread-scroll-pad: calc(var(--chrome-bottom) + 48px);
+  --chat-composer-bottom: calc(var(--nav-bar-height) + env(safe-area-inset-bottom, 0px) + 12px);
+  --chat-composer-side-pad: 16px;
+  --surface-max-width: 720px;
 }
 
 * {
@@ -301,7 +304,7 @@ a:focus-visible {
   right: 0;
   bottom: 0;
   height: var(--nav-bar-height);
-  padding-top: 16px;
+  padding-top: 12px;
   padding-bottom: env(safe-area-inset-bottom);
   background: rgba(10, 10, 10, 0.92);
   backdrop-filter: blur(20px);
@@ -312,9 +315,40 @@ a:focus-visible {
 }
 
 /* Content gets bottom room for the bar on mobile. */
-.app-content { padding-bottom: var(--chrome-bottom); min-height: 100dvh; }
+.app-content {
+  padding-bottom: var(--chrome-bottom);
+  min-height: 100dvh;
+}
+
+/* Shared mobile-first shell primitives for non-chat surfaces. */
+.surface-wrap {
+  width: 100%;
+  max-width: var(--surface-max-width);
+  margin: 0 auto;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.surface-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  backdrop-filter: blur(20px);
+  background: rgba(10, 10, 10, 0.85);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
 
 @media (min-width: 1120px) {
+  :root {
+    --thread-scroll-pad: 112px;
+    --chat-composer-bottom: 20px;
+    --chat-composer-side-pad: 20px;
+  }
   .app-nav {
     top: 0;
     right: auto;
@@ -328,9 +362,19 @@ a:focus-visible {
     border-top: none;
     border-right: 1px solid var(--border-soft);
   }
-  .app-content { padding-bottom: 0; padding-left: var(--rail-width); }
+  .app-content {
+    padding-bottom: 0;
+    padding-left: var(--rail-width);
+  }
   /* desktop: rail persists, in-page back arrow is redundant (design.md §14.2) */
   .app-backlink { display: none !important; }
+}
+
+@media (min-width: 768px) {
+  .surface-wrap {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
 }
 
 /* ── desktop two-pane surfaces (≥1120px) — proto-desktop.jsx ────────────
@@ -351,6 +395,30 @@ a:focus-visible {
   .desktop-pane.people-rail { width: 280px; border-right: 1px solid var(--border-soft); }
   /* the graph's mobile floating selected-card is redundant beside the rail */
   .graph-mobile-card { display: none; }
+}
+
+.chat-composer-shell {
+  position: fixed;
+  bottom: var(--chat-composer-bottom);
+  left: 0;
+  right: 0;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 10px var(--chat-composer-side-pad) 0;
+  z-index: 40;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, rgba(10,10,10,0) 0%, var(--bg-page) 28%, var(--bg-page) 100%);
+  pointer-events: none;
+}
+
+.capture-orb {
+  top: -18px;
+}
+
+@media (min-width: 1120px) {
+  .capture-orb {
+    top: 0;
+  }
 }
 
 /* ── graph page: toolbar + bounded canvas viewport ─────────────────────── */

@@ -9,6 +9,7 @@
 // "stays full opacity" carve-out.
 
 import Link from 'next/link';
+import { memo } from 'react';
 import { useCapture } from '@/app/_components/CaptureProvider';
 import { AskExchange } from './AskPrimitives';
 import { PersonCaptureCard } from './PersonCaptureCard';
@@ -71,7 +72,7 @@ export function ChatThread() {
         {visibleMessages.length === 0 && !recording && <WelcomeAgent />}
 
         {visibleMessages.map((m) => (
-          <MessageBubble
+          <MemoMessageBubble
             key={m.id}
             message={m}
             onRetry={() => retryBubble(m.id)}
@@ -326,6 +327,14 @@ function MessageBubble(props: MessageBubbleProps) {
     </>
   );
 }
+
+const MemoMessageBubble = memo(MessageBubble, (prev, next) => {
+  if (prev.message !== next.message) return false;
+  if (prev.pasteOpen !== next.pasteOpen) return false;
+  // Only the open paste editor cares about draft text churn.
+  if (prev.pasteOpen && prev.pasteDraft !== next.pasteDraft) return false;
+  return true;
+});
 
 // AgentReply — ack + extraction cards in-thread. Person rows stay here;
 // dump-to-/acts CTAs were removed (#146).

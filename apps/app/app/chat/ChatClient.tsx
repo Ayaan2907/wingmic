@@ -19,7 +19,7 @@ import { ChatHeader } from './_components/ChatHeader';
 import { ChatThread, UndoChip } from './_components/ChatThread';
 import { ChatEntityRail } from './_components/ChatEntityRail';
 import { CameraCapture } from './_components/CameraCapture';
-import { TAB_BAR_HEIGHT_PX, accent } from './_components/tokens';
+import { accent } from './_components/tokens';
 import type { ChatInitialItem } from './_components/types';
 
 interface ChatClientProps {
@@ -106,20 +106,8 @@ function ChatComposer() {
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       data-testid="chat-composer"
-      style={{
-        position: 'fixed',
-        bottom: TAB_BAR_HEIGHT_PX + 14,
-        left: 0,
-        right: 0,
-        maxWidth: 640,
-        margin: '0 auto',
-        padding: '10px 16px 0',
-        zIndex: 40,
-        boxSizing: 'border-box',
-        background:
-          'linear-gradient(180deg, rgba(10,10,10,0) 0%, var(--bg-page) 28%, var(--bg-page) 100%)',
-        pointerEvents: 'none',
-      }}
+      className="chat-composer-shell"
+      style={{ background: 'linear-gradient(180deg, rgba(10,10,10,0) 0%, var(--bg-page) 28%, var(--bg-page) 100%)' }}
     >
       {photoBindChoices && photoBindChoices.length > 1 ? (
         <div
@@ -217,6 +205,8 @@ function ChatComposer() {
               color: 'var(--text-55)',
               cursor: 'pointer',
               font: '700 12px Inter, system-ui, sans-serif',
+              minWidth: 28,
+              minHeight: 28,
             }}
           >
             ×
@@ -252,6 +242,8 @@ function ChatComposer() {
               color: 'var(--text-55)',
               cursor: 'pointer',
               font: '700 12px Inter, system-ui, sans-serif',
+              minWidth: 28,
+              minHeight: 28,
             }}
           >
             ×
@@ -295,6 +287,8 @@ function ChatComposer() {
               color: 'var(--text-55)',
               cursor: 'pointer',
               font: '700 12px Inter, system-ui, sans-serif',
+              minWidth: 28,
+              minHeight: 28,
             }}
           >
             ×
@@ -374,7 +368,7 @@ function ChatComposer() {
             background: 'transparent',
             border: 'none',
             color: 'var(--ink)',
-            fontSize: 14,
+            fontSize: 16,
             outline: 'none',
           }}
         />
