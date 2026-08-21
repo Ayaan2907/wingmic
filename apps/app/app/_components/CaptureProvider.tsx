@@ -112,7 +112,10 @@ export interface CaptureContextValue {
   attachmentBusy: boolean;
   attachmentError: string | null;
   photoBindChoices: OpenCaptureTarget[] | null;
-  attachFiles: (files: FileList | File[] | null) => Promise<void>;
+  attachFiles: (
+    files: FileList | File[] | null,
+    options?: { qrText?: string | null },
+  ) => Promise<void>;
   clearAttachment: () => void;
   choosePhotoBind: (target: OpenCaptureTarget) => void;
   choosePhotoUnassigned: () => void;
@@ -343,7 +346,10 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     setPhotoBindChoices(null);
   }
 
-  const attachFiles = useCallback(async (files: FileList | File[] | null) => {
+  const attachFiles = useCallback(async (
+    files: FileList | File[] | null,
+    options?: { qrText?: string | null },
+  ) => {
     const file = files && files[0];
     if (!file) return;
     const generation = attachmentGenerationRef.current + 1;
@@ -352,7 +358,10 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     setAttachmentBusy(true);
     setAttachmentError(null);
     try {
-      const compressed = await compressImageFile(file);
+      const compressed = await compressImageFile(
+        file,
+        options?.qrText !== undefined ? { qrText: options.qrText } : {},
+      );
       if (attachmentGenerationRef.current !== generation) return;
       attachmentBusyRef.current = false;
       setAttachmentBusy(false);
