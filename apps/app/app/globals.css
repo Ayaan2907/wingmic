@@ -40,6 +40,7 @@
   --chat-composer-bottom: calc(var(--nav-bar-height) + env(safe-area-inset-bottom, 0px) + 12px);
   --chat-composer-side-pad: 16px;
   --surface-max-width: 720px;
+  --surface-max-width-compact: 640px;
 }
 
 * {
@@ -329,6 +330,10 @@ a:focus-visible {
   padding-right: 16px;
 }
 
+.surface-wrap.surface-wrap-compact {
+  max-width: var(--surface-max-width-compact);
+}
+
 .surface-header {
   position: sticky;
   top: 0;
@@ -374,6 +379,13 @@ a:focus-visible {
   .surface-wrap {
     padding-left: 20px;
     padding-right: 20px;
+  }
+}
+
+@media (min-width: 1120px) {
+  .surface-wrap {
+    padding-left: 24px;
+    padding-right: 24px;
   }
 }
 

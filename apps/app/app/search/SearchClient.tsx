@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { useSearchParams } from 'next/navigation';
@@ -53,9 +53,10 @@ export default function SearchClient() {
     return () => clearTimeout(id);
   }, [q]);
 
+  const normalizedQuery = useMemo(() => debouncedQ.trim(), [debouncedQ]);
   const search = trpc.recall.query.useQuery(
-    { q: debouncedQ.trim(), limit: 20 },
-    { enabled: debouncedQ.trim().length > 0, staleTime: 60_000 },
+    { q: normalizedQuery, limit: 20 },
+    { enabled: normalizedQuery.length > 0, staleTime: 60_000 },
   );
 
   function onSubmit(e: FormEvent) {
@@ -63,7 +64,11 @@ export default function SearchClient() {
   }
 
   const entities = (search.data?.entities ?? []) as Entity[];
-  const hasQuery = debouncedQ.trim().length > 0;
+  const hasQuery = normalizedQuery.length > 0;
+  const groupedEntities = useMemo(
+    () => (grouping === 'recent' ? [] : groupEntities(entities, grouping)),
+    [entities, grouping],
+  );
 
   return (
     <main
@@ -76,14 +81,14 @@ export default function SearchClient() {
       }}
     >
       <div
+        className="surface-wrap"
         style={{
           maxWidth: 720,
-          width: '100%',
-          margin: '0 auto',
-          padding: '32px 20px 96px',
+          paddingTop: 20,
+          paddingBottom: 96,
           display: 'flex',
           flexDirection: 'column',
-          gap: 24,
+          gap: 18,
         }}
       >
         <div>
@@ -123,8 +128,9 @@ export default function SearchClient() {
             autoFocus
             style={{
               flex: 1,
-              padding: '14px 16px',
-              borderRadius: 10,
+              minHeight: 48,
+              padding: '12px 14px',
+              borderRadius: 12,
               background: 'var(--surface-2)',
               border: '1px solid var(--border-mid)',
               color: 'var(--ink)',
@@ -136,7 +142,7 @@ export default function SearchClient() {
         </form>
 
         {/* Segmented control — regroups one result set, no new query. */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {GROUPINGS.map((g) => {
             const active = grouping === g.key;
             return (
@@ -147,7 +153,8 @@ export default function SearchClient() {
                 onClick={() => setGrouping(g.key)}
                 className="mono"
                 style={{
-                  padding: '7px 13px',
+                  minHeight: 40,
+                  padding: '8px 14px',
                   borderRadius: 999,
                   fontSize: 11,
                   letterSpacing: 1,
@@ -254,7 +261,7 @@ export default function SearchClient() {
             ) : grouping === 'recent' ? (
               entities.map((e) => <ResultCard key={e.id} entity={e} />)
             ) : (
-              groupEntities(entities, grouping).map((group) => (
+              groupedEntities.map((group) => (
                 <ClusterGroup key={group.key} label={group.label} entities={group.entities} />
               ))
             )}
