@@ -40,10 +40,8 @@ type Capture = {
   interactionId: string;
   capturedAt: string; // ISO
   transcript: string;
-  // eventName intentionally omitted — there's no reliable interaction→event
-  // mapping today (sourceInteractionId lives on entityFacts/entityTopics but
-  // not on entityEvents). Don't fake it from events[0]; add the proper mapping
-  // when the extractor stamps event linkage onto interactions.
+  eventName?: string;
+  jpegBase64?: string | null;
 };
 
 type Related = {
@@ -190,29 +188,20 @@ async function loadPerson(
   const topicInteractionIds = et
     .map((x: any) => x.sourceInteractionId)
     .filter((x: string | null): x is string => !!x);
-  const interactionIds = [...new Set([...factInteractionIds, ...topicInteractionIds])];
+  const interactionIds = [
+    ...new Set([...factInteractionIds, ...topicInteractionIds]),
+  ];
+  interactionIds.push(
+    ...(await extraAttachmentInteractionIds(db, { entityIds: [entityId] })),
+  );
+  const uniqueInteractionIds = [...new Set(interactionIds)];
 
-  const interactions = interactionIds.length
-    ? await db.query.interactions.findMany({
-        where: and(
-          inArray(schema.interactions.id, interactionIds),
-          eq(schema.interactions.userId, userId),
-          isNull(schema.interactions.deletedAt),
-        ),
-        orderBy: desc(schema.interactions.capturedAt),
-        limit: 5,
-      })
-    : [];
-
-  const captures: Capture[] = interactions.map((i: any) => ({
-    interactionId: i.id,
-    capturedAt: (toDate(i.capturedAt) ?? new Date()).toISOString(),
-    transcript: i.transcript ?? '',
-  }));
+  const interactions = await loadOwnedInteractions(db, userId, uniqueInteractionIds);
+  const captures = await attachCaptureMedia(db, interactions, { entityId });
 
   // Stats
   const edgesCount = ec.length + ee.length + et.length;
-  const commits = interactionIds.length;
+  const commits = uniqueInteractionIds.length;
   const mostRecent = interactions[0] ? toDate(interactions[0].capturedAt) : null;
   const since = daysSince(mostRecent);
 
@@ -411,24 +400,13 @@ async function loadCompany(db: DB, userId: string, companyId: string) {
       ].filter((x: string | null): x is string => !!x),
     ),
   ];
+  interactionIds.push(
+    ...(await extraAttachmentInteractionIds(db, { entityIds: myEntityIds })),
+  );
+  const uniqueInteractionIds = [...new Set(interactionIds)];
 
-  const interactions = interactionIds.length
-    ? await db.query.interactions.findMany({
-        where: and(
-          inArray(schema.interactions.id, interactionIds),
-          eq(schema.interactions.userId, userId),
-          isNull(schema.interactions.deletedAt),
-        ),
-        orderBy: desc(schema.interactions.capturedAt),
-        limit: 5,
-      })
-    : [];
-
-  const captures: Capture[] = interactions.map((i: any) => ({
-    interactionId: i.id,
-    capturedAt: (toDate(i.capturedAt) ?? new Date()).toISOString(),
-    transcript: i.transcript ?? '',
-  }));
+  const interactions = await loadOwnedInteractions(db, userId, uniqueInteractionIds);
+  const captures = await attachCaptureMedia(db, interactions, {});
 
   // Topics raised
   const topicIds = [...new Set(topicLinks.map((t: any) => t.topicId as string))];
@@ -449,7 +427,7 @@ async function loadCompany(db: DB, userId: string, companyId: string) {
     } satisfies DetailSub,
     stats: [
       { key: 'you know', value: String(youKnow) },
-      { key: 'commits', value: String(interactionIds.length) },
+      { key: 'commits', value: String(uniqueInteractionIds.length) },
       { key: 'last touch', value: daysSince(mostRecent) == null ? '—' : `${daysSince(mostRecent)}d` },
     ] satisfies DetailStats,
     captures,
@@ -543,25 +521,19 @@ async function loadEvent(db: DB, userId: string, eventId: string) {
       ].filter((x: string | null): x is string => !!x),
     ),
   ];
+  interactionIds.push(
+    ...(await extraAttachmentInteractionIds(db, {
+      entityIds: myEntityIds,
+      eventId,
+    })),
+  );
+  const uniqueInteractionIds = [...new Set(interactionIds)];
 
-  const interactions = interactionIds.length
-    ? await db.query.interactions.findMany({
-        where: and(
-          inArray(schema.interactions.id, interactionIds),
-          eq(schema.interactions.userId, userId),
-          isNull(schema.interactions.deletedAt),
-        ),
-        orderBy: desc(schema.interactions.capturedAt),
-        limit: 5,
-      })
-    : [];
-
-  const captures: Capture[] = interactions.map((i: any) => ({
-    interactionId: i.id,
-    capturedAt: (toDate(i.capturedAt) ?? new Date()).toISOString(),
-    transcript: i.transcript ?? '',
+  const interactions = await loadOwnedInteractions(db, userId, uniqueInteractionIds);
+  const captures = await attachCaptureMedia(db, interactions, {
     eventName: event.name,
-  }));
+    eventId,
+  });
 
   const topicIds = [...new Set(topicLinks.map((t: any) => t.topicId as string))];
   const topics = topicIds.length
@@ -585,7 +557,7 @@ async function loadEvent(db: DB, userId: string, eventId: string) {
     } satisfies DetailSub,
     stats: [
       { key: 'people met', value: String(myEntities.length) },
-      { key: 'commits', value: String(interactionIds.length) },
+      { key: 'commits', value: String(uniqueInteractionIds.length) },
       { key: 'topics', value: String(topics.length) },
     ] satisfies DetailStats,
     captures,
@@ -598,6 +570,85 @@ async function loadEvent(db: DB, userId: string, eventId: string) {
     })) satisfies Related[],
     topics: topics.map((t: any) => ({ id: t.id, name: t.name })),
   };
+}
+
+async function extraAttachmentInteractionIds(
+  db: DB,
+  opts: { entityIds?: string[]; eventId?: string },
+): Promise<string[]> {
+  const ids: string[] = [];
+  if (opts.entityIds && opts.entityIds.length > 0) {
+    const rows = await db.query.interactionAttachments.findMany({
+      where: inArray(schema.interactionAttachments.entityId, opts.entityIds),
+      columns: { interactionId: true },
+    });
+    ids.push(...rows.map((r) => r.interactionId));
+  }
+  if (opts.eventId) {
+    const rows = await db.query.interactionAttachments.findMany({
+      where: eq(schema.interactionAttachments.eventId, opts.eventId),
+      columns: { interactionId: true },
+    });
+    ids.push(...rows.map((r) => r.interactionId));
+  }
+  return ids;
+}
+
+async function loadOwnedInteractions(
+  db: DB,
+  userId: string,
+  interactionIds: string[],
+) {
+  if (interactionIds.length === 0) return [];
+  return db.query.interactions.findMany({
+    where: and(
+      inArray(schema.interactions.id, interactionIds),
+      eq(schema.interactions.userId, userId),
+      isNull(schema.interactions.deletedAt),
+    ),
+    orderBy: desc(schema.interactions.capturedAt),
+    limit: 5,
+  });
+}
+
+async function attachCaptureMedia(
+  db: DB,
+  interactions: Array<{ id: string; capturedAt: Date | number | null; transcript: string | null }>,
+  opts: { eventName?: string; entityId?: string; eventId?: string },
+): Promise<Capture[]> {
+  if (interactions.length === 0) return [];
+  const rows = await db.query.interactionAttachments.findMany({
+    where: inArray(
+      schema.interactionAttachments.interactionId,
+      interactions.map((i) => i.id),
+    ),
+    columns: {
+      interactionId: true,
+      entityId: true,
+      eventId: true,
+      jpegBase64: true,
+    },
+  });
+  const byInteraction = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const list = byInteraction.get(row.interactionId) ?? [];
+    list.push(row);
+    byInteraction.set(row.interactionId, list);
+  }
+  return interactions.map((i) => {
+    const atts = byInteraction.get(i.id) ?? [];
+    const preferred =
+      atts.find((a) => opts.entityId && a.entityId === opts.entityId) ??
+      atts.find((a) => opts.eventId && a.eventId === opts.eventId) ??
+      atts[0];
+    return {
+      interactionId: i.id,
+      capturedAt: (toDate(i.capturedAt) ?? new Date()).toISOString(),
+      transcript: i.transcript ?? '',
+      ...(opts.eventName ? { eventName: opts.eventName } : {}),
+      jpegBase64: preferred?.jpegBase64 ?? null,
+    };
+  });
 }
 
 function firstFactValue(

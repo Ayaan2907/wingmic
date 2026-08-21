@@ -70,6 +70,12 @@ const detail = {
       capturedAt: new Date('2026-05-30T14:32:00Z').toISOString(),
       transcript: 'met sarah at devconnect, rust lead at acme',
     },
+    {
+      interactionId: 'it_photo',
+      capturedAt: new Date('2026-08-20T17:24:00Z').toISOString(),
+      transcript: 'attached a photo',
+      jpegBase64: 'aGVsbG93aW5nbWljLXRlc3QtcGhvdG8tZGF0YQ==',
+    },
   ],
   followups: [],
   related: [
@@ -104,6 +110,12 @@ describe('PersonDetailClient', () => {
     const caps = getAllByTestId('entity-capture');
     expect(caps.length).toBeGreaterThan(0);
     expect(caps[0]!.textContent).toContain('met sarah at devconnect');
+    const photo = caps.find((el) => el.textContent?.includes('attached a photo'));
+    expect(photo).toBeTruthy();
+    const img = photo!.querySelector('img[alt="attached photo"]') as HTMLImageElement | null;
+    expect(img?.getAttribute('src')).toContain(
+      'data:image/jpeg;base64,aGVsbG93aW5nbWljLXRlc3QtcGhvdG8tZGF0YQ==',
+    );
     // related rows wired to the right hrefs
     const rows = getAllByTestId('entity-related-row');
     expect(rows.length).toBe(2);

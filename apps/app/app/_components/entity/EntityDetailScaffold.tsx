@@ -25,6 +25,7 @@ export interface EntityCapture {
   capturedAt: string;
   transcript: string;
   eventName?: string | null;
+  jpegBase64?: string | null;
 }
 
 export interface EntityFollowup {
@@ -559,6 +560,22 @@ function CaptureCard({ capture }: { capture: EntityCapture }) {
       >
         {excerpt}
       </div>
+      {capture.jpegBase64 ? (
+        // stored jpeg from this user's capture; next/image does not take data urls
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          alt="attached photo"
+          src={`data:image/jpeg;base64,${capture.jpegBase64}`}
+          style={{
+            width: '100%',
+            maxHeight: 220,
+            objectFit: 'cover',
+            borderRadius: 10,
+            marginTop: 10,
+            border: '1px solid var(--border-soft, rgba(255,255,255,0.08))',
+          }}
+        />
+      ) : null}
     </div>
   );
 }
