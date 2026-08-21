@@ -292,6 +292,10 @@ For each PersonCandidate from the extractor:
   Follow-up captures write parentInteractionId + threadRootId
   (parent.threadRootId ?? parent.id). Append-only; parent transcript is not mutated.
 
+  Spoken or pasted LinkedIn /in/{handle} URLs are harvested before topic
+  ranking and stored as a linkedin fact on the bound person. URL tokens
+  (https, linkedin, the handle) are not topics. We never fetch LinkedIn HTML.
+
   normalizePersonName = lowercase tokens, punctuation stripped, space-joined.
   Partial names ("Tomo" vs "Tomo Matsuo") do NOT auto-link.
 
