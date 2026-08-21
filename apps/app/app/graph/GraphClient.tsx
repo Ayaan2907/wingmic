@@ -19,7 +19,6 @@ import { GraphSearch } from './GraphSearch';
 import {
   FILTERS,
   KIND_COLOR,
-  NODE_PAINT_RADIUS,
   NODE_REL_SIZE,
   linkWidthOf,
   paintGraphLinkColor,
@@ -29,6 +28,12 @@ import {
 import type { GraphData, GraphLink, GraphNode, LinkRel, NodeKind } from './graph-types';
 import { graphEndId } from './graph-types';
 import { graphNeighborhoodIds } from './graph-node-label';
+import {
+  configureGraphForces,
+  GRAPH_COOLDOWN_TICKS,
+  GRAPH_VELOCITY_DECAY,
+  GRAPH_WARMUP_TICKS,
+} from './graph-force';
 
 export type { GraphData, GraphLink, GraphNode, LinkRel, NodeKind };
 
@@ -50,6 +55,7 @@ export function GraphClient({ data }: { data: GraphData }) {
   const hoveredRef = useRef<GraphNode | null>(null);
   const pointerRef = useRef(pointer);
   const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
+  const hasFitRef = useRef(false);
 
   const selectNode = (node: GraphNode) => {
     setActive((prev) => {
@@ -117,19 +123,20 @@ export function GraphClient({ data }: { data: GraphData }) {
       | undefined;
     if (node?.x == null || node.y == null) return;
     fgRef.current?.centerAt(node.x, node.y, 480);
-    fgRef.current?.zoom(3.1, 480);
+    fgRef.current?.zoom(2.4, 480);
   }, [selected, filtered.nodes]);
 
   useEffect(() => {
-    const graph = fgRef.current as ForceGraphMethods | undefined;
-    if (!graph?.d3Force) return;
-    const charge = graph.d3Force('charge');
-    charge?.strength?.(-180);
-    const link = graph.d3Force('link');
-    link?.distance?.(70);
-    const collide = graph.d3Force('collide');
-    collide?.radius?.(NODE_PAINT_RADIUS + 8);
-  }, [filtered.nodes.length]);
+    hasFitRef.current = false;
+    configureGraphForces(fgRef.current);
+    (fgRef.current as { d3ReheatSimulation?: () => void } | undefined)?.d3ReheatSimulation?.();
+  }, [filtered.nodes.length, filtered.links.length]);
+
+  const fitGraphToCanvas = () => {
+    if (hasFitRef.current || filtered.nodes.length === 0) return;
+    fgRef.current?.zoomToFit(480, 72);
+    hasFitRef.current = true;
+  };
 
   if (data.nodes.length === 0) {
     return (
@@ -235,6 +242,10 @@ export function GraphClient({ data }: { data: GraphData }) {
       <ForceGraph2D
         ref={fgRef}
         graphData={filtered}
+        warmupTicks={GRAPH_WARMUP_TICKS}
+        cooldownTicks={GRAPH_COOLDOWN_TICKS}
+        d3VelocityDecay={GRAPH_VELOCITY_DECAY}
+        onEngineStop={fitGraphToCanvas}
         nodeColor={(n: any) => KIND_COLOR[(n as GraphNode).kind] ?? accent}
         nodeRelSize={NODE_REL_SIZE}
         nodeLabel={() => ''}

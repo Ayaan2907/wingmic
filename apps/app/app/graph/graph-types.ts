@@ -7,6 +7,8 @@ export type GraphLink = {
   source: string | { id: string };
   target: string | { id: string };
   rel: LinkRel;
+  /** company/event → topic hub edge (longer link distance in layout). */
+  hub?: boolean;
 };
 export type GraphData = { nodes: GraphNode[]; links: GraphLink[] };
 

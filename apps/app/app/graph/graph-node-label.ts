@@ -1,7 +1,5 @@
 /** Canvas-facing label helpers for graph nodes. */
 
-export const GRAPH_CAPTION_ZOOM_MIN = 1.35;
-
 export function graphNodeInitials(label: string): string {
   const parts = label.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '?';
@@ -31,10 +29,9 @@ export function shouldShowGraphNodeCaption(
   nodeId: string,
   selectedId: string | null,
   hoveredId: string | null,
-  globalScale: number,
+  _globalScale: number,
 ): boolean {
-  if (selectedId === nodeId || hoveredId === nodeId) return true;
-  return globalScale >= GRAPH_CAPTION_ZOOM_MIN;
+  return selectedId === nodeId || hoveredId === nodeId;
 }
 
 /** Selected node + 1-hop neighbors; empty when nothing selected. */
