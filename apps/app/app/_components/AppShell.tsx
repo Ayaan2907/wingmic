@@ -52,7 +52,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <div className="app-content">
+      <a href="#main-content" className="skip-link">
+        skip to content
+      </a>
+      <div className="app-content" id="main-content">
         {showCalendarNudge ? <CalendarSettingsNudge /> : null}
         {children}
       </div>

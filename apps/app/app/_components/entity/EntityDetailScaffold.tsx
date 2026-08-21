@@ -333,11 +333,11 @@ function TopRow() {
         ← back
       </Link>
       <div style={{ display: 'flex', gap: 6 }}>
-        <ChromeBtn href="/" label="graph">
+        <ChromeBtn href="/graph" label="graph">
           ◈
         </ChromeBtn>
-        <ChromeBtn href="/" label="settings">
-          ⚙
+        <ChromeBtn href="/settings" label="settings">
+          set
         </ChromeBtn>
       </div>
     </div>
@@ -361,8 +361,8 @@ function ChromeBtn({
       href={href}
       aria-label={label}
       style={{
-        width: 32,
-        height: 32,
+        minWidth: 44,
+        minHeight: 44,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -371,7 +371,10 @@ function ChromeBtn({
         border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
         color: 'var(--text-55)',
         textDecoration: 'none',
-        fontSize: 14,
+        fontSize: label === 'settings' ? 10 : 14,
+        fontFamily: label === 'settings' ? 'JetBrains Mono, monospace' : undefined,
+        letterSpacing: label === 'settings' ? 0.5 : undefined,
+        textTransform: label === 'settings' ? 'uppercase' as const : undefined,
       }}
     >
       {children}

@@ -167,6 +167,26 @@ export default function SearchClient() {
           })}
         </div>
 
+        {search.isFetching && hasQuery && (
+          <div
+            className="mono"
+            role="status"
+            aria-live="polite"
+            style={{
+              padding: '12px 14px',
+              borderRadius: 10,
+              background: 'var(--surface-1)',
+              border: '1px solid var(--border-soft)',
+              color: 'var(--text-55)',
+              fontSize: 11,
+              letterSpacing: 1,
+              textTransform: 'uppercase',
+            }}
+          >
+            searching…
+          </div>
+        )}
+
         {search.error && (
           <div
             style={{

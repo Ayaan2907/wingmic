@@ -130,10 +130,12 @@ function PhantomBubble({ level, duration }: { level: number[]; duration: number 
             key={i}
             style={{
               width: 3,
-              height: Math.max(4, Math.round(4 + v * 34)),
+              height: 38,
               background: accent,
               borderRadius: 2,
-              transition: 'height 0.12s ease-out',
+              transform: `scaleY(${Math.max(0.1, (4 + v * 34) / 38)})`,
+              transformOrigin: 'bottom',
+              transition: 'transform 0.12s ease-out',
             }}
           />
         ))}

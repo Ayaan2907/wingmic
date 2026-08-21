@@ -46,13 +46,9 @@ export function ChatThread() {
     recorder.status === 'cancel_armed' ||
     recorder.status === 'locked';
 
-  // β₁ thread-dimming: the message list dims while the mic is hot. The
-  // live phantom bubble lives in the global RecordingOverlay (above this
-  // surface in the layer stack), so the dim applies cleanly to the list.
-  const dimStyle: React.CSSProperties = {
-    opacity: recording ? 0.4 : 1,
+  // RecordingOverlay owns the dim layer globally — avoid double-dimming here.
+  const threadStyle: React.CSSProperties = {
     pointerEvents: recording ? 'none' : 'auto',
-    transition: 'opacity 180ms ease-out',
     display: 'flex',
     flexDirection: 'column',
     gap: 18,
@@ -64,14 +60,14 @@ export function ChatThread() {
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        padding: '20px 16px 200px',
+        padding: '20px 16px var(--thread-scroll-pad, 200px)',
         maxWidth: 640,
         width: '100%',
         margin: '0 auto',
         gap: 18,
       }}
     >
-      <div style={dimStyle}>
+      <div style={threadStyle}>
         {visibleMessages.length === 0 && !recording && <WelcomeAgent />}
 
         {visibleMessages.map((m) => (
@@ -536,8 +532,7 @@ function FailedBubble(props: MessageBubbleProps) {
         padding: '14px 16px',
         borderRadius: 14,
         background: 'rgba(255,107,107,0.06)',
-        border: '1px solid rgba(255,107,107,0.25)',
-        borderLeft: `3px solid ${coral}`,
+        border: '1px solid rgba(255,107,107,0.35)',
         display: 'flex',
         flexDirection: 'column',
         gap: 10,

@@ -13,6 +13,7 @@ export function CommandPalette() {
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState('');
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -28,7 +29,28 @@ export function CommandPalette() {
   }, []);
 
   React.useEffect(() => {
-    if (open) inputRef.current?.focus();
+    if (!open) return;
+    inputRef.current?.focus();
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+        'input, button, [href], [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
   }, [open]);
 
   if (!open) return null;
@@ -38,27 +60,56 @@ export function CommandPalette() {
     if (!term) return;
     setOpen(false);
     setQ('');
-    // /search ships in PR θ; typedRoutes can't know it yet, so cast the
-    // dynamic href (matches the plain-<a> typedRoutes dodge used elsewhere).
     router.push(`/search?q=${encodeURIComponent(term)}` as Route);
   }
 
   return (
     <div
       role="dialog"
+      aria-modal="true"
       aria-label="command palette"
       onClick={() => setOpen(false)}
-      style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '18vh', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 100,
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        paddingTop: '18vh',
+        background: 'rgba(0,0,0,0.6)',
+        backdropFilter: 'blur(4px)',
+      }}
     >
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(560px, 92vw)', background: '#0e0e12', border: '1px solid var(--border-mid, rgba(255,255,255,0.1))', borderRadius: 18, boxShadow: '0 20px 50px rgba(0,0,0,0.6)', padding: 14 }}>
+      <div
+        ref={panelRef}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 'min(560px, 92vw)',
+          background: 'var(--bg-raised)',
+          border: '1px solid var(--border-mid)',
+          borderRadius: 18,
+          boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
+          padding: 14,
+        }}
+      >
         <input
           ref={inputRef}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submit();
+          }}
           placeholder="search your graph…  e.g. who at acme works on rust?"
           aria-label="search your graph"
-          style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: 'var(--ink)', fontFamily: 'JetBrains Mono, monospace', fontSize: 14 }}
+          style={{
+            width: '100%',
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--ink)',
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: 14,
+          }}
         />
       </div>
     </div>

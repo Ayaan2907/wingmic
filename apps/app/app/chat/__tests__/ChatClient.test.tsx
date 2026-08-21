@@ -260,7 +260,7 @@ describe('ChatClient', () => {
     const composer = screen.getByTestId('chat-composer');
     expect(composer.style.background).toMatch(/var\(--bg-page\)|#0a0a0a/);
     const pill = composer.firstElementChild as HTMLElement;
-    expect(pill.style.background).toMatch(/#141414|rgb\(20,\s*20,\s*20\)/);
+    expect(pill.style.background).toMatch(/var\(--bg-card\)|#141414|rgb\(20,\s*20,\s*20\)/);
   });
 
   it('runs the full record → transcribe → commit cycle and renders a committed bubble + graph card', async () => {
@@ -1079,7 +1079,7 @@ describe('ChatClient', () => {
     });
   });
 
-  it('thread dims (opacity 0.4, pointer-events none) when recorder transitions to recording', async () => {
+  it('thread blocks pointer events when recorder transitions to recording', async () => {
     renderChat({
       userName: 'ada',
       initialThread: [
@@ -1087,26 +1087,20 @@ describe('ChatClient', () => {
       ],
     });
     const pastBubble = screen.getByText('past memo one');
-    // Walk up to the dim wrapper — it's the parent div with opacity:1 initially.
-    const dimWrapper = pastBubble.closest('div[style*="opacity"]') as HTMLElement | null;
-    expect(dimWrapper).toBeTruthy();
-    // Idle: opacity 1, pointer-events auto
-    expect(dimWrapper!.style.opacity).toBe('1');
-    expect(dimWrapper!.style.pointerEvents).toBe('auto');
+    const threadWrapper = pastBubble.closest('div[style*="pointer-events"]') as HTMLElement | null;
+    expect(threadWrapper).toBeTruthy();
+    expect(threadWrapper!.style.pointerEvents).toBe('auto');
 
-    // Transition the recorder into a recording status.
     await act(async () => {
       setStatusHook?.('recording');
       await Promise.resolve();
     });
 
-    // After transition, the same wrapper should have opacity 0.4.
-    const dimWrapperAfter = screen
+    const threadWrapperAfter = screen
       .getByText('past memo one')
-      .closest('div[style*="opacity"]') as HTMLElement | null;
-    expect(dimWrapperAfter).toBeTruthy();
-    expect(dimWrapperAfter!.style.opacity).toBe('0.4');
-    expect(dimWrapperAfter!.style.pointerEvents).toBe('none');
+      .closest('div[style*="pointer-events"]') as HTMLElement | null;
+    expect(threadWrapperAfter).toBeTruthy();
+    expect(threadWrapperAfter!.style.pointerEvents).toBe('none');
   });
 
   it('can start a second recording while the first bubble is still linking', async () => {

@@ -105,9 +105,9 @@ export default function HomeClient({ userName, initialData }: HomeClientProps) {
           </span>
         </h1>
         <StatsRow today={todayCount} week={weekCount} />
-        <ImportsCue />
         <HomeActsPanel fallbackCount={pendingActs} />
         <ActivityList items={recent} />
+        <ImportsCue />
       </section>
     </main>
   );
@@ -158,7 +158,9 @@ function Header({ userName }: { userName: string | null }) {
           aria-label="search"
           className="mono"
           style={{
-            padding: '6px 10px',
+            minWidth: 44,
+            minHeight: 44,
+            padding: '0 12px',
             borderRadius: 8,
             background: 'var(--surface-1)',
             border: '1px solid var(--border-soft)',
@@ -167,6 +169,9 @@ function Header({ userName }: { userName: string | null }) {
             fontSize: 11,
             letterSpacing: 1,
             textTransform: 'uppercase',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
           search
@@ -174,9 +179,10 @@ function Header({ userName }: { userName: string | null }) {
         <Link
           href="/settings"
           aria-label="settings"
+          className="mono"
           style={{
-            width: 30,
-            height: 30,
+            minWidth: 44,
+            minHeight: 44,
             borderRadius: 8,
             background: 'var(--surface-1)',
             border: '1px solid var(--border-soft)',
@@ -185,11 +191,13 @@ function Header({ userName }: { userName: string | null }) {
             justifyContent: 'center',
             color: 'var(--text-55)',
             textDecoration: 'none',
-            fontSize: 14,
+            fontSize: 10,
+            letterSpacing: 0.5,
+            textTransform: 'uppercase',
             flexShrink: 0,
           }}
         >
-          ⚙
+          set
         </Link>
       </div>
     </header>

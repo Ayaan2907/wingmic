@@ -129,7 +129,7 @@ function ChatComposer() {
             padding: 10,
             borderRadius: 12,
             border: `1px solid ${accent}66`,
-            background: '#141414',
+            background: 'var(--bg-card)',
             pointerEvents: 'auto',
           }}
         >
@@ -308,7 +308,7 @@ function ChatComposer() {
           gap: 8,
           padding: '10px 12px',
           borderRadius: 999,
-          background: '#141414',
+          background: 'var(--bg-card)',
           border: dropping ? `1.5px solid ${accent}` : '1px solid var(--border-mid)',
           pointerEvents: 'auto',
         }}
@@ -330,8 +330,8 @@ function ChatComposer() {
           aria-label="attach photo"
           onClick={() => pinInputRef.current?.click()}
           style={{
-            width: 28,
-            height: 28,
+            minWidth: 44,
+            minHeight: 44,
             padding: 0,
             background: 'transparent',
             border: 'none',
@@ -350,8 +350,8 @@ function ChatComposer() {
           aria-label="take photo"
           onClick={() => setCameraOpen(true)}
           style={{
-            width: 28,
-            height: 28,
+            minWidth: 44,
+            minHeight: 44,
             padding: 0,
             background: 'transparent',
             border: 'none',

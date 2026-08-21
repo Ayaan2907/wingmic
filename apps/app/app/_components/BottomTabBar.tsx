@@ -63,6 +63,7 @@ export function NavLink({ tab, active }: { tab: (typeof NAV_TABS)[number]; activ
         alignItems: 'center',
         justifyContent: 'center',
         gap: 2,
+        minHeight: 44,
         textDecoration: 'none',
         position: 'relative',
         fontFamily: 'JetBrains Mono, monospace',
@@ -276,7 +277,8 @@ export function LockedBar({ onStop, onDiscard, duration }: LockedBarProps) {
         onClick={onDiscard}
         aria-label="discard recording"
         style={{
-          padding: '6px 10px',
+          minHeight: 44,
+          padding: '10px 14px',
           borderRadius: 8,
           background: 'transparent',
           color: coral,
@@ -296,7 +298,8 @@ export function LockedBar({ onStop, onDiscard, duration }: LockedBarProps) {
         onClick={onStop}
         aria-label="send recording"
         style={{
-          padding: '6px 14px',
+          minHeight: 44,
+          padding: '10px 16px',
           borderRadius: 8,
           background: accent,
           color: '#000',
