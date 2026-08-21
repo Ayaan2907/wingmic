@@ -26,7 +26,7 @@ import type { GraphData, GraphLink, GraphNode, LinkRel, NodeKind } from './graph
 import { graphEndId } from './graph-types';
 import { graphNeighborhoodIds } from './graph-node-label';
 import {
-  configureGraphForces,
+  applyGraphSpacing,
   GRAPH_COOLDOWN_TICKS,
   GRAPH_VELOCITY_DECAY,
   GRAPH_WARMUP_TICKS,
@@ -119,9 +119,12 @@ export function GraphClient({ data }: { data: GraphData }) {
 
   const reheatLayout = useCallback(() => {
     hasFitRef.current = false;
-    configureGraphForces(fgRef.current, spacing);
-    (fgRef.current as { d3ReheatSimulation?: () => void } | undefined)?.d3ReheatSimulation?.();
+    applyGraphSpacing(fgRef.current, spacing);
   }, [spacing]);
+
+  const handleSpacingChange = (preset: GraphSpacingPreset) => {
+    setSpacing(preset);
+  };
 
   const handleZoomIn = () => {
     const fg = fgRef.current as (ForceGraphMethods & { zoom?: () => number }) | undefined;
@@ -164,8 +167,17 @@ export function GraphClient({ data }: { data: GraphData }) {
   }, [selected, filtered.nodes]);
 
   useEffect(() => {
-    reheatLayout();
-  }, [filtered.nodes.length, filtered.links.length, spacing, reheatLayout]);
+    hasFitRef.current = false;
+    // ForceGraph mounts async (dynamic import) — retry until ref is ready.
+    let tries = 0;
+    const id = window.setInterval(() => {
+      tries += 1;
+      if (applyGraphSpacing(fgRef.current, spacing) || tries >= 40) {
+        window.clearInterval(id);
+      }
+    }, 40);
+    return () => window.clearInterval(id);
+  }, [filtered.nodes.length, filtered.links.length, spacing]);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -323,7 +335,7 @@ export function GraphClient({ data }: { data: GraphData }) {
 
           <GraphCanvasControls
             spacing={spacing}
-            onSpacingChange={setSpacing}
+            onSpacingChange={handleSpacingChange}
             onZoomIn={handleZoomIn}
             onZoomOut={handleZoomOut}
             onReset={handleReset}
