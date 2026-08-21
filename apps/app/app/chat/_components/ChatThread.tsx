@@ -9,17 +9,16 @@
 // "stays full opacity" carve-out.
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import type { Route } from 'next';
+import { memo } from 'react';
 import { useCapture } from '@/app/_components/CaptureProvider';
-import { AgentBubble, AskExchange, WingmicAvatar as AskAvatar } from './AskPrimitives';
+import { AskExchange } from './AskPrimitives';
+import { PersonCaptureCard } from './PersonCaptureCard';
 import type {
   ThreadMessage,
   GraphResult,
   FailureCode,
 } from './types';
 import { accent, coral, third, violet, blue } from './tokens';
-import { trpc } from '@/lib/trpc/client';
 
 function fmtMs(ms: number | null): string {
   if (ms == null) return '—';
@@ -48,13 +47,9 @@ export function ChatThread() {
     recorder.status === 'cancel_armed' ||
     recorder.status === 'locked';
 
-  // β₁ thread-dimming: the message list dims while the mic is hot. The
-  // live phantom bubble lives in the global RecordingOverlay (above this
-  // surface in the layer stack), so the dim applies cleanly to the list.
-  const dimStyle: React.CSSProperties = {
-    opacity: recording ? 0.4 : 1,
+  // RecordingOverlay owns the dim layer globally — avoid double-dimming here.
+  const threadStyle: React.CSSProperties = {
     pointerEvents: recording ? 'none' : 'auto',
-    transition: 'opacity 180ms ease-out',
     display: 'flex',
     flexDirection: 'column',
     gap: 18,
@@ -62,22 +57,27 @@ export function ChatThread() {
 
   return (
     <div
+      className="chat-scroll"
       style={{
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        padding: '20px 16px 200px',
+        minHeight: 0,
+        overflowY: 'auto',
+        overscrollBehavior: 'contain',
+        WebkitOverflowScrolling: 'touch',
+        padding: '20px 16px var(--thread-scroll-pad, 200px)',
         maxWidth: 640,
         width: '100%',
         margin: '0 auto',
         gap: 18,
       }}
     >
-      <div style={dimStyle}>
+      <div style={threadStyle}>
         {visibleMessages.length === 0 && !recording && <WelcomeAgent />}
 
         {visibleMessages.map((m) => (
-          <MessageBubble
+          <MemoMessageBubble
             key={m.id}
             message={m}
             onRetry={() => retryBubble(m.id)}
@@ -233,6 +233,7 @@ function isEmptyExtraction(e: GraphResult['extracted']): boolean {
     e.persons.length === 0 &&
     e.companies.length === 0 &&
     e.events.length === 0 &&
+    e.topics.length === 0 &&
     e.actions.length === 0
   );
 }
@@ -289,6 +290,28 @@ function MessageBubble(props: MessageBubbleProps) {
               {m.transcript}
             </p>
           ) : null}
+          {(() => {
+            const jpeg =
+              m.previewJpegBase64 ??
+              m.graphResult?.attachments?.[0]?.jpegBase64 ??
+              null;
+            if (!jpeg) return null;
+            return (
+              // data-url capture; next/image does not take in-memory jpeg
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                alt="attached photo"
+                src={`data:image/jpeg;base64,${jpeg}`}
+                style={{
+                  width: '100%',
+                  maxHeight: 180,
+                  objectFit: 'cover',
+                  borderRadius: 10,
+                  border: '1px solid rgba(0,0,0,0.35)',
+                }}
+              />
+            );
+          })()}
           {showLinkSweep && (
             <div
               aria-hidden="true"
@@ -310,15 +333,17 @@ function MessageBubble(props: MessageBubbleProps) {
   );
 }
 
-// AgentReply — the templated "wingmic" reply that lands under a committed
-// memo. Acknowledgement + extraction card + draft follow-up CTA (A6).
+const MemoMessageBubble = memo(MessageBubble, (prev, next) => {
+  if (prev.message !== next.message) return false;
+  if (prev.pasteOpen !== next.pasteOpen) return false;
+  // Only the open paste editor cares about draft text churn.
+  if (prev.pasteOpen && prev.pasteDraft !== next.pasteDraft) return false;
+  return true;
+});
+
+// AgentReply — ack + extraction cards in-thread. Person rows stay here;
+// dump-to-/acts CTAs were removed (#146).
 function AgentReply({ message, result }: { message: ThreadMessage; result: GraphResult }) {
-  const router = useRouter();
-  const createDraft = trpc.acts.createDraft.useMutation({
-    onSuccess: (res) => {
-      if (res.ok) router.push('/acts');
-    },
-  });
   const { extracted } = result;
   const sparse = isEmptyExtraction(extracted);
   const counts: string[] = [];
@@ -333,13 +358,13 @@ function AgentReply({ message, result }: { message: ThreadMessage; result: Graph
   if (extracted.events.length) {
     counts.push(`${extracted.events.length} ${extracted.events.length === 1 ? 'event' : 'events'}`);
   }
+  if (extracted.topics.length) {
+    counts.push(`${extracted.topics.length} ${extracted.topics.length === 1 ? 'topic' : 'topics'}`);
+  }
   const summary = sparse
     ? 'noted — nothing solid to tag yet.'
-    : `acknowledged. ${counts.length ? `captured ${counts.join(', ')}. tap to open.` : 'captured your memo.'}`;
+    : `acknowledged. ${counts.length ? `captured ${counts.join(', ')}.` : 'captured your memo.'}`;
   const time = message.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const firstPersonId = result.entityIds?.[0];
-  const firstPersonName = extracted.persons[0]?.name;
-  const openHref = firstPersonId ? (`/person/${firstPersonId}` as Route) : null;
 
   return (
     <div
@@ -381,89 +406,8 @@ function AgentReply({ message, result }: { message: ThreadMessage; result: Graph
           {summary}
         </div>
         {!sparse ? <GraphCard message={message} result={result} /> : null}
-        {!sparse ? (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              data-testid="draft-follow-up"
-              disabled={!firstPersonId || createDraft.isPending}
-              title={firstPersonId ? 'draft a follow-up' : 'no person extracted yet'}
-              aria-label={
-                firstPersonId
-                  ? `draft follow-up for ${firstPersonName ?? 'person'}`
-                  : 'draft follow-up unavailable'
-              }
-              onClick={() => {
-                if (!firstPersonId) return;
-                createDraft.mutate({
-                  kind: 'email',
-                  intent: 'follow-up',
-                  targetEntityId: firstPersonId,
-                  sourceInteractionId: result.interactionId || undefined,
-                });
-              }}
-              style={{
-                padding: '8px 13px',
-                borderRadius: 999,
-                background: accent,
-                color: '#000',
-                border: '1.5px solid #000',
-                boxShadow: '3px 3px 0 #000',
-                font: '700 12px Inter, system-ui, sans-serif',
-                cursor: !firstPersonId || createDraft.isPending ? 'not-allowed' : 'pointer',
-                opacity: !firstPersonId || createDraft.isPending ? 0.85 : 1,
-              }}
-            >
-              {createDraft.isPending ? 'drafting…' : 'draft follow-up →'}
-            </button>
-            {openHref ? (
-              <Link
-                href={openHref}
-                data-testid="open-card"
-                aria-label={`open card for ${firstPersonName ?? 'person'}`}
-                style={{
-                  padding: '8px 13px',
-                  borderRadius: 999,
-                  background: 'transparent',
-                  color: 'var(--text-70)',
-                  border: '1px solid var(--border-mid)',
-                  font: '700 12px Inter, system-ui, sans-serif',
-                  textDecoration: 'none',
-                }}
-              >
-                open card
-              </Link>
-            ) : (
-              <DisabledAction label="open card" ghost />
-            )}
-          </div>
-        ) : null}
       </div>
     </div>
-  );
-}
-
-function DisabledAction({ label, ghost }: { label: string; ghost?: boolean }) {
-  return (
-    <button
-      type="button"
-      disabled
-      title="coming soon · v0.3"
-      aria-label={`${label} — coming soon, v0.3`}
-      style={{
-        padding: '8px 13px',
-        borderRadius: 999,
-        background: ghost ? 'transparent' : accent,
-        color: ghost ? 'var(--text-70)' : '#000',
-        border: ghost ? '1px solid var(--border-mid)' : '1.5px solid #000',
-        boxShadow: ghost ? 'none' : '3px 3px 0 #000',
-        font: '700 12px Inter, system-ui, sans-serif',
-        cursor: 'not-allowed',
-        opacity: ghost ? 0.7 : 0.85,
-      }}
-    >
-      {label}
-    </button>
   );
 }
 
@@ -539,6 +483,7 @@ function BubbleFooter({ m }: { m: ThreadMessage }) {
       g.extracted.persons.length === 0 &&
       g.extracted.companies.length === 0 &&
       g.extracted.events.length === 0 &&
+      g.extracted.topics.length === 0 &&
       g.extracted.actions.length === 0;
     if (isEmpty) {
       // Soft agent reply carries the "nothing solid" copy; footer stays timing-only.
@@ -601,8 +546,7 @@ function FailedBubble(props: MessageBubbleProps) {
         padding: '14px 16px',
         borderRadius: 14,
         background: 'rgba(255,107,107,0.06)',
-        border: '1px solid rgba(255,107,107,0.25)',
-        borderLeft: `3px solid ${coral}`,
+        border: '1px solid rgba(255,107,107,0.35)',
         display: 'flex',
         flexDirection: 'column',
         gap: 10,
@@ -834,7 +778,22 @@ function PasteInline({
 
 function GraphCard({ message, result }: { message: ThreadMessage; result: GraphResult }) {
   const { extracted } = result;
+  const { openTarget, setOpenTarget } = useCapture();
   if (isEmptyExtraction(extracted)) return null;
+
+  const claimed = new Set<number>();
+  const personActions = extracted.persons.map((p) => {
+    const idx = extracted.actions.findIndex(
+      (a, i) =>
+        !claimed.has(i) &&
+        a.targetPersonName != null &&
+        a.targetPersonName.trim().toLowerCase() === p.name.trim().toLowerCase(),
+    );
+    if (idx < 0) return null;
+    claimed.add(idx);
+    return extracted.actions[idx] ?? null;
+  });
+  const leftoverActions = extracted.actions.filter((_, i) => !claimed.has(i));
 
   return (
     <div
@@ -851,18 +810,38 @@ function GraphCard({ message, result }: { message: ThreadMessage; result: GraphR
       }}
     >
       {extracted.persons.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div
             className="mono"
             style={{ fontSize: 9.5, color: 'var(--text-40)', letterSpacing: 2, textTransform: 'uppercase' }}
           >
             people
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {extracted.persons.map((p, i) => (
-              <PersonPill key={`${p.name}-${i}`} person={p} href={hrefFor('person', result.entityIds, i)} />
-            ))}
-          </div>
+          {extracted.persons.map((p, i) => {
+            const entityId = result.entityIds?.[i];
+            const href = hrefFor('person', result.entityIds, i);
+            const selected =
+              !!entityId &&
+              openTarget?.interactionId === result.interactionId &&
+              openTarget.entityId === entityId;
+            return (
+              <PersonCaptureCard
+                key={`${p.name}-${i}`}
+                person={p}
+                href={href}
+                selected={selected}
+                action={personActions[i]}
+                onPhoto={() => {
+                  if (!entityId) return;
+                  setOpenTarget({ interactionId: result.interactionId, entityId, name: p.name });
+                }}
+                onCorrect={() => {
+                  if (!entityId) return;
+                  setOpenTarget({ interactionId: result.interactionId, entityId, name: p.name });
+                }}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -889,7 +868,7 @@ function GraphCard({ message, result }: { message: ThreadMessage; result: GraphR
         </div>
       )}
 
-      {extracted.actions.length > 0 && (
+      {leftoverActions.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div
             className="mono"
@@ -897,24 +876,32 @@ function GraphCard({ message, result }: { message: ThreadMessage; result: GraphR
           >
             follow-ups
           </div>
-          {extracted.actions.slice(0, 2).map((a, i) => (
+          {leftoverActions.slice(0, 2).map((a, i) => (
             <ActionCard key={i} action={a} />
           ))}
-          {extracted.actions.length > 2 && (
+          {leftoverActions.length > 2 && (
             <div className="mono" style={{ fontSize: 11, color: accent }}>
-              +{extracted.actions.length - 2} more →
+              +{leftoverActions.length - 2} more →
             </div>
           )}
         </div>
       )}
 
       {extracted.topics.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {extracted.topics.map((t) => (
-            <TagPill key={t} color={violet}>
-              {t}
-            </TagPill>
-          ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div
+            className="mono"
+            style={{ fontSize: 9.5, color: 'var(--text-40)', letterSpacing: 2, textTransform: 'uppercase' }}
+          >
+            topics
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {extracted.topics.map((t) => (
+              <TagPill key={t} color={violet}>
+                {t}
+              </TagPill>
+            ))}
+          </div>
         </div>
       )}
 
@@ -970,80 +957,6 @@ function hrefByName(
   const idx = uniqueNames.indexOf(name);
   const id = idx >= 0 ? ids[idx] : undefined;
   return id ? `/${kind}/${encodeURIComponent(id)}` : null;
-}
-
-function PersonPill({
-  person,
-  href,
-}: {
-  person: {
-    name: string;
-    role: string | null;
-    companyHint: string | null;
-    topics: string[];
-  };
-  href: string | null;
-}) {
-  const monogram = person.name
-    .split(/\s+/)
-    .map((s) => s[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
-  const pillStyle: React.CSSProperties = {
-    display: 'flex',
-    gap: 10,
-    padding: '8px 12px 8px 8px',
-    borderRadius: 999,
-    background: 'var(--surface-2)',
-    border: '1px solid var(--border-soft)',
-    borderLeft: `2px solid ${accent}`,
-    textDecoration: 'none',
-    color: 'inherit',
-    alignItems: 'center',
-    minHeight: 32,
-  };
-  const inner = (
-    <>
-      <span
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: 999,
-          background: accent,
-          color: '#000',
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontWeight: 800,
-          fontSize: 11,
-          fontFamily: 'Inter, system-ui, sans-serif',
-        }}
-      >
-        {monogram}
-      </span>
-      <span style={{ display: 'flex', flexDirection: 'column' }}>
-        <span style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.2 }}>{person.name}</span>
-        {(person.role || person.companyHint) && (
-          <span style={{ fontSize: 11, color: 'var(--text-55)' }}>
-            {person.role}
-            {person.role && person.companyHint && ' · '}
-            {person.companyHint && <span style={{ color: blue }}>{person.companyHint}</span>}
-          </span>
-        )}
-      </span>
-    </>
-  );
-  return href ? (
-    <a href={href} style={pillStyle} data-entity-kind="person">
-      {inner}
-    </a>
-  ) : (
-    <span style={pillStyle} data-entity-kind="person">
-      {inner}
-    </span>
-  );
 }
 
 function TagPill({
@@ -1134,7 +1047,7 @@ export function UndoChip() {
       style={{
         position: 'fixed',
         left: '50%',
-        bottom: 180,
+        bottom: 'calc(var(--chat-composer-bottom, 72px) + 64px)',
         transform: 'translateX(-50%)',
         padding: '8px 14px',
         background: 'rgba(255,107,107,0.12)',

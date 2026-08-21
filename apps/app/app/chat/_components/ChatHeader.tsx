@@ -20,7 +20,7 @@ export function ChatHeader({ userName }: { userName: string | null }) {
     recorder.status === 'locked';
 
   const shell: React.CSSProperties = {
-    padding: '14px 20px',
+    padding: 'calc(10px + env(safe-area-inset-top, 0px)) 16px 10px',
     borderBottom: '1px solid var(--border-soft)',
     display: 'flex',
     alignItems: 'center',

@@ -2,7 +2,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 
-// ── Mocks ───────────────────────────────────────────────────────────────
 const pushSpy = vi.fn();
 const mutateAsyncSpy = vi.fn().mockResolvedValue({ ok: true });
 
@@ -22,6 +21,25 @@ vi.mock('@/lib/trpc/client', () => ({
 
 import OnboardingClient from '../OnboardingClient';
 
+function walkToProfile() {
+  fireEvent.click(screen.getByRole('button', { name: /next/i }));
+}
+
+function fillProfile() {
+  fireEvent.change(screen.getByPlaceholderText('Ada'), { target: { value: 'Ada' } });
+  fireEvent.change(screen.getByPlaceholderText('Lovelace'), { target: { value: 'Lovelace' } });
+  fireEvent.change(screen.getByPlaceholderText('https://www.linkedin.com/in/you'), {
+    target: { value: 'https://www.linkedin.com/in/ada-lovelace' },
+  });
+}
+
+function walkProfileToLast() {
+  walkToProfile();
+  fillProfile();
+  fireEvent.click(screen.getByRole('button', { name: /next/i }));
+  fireEvent.click(screen.getByRole('button', { name: /next/i }));
+}
+
 describe('OnboardingClient', () => {
   beforeEach(() => {
     pushSpy.mockClear();
@@ -29,72 +47,122 @@ describe('OnboardingClient', () => {
   });
   afterEach(() => cleanup());
 
-  it('renders step 1 (welcome) and advances next → step 2 → step 3', () => {
+  it('renders step 1 (welcome) and advances next → you → mic → privacy', () => {
     render(<OnboardingClient />);
-    // step 1
     expect(screen.getByText(/social ram/i)).toBeTruthy();
-    // dot progress: step 1 of 3
-    expect(screen.getByText(/step 1 of 3/i)).toBeTruthy();
+    expect(screen.getByText(/step 1 of 4/i)).toBeTruthy();
 
+    walkToProfile();
+    expect(screen.getByText(/step 2 of 4/i)).toBeTruthy();
+    expect(screen.getByPlaceholderText('Ada')).toBeTruthy();
+
+    fillProfile();
+    expect(screen.getByPlaceholderText(/public\/basic\.ics/i)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
-    expect(screen.getByText(/step 2 of 3/i)).toBeTruthy();
-    // step 2 is the mic-permission explainer (mock, no getUserMedia)
+    expect(screen.getByText(/step 3 of 4/i)).toBeTruthy();
     expect(screen.getByText(/press record/i)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
-    expect(screen.getByText(/step 3 of 3/i)).toBeTruthy();
+    expect(screen.getByText(/step 4 of 4/i)).toBeTruthy();
   });
 
-  it('back from step 2 returns to step 1', () => {
+  it('blocks next on the you-step until first and last name are filled', () => {
     render(<OnboardingClient />);
+    walkToProfile();
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
-    expect(screen.getByText(/step 2 of 3/i)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /back/i }));
-    expect(screen.getByText(/step 1 of 3/i)).toBeTruthy();
+    expect(screen.getByText(/first and last name/i)).toBeTruthy();
+    expect(screen.getByText(/step 2 of 4/i)).toBeTruthy();
+    expect(mutateAsyncSpy).not.toHaveBeenCalled();
   });
 
-  it('"get started" on step 3 acknowledges then pushes /chat', async () => {
+  it('back from the you-step returns to welcome', () => {
     render(<OnboardingClient />);
+    walkToProfile();
+    expect(screen.getByText(/step 2 of 4/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /back/i }));
+    expect(screen.getByText(/step 1 of 4/i)).toBeTruthy();
+  });
+
+  it('"get started" on the last step acknowledges with the profile then pushes /chat', async () => {
+    render(<OnboardingClient />);
+    walkProfileToLast();
+    fireEvent.click(screen.getByRole('button', { name: /get started/i }));
+
+    await waitFor(() => expect(mutateAsyncSpy).toHaveBeenCalledTimes(1));
+    expect(mutateAsyncSpy).toHaveBeenCalledWith({
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      linkedinUrl: 'https://www.linkedin.com/in/ada-lovelace',
+    });
+    expect(mutateAsyncSpy.mock.calls[0]?.[0]).not.toHaveProperty('calendarIcsUrl');
+    await waitFor(() => expect(pushSpy).toHaveBeenCalledWith('/chat'));
+    expect(mutateAsyncSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      pushSpy.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('sends a public calendar ics url when filled on the you-step', async () => {
+    render(<OnboardingClient />);
+    walkToProfile();
+    fillProfile();
+    fireEvent.change(screen.getByPlaceholderText(/public\/basic\.ics/i), {
+      target: {
+        value:
+          'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics',
+      },
+    });
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
     fireEvent.click(screen.getByRole('button', { name: /get started/i }));
 
     await waitFor(() => expect(mutateAsyncSpy).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(pushSpy).toHaveBeenCalledWith('/chat'));
-    // acknowledge resolves BEFORE the push
-    expect(mutateAsyncSpy.mock.invocationCallOrder[0]).toBeLessThan(
-      pushSpy.mock.invocationCallOrder[0],
-    );
+    expect(mutateAsyncSpy).toHaveBeenCalledWith({
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      linkedinUrl: 'https://www.linkedin.com/in/ada-lovelace',
+      calendarIcsUrl:
+        'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics',
+    });
   });
 
-  it('skip acknowledges then pushes /chat (skip still acknowledges → no re-trigger)', async () => {
+  it('blocks next on the you-step when the calendar url is present but not public ics', () => {
     render(<OnboardingClient />);
+    walkToProfile();
+    fillProfile();
+    fireEvent.change(screen.getByPlaceholderText(/public\/basic\.ics/i), {
+      target: { value: 'https://example.com/not-a-calendar' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    expect(screen.getByText(/public google calendar ics/i)).toBeTruthy();
+    expect(screen.getByText(/step 2 of 4/i)).toBeTruthy();
+    expect(mutateAsyncSpy).not.toHaveBeenCalled();
+  });
+
+  it('skip acknowledges without profile even if linkedin is invalid', async () => {
+    render(<OnboardingClient />);
+    walkToProfile();
+    fireEvent.change(screen.getByPlaceholderText('https://www.linkedin.com/in/you'), {
+      target: { value: 'not-a-url' },
+    });
     fireEvent.click(screen.getByRole('button', { name: /skip/i }));
 
     await waitFor(() => expect(mutateAsyncSpy).toHaveBeenCalledTimes(1));
+    expect(mutateAsyncSpy).toHaveBeenCalledWith(undefined);
     await waitFor(() => expect(pushSpy).toHaveBeenCalledWith('/chat'));
-    expect(mutateAsyncSpy.mock.invocationCallOrder[0]).toBeLessThan(
-      pushSpy.mock.invocationCallOrder[0],
-    );
   });
 
   it('acknowledge rejection re-enables buttons, shows error, and does NOT push', async () => {
     mutateAsyncSpy.mockRejectedValueOnce(new Error('network down'));
     render(<OnboardingClient />);
-    // walk to the last step so "get started" is the primary action
-    fireEvent.click(screen.getByRole('button', { name: /next/i }));
-    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    walkProfileToLast();
     fireEvent.click(screen.getByRole('button', { name: /get started/i }));
 
     await waitFor(() => expect(mutateAsyncSpy).toHaveBeenCalledTimes(1));
-    // inline error surfaces for retry
     await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeTruthy());
-    // not stranded: get-started + skip buttons are enabled again
     const getStartedBtn = screen.getByRole('button', { name: /get started/i }) as HTMLButtonElement;
     const skipBtn = screen.getByRole('button', { name: /skip/i }) as HTMLButtonElement;
     expect(getStartedBtn.disabled).toBe(false);
     expect(skipBtn.disabled).toBe(false);
-    // navigation never happened
     expect(pushSpy).not.toHaveBeenCalled();
   });
 });

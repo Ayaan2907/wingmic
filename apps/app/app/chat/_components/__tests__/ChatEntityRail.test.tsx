@@ -22,6 +22,7 @@ describe('ChatEntityRail', () => {
     messagesRef.current = [];
     render(<ChatEntityRail />);
     expect(screen.getByTestId('chat-entity-rail').getAttribute('data-empty')).toBe('true');
+    expect(screen.getByTestId('chat-entity-rail').className).toContain('desktop-pane');
     expect(screen.getByText(/commit a memo/i)).toBeTruthy();
     expect(screen.queryByText(/sarah chen/i)).toBeNull();
   });

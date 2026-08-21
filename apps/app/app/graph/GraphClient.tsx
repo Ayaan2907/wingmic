@@ -3,41 +3,41 @@
 // GraphClient — force-directed canvas of the user's entity graph (PR ι-graph).
 // Source of truth: docs/superpowers/plans/2026-06-06-v0.1.2-pr-iota-graph.md,
 // design/v2/proto-screens-b.jsx ScreenGraph + design.md §14.3.
-//
-// react-force-graph-2d touches `window`/canvas, so it MUST be dynamically
-// imported with `ssr: false` — a static import breaks SSR/build. The test
-// mocks `next/dynamic` so jsdom never instantiates the real canvas.
 
 import dynamic from 'next/dynamic';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { accent, blue, violet } from '@/app/chat/_components/tokens';
+import type { ForceGraphMethods } from 'react-force-graph-2d';
+import { accent } from '@/app/chat/_components/tokens';
 import { trpc } from '@/lib/trpc/client';
+import { GraphCanvasControls } from './GraphCanvasControls';
+import { GraphHoverCard } from './GraphHoverCard';
+import { GraphSearch } from './GraphSearch';
+import {
+  FILTERS,
+  KIND_COLOR,
+  NODE_REL_SIZE,
+  linkWidthOf,
+  paintGraphLinkColor,
+  paintGraphNode,
+  paintGraphNodePointerArea,
+} from './graph-style';
+import type { GraphData, GraphLink, GraphNode, LinkRel, NodeKind } from './graph-types';
+import { graphEndId } from './graph-types';
+import { graphNeighborhoodIds } from './graph-node-label';
+import {
+  applyGraphSpacing,
+  GRAPH_COOLDOWN_TICKS,
+  GRAPH_VELOCITY_DECAY,
+  GRAPH_WARMUP_TICKS,
+  type GraphSpacingPreset,
+} from './graph-force';
+
+export type { GraphData, GraphLink, GraphNode, LinkRel, NodeKind };
 
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), { ssr: false });
 
-type NodeKind = 'person' | 'company' | 'event' | 'topic';
-type LinkRel = 'works_at' | 'attended' | 'discussed';
-
-export type GraphNode = { id: string; kind: NodeKind; label: string };
-export type GraphLink = { source: string; target: string; rel: LinkRel };
-export type GraphData = { nodes: GraphNode[]; links: GraphLink[] };
-
-// Node palette by kind — entity colors lifted from chat/_components/tokens.
-// event has no dedicated token; the grey --text-55 keeps it recessive.
-const KIND_COLOR: Record<NodeKind, string> = {
-  person: accent, // #FFC452
-  company: blue, // #7DD3FC
-  event: 'var(--text-55)',
-  topic: violet, // #A78BFA
-};
-
-const FILTERS: Array<{ kind: NodeKind; label: string }> = [
-  { kind: 'person', label: 'people' },
-  { kind: 'company', label: 'orgs' },
-  { kind: 'event', label: 'events' },
-  { kind: 'topic', label: 'topics' },
-];
+const ZOOM_STEP = 1.28;
 
 export function GraphClient({ data }: { data: GraphData }) {
   const router = useRouter();
@@ -50,6 +50,25 @@ export function GraphClient({ data }: { data: GraphData }) {
     () => new Set<NodeKind>(['person', 'company', 'event', 'topic']),
   );
   const [selected, setSelected] = useState<GraphNode | null>(null);
+  const [hovered, setHovered] = useState<GraphNode | null>(null);
+  const [pointer, setPointer] = useState({ x: 0, y: 0 });
+  const [spacing, setSpacing] = useState<GraphSpacingPreset>('normal');
+  const [viewportSize, setViewportSize] = useState({ width: 640, height: 480 });
+  const hoveredRef = useRef<GraphNode | null>(null);
+  const pointerRef = useRef(pointer);
+  const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const hasFitRef = useRef(false);
+
+  const selectNode = (node: GraphNode) => {
+    setActive((prev) => {
+      if (prev.has(node.kind)) return prev;
+      const next = new Set(prev);
+      next.add(node.kind);
+      return next;
+    });
+    setSelected(node);
+  };
 
   const toggle = (kind: NodeKind) => {
     setActive((prev) => {
@@ -60,30 +79,124 @@ export function GraphClient({ data }: { data: GraphData }) {
     });
   };
 
-  // Filter nodes by active kinds; drop links whose endpoints fell away.
   const filtered = useMemo(() => {
     const nodes = data.nodes.filter((n) => active.has(n.kind));
     const visibleIds = new Set(nodes.map((n) => n.id));
-    const links = data.links.filter(
-      (l) => visibleIds.has(l.source) && visibleIds.has(l.target),
-    );
+    const links = data.links
+      .filter(
+        (l) => visibleIds.has(graphEndId(l.source)) && visibleIds.has(graphEndId(l.target)),
+      )
+      .map((l) => ({
+        source: graphEndId(l.source),
+        target: graphEndId(l.target),
+        rel: l.rel,
+        hub: l.hub,
+      }));
     return { nodes, links };
   }, [data, active]);
 
-  // Edges touching the selected node, for the desktop detail rail. Real data,
-  // derived from data.links. react-force-graph mutates link.source/target from
-  // id strings into node objects after first render, so normalise both.
   const nodeById = useMemo(() => new Map(data.nodes.map((n) => [n.id, n])), [data.nodes]);
+  const neighborhood = useMemo(
+    () => graphNeighborhoodIds(selected?.id ?? null, data.links),
+    [selected?.id, data.links],
+  );
   const selectedEdges = useMemo(() => {
     if (!selected) return [] as Array<{ rel: LinkRel; label: string }>;
-    const idOf = (end: string | { id: string }) => (typeof end === 'object' ? end.id : end);
     return data.links
-      .filter((l) => idOf(l.source) === selected.id || idOf(l.target) === selected.id)
+      .filter((l) => graphEndId(l.source) === selected.id || graphEndId(l.target) === selected.id)
       .map((l) => {
-        const otherId = idOf(l.source) === selected.id ? idOf(l.target) : idOf(l.source);
+        const otherId =
+          graphEndId(l.source) === selected.id ? graphEndId(l.target) : graphEndId(l.source);
         return { rel: l.rel, label: nodeById.get(otherId)?.label ?? otherId };
       });
   }, [selected, data.links, nodeById]);
+  const selectedHref = selected ? `/${selected.kind}/${selected.id}` : null;
+
+  const fitGraphToCanvas = useCallback(() => {
+    if (filtered.nodes.length === 0) return;
+    fgRef.current?.zoomToFit(400, 48);
+    hasFitRef.current = true;
+  }, [filtered.nodes.length]);
+
+  const reheatLayout = useCallback(() => {
+    hasFitRef.current = false;
+    applyGraphSpacing(fgRef.current, spacing);
+  }, [spacing]);
+
+  const handleSpacingChange = (preset: GraphSpacingPreset) => {
+    setSpacing(preset);
+  };
+
+  const handleZoomIn = () => {
+    const fg = fgRef.current as (ForceGraphMethods & { zoom?: () => number }) | undefined;
+    if (!fg?.zoom) return;
+    fg.zoom(fg.zoom() * ZOOM_STEP, 280);
+  };
+
+  const handleZoomOut = () => {
+    const fg = fgRef.current as (ForceGraphMethods & { zoom?: () => number }) | undefined;
+    if (!fg?.zoom) return;
+    fg.zoom(fg.zoom() / ZOOM_STEP, 280);
+  };
+
+  const handleReset = () => {
+    hasFitRef.current = false;
+    reheatLayout();
+    window.setTimeout(() => fitGraphToCanvas(), 520);
+  };
+
+  const handleFullscreen = () => {
+    const el = viewportRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+      return;
+    }
+    void el.requestFullscreen?.();
+  };
+
+  useEffect(() => {
+    const graph = fgRef.current as (ForceGraphMethods & { refresh?: () => void }) | undefined;
+    graph?.refresh?.();
+    if (!selected) return;
+    const node = filtered.nodes.find((n) => n.id === selected.id) as
+      | (GraphNode & { x?: number; y?: number })
+      | undefined;
+    if (node?.x == null || node.y == null) return;
+    fgRef.current?.centerAt(node.x, node.y, 480);
+    fgRef.current?.zoom(2.2, 480);
+  }, [selected, filtered.nodes]);
+
+  useEffect(() => {
+    hasFitRef.current = false;
+    // ForceGraph mounts async (dynamic import) — retry until ref is ready.
+    let tries = 0;
+    const id = window.setInterval(() => {
+      tries += 1;
+      if (applyGraphSpacing(fgRef.current, spacing) || tries >= 40) {
+        window.clearInterval(id);
+      }
+    }, 40);
+    return () => window.clearInterval(id);
+  }, [filtered.nodes.length, filtered.links.length, spacing]);
+
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    if (typeof ResizeObserver === 'undefined') {
+      setViewportSize({ width: 800, height: 520 });
+      return;
+    }
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) {
+        setViewportSize({ width: Math.floor(width), height: Math.floor(height) });
+        hasFitRef.current = false;
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   if (data.nodes.length === 0) {
     return (
@@ -93,7 +206,7 @@ export function GraphClient({ data }: { data: GraphData }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '32px 20px',
+          padding: 'clamp(24px, 7vw, 36px) clamp(14px, 5vw, 20px)',
           background: 'var(--bg-page)',
           color: 'var(--ink)',
           textAlign: 'center',
@@ -124,138 +237,192 @@ export function GraphClient({ data }: { data: GraphData }) {
   }
 
   return (
-    // Desktop (≥1120px) splits into [canvas | detail rail]; on mobile the
-    // rail is display:none and the selected node uses the floating card.
-    <div className="surface-split">
-    <main
-      className="surface-primary"
-      style={{
-        position: 'relative',
-        minHeight: '100dvh',
-        background: 'var(--bg-page)',
-        color: 'var(--ink)',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Filter chips */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 16,
-          left: 16,
-          zIndex: 2,
-          display: 'flex',
-          gap: 8,
-          flexWrap: 'wrap',
-        }}
-      >
-        {FILTERS.map(({ kind, label }) => {
-          const on = active.has(kind);
-          return (
-            <button
-              key={kind}
-              type="button"
-              onClick={() => toggle(kind)}
-              aria-pressed={on}
-              className="mono"
-              style={{
-                fontSize: 11,
-                letterSpacing: 1,
-                textTransform: 'uppercase',
-                padding: '5px 11px',
-                borderRadius: 999,
-                border: `1px solid ${on ? KIND_COLOR[kind] : 'var(--hair)'}`,
-                background: on ? `${KIND_COLOR[kind]}22` : 'transparent',
-                color: on ? KIND_COLOR[kind] : 'var(--text-55)',
-                cursor: 'pointer',
-              }}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
+    <div className="surface-split graph-shell">
+      <main className="surface-primary graph-surface">
+        <header className="graph-toolbar" data-testid="graph-toolbar">
+          <div className="graph-toolbar-filters">
+            {FILTERS.map(({ kind, label }) => {
+              const on = active.has(kind);
+              return (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => toggle(kind)}
+                  aria-pressed={on}
+                  className="mono"
+                  style={{
+                    fontSize: 11,
+                    letterSpacing: 1,
+                    textTransform: 'uppercase',
+                    padding: '5px 11px',
+                    minHeight: 32,
+                    borderRadius: 999,
+                    border: `1px solid ${on ? KIND_COLOR[kind] : 'var(--border-soft)'}`,
+                    background: on ? `${KIND_COLOR[kind]}22` : 'transparent',
+                    color: on ? KIND_COLOR[kind] : 'var(--text-55)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <GraphSearch nodes={data.nodes} onSelect={selectNode} />
+        </header>
 
-      <ForceGraph2D
-        graphData={filtered}
-        nodeColor={(n: any) => KIND_COLOR[(n as GraphNode).kind] ?? accent}
-        nodeLabel={(n: any) => (n as GraphNode).label}
-        onNodeClick={(n: any) => setSelected(n as GraphNode)}
-        backgroundColor="rgba(0,0,0,0)"
-      />
-
-      {/* Selected-node floating card (above the nav on mobile). Hidden on
-          desktop — the persistent detail rail replaces it there. */}
-      {selected && (
         <div
-          className="graph-mobile-card"
-          style={{
-            position: 'absolute',
-            left: 16,
-            right: 16,
-            bottom: 96,
-            zIndex: 3,
-            maxWidth: 360,
-            margin: '0 auto',
-            padding: 16,
-            borderRadius: 14,
-            background: 'var(--bg-elev, #111)',
-            border: '1px solid var(--hair)',
-            boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+          ref={viewportRef}
+          className="graph-viewport"
+          data-testid="graph-canvas"
+          data-highlighted-id={selected?.id ?? ''}
+          style={{ minHeight: 400 }}
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            pointerRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            if (hoveredRef.current) setPointer(pointerRef.current);
           }}
         >
-          <button
-            type="button"
-            onClick={() => setSelected(null)}
-            aria-label="close"
-            className="mono"
-            style={{
-              position: 'absolute',
-              top: 10,
-              right: 12,
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-55)',
-              cursor: 'pointer',
-              fontSize: 14,
+          <ForceGraph2D
+            ref={fgRef}
+            width={viewportSize.width}
+            height={viewportSize.height}
+            graphData={filtered}
+            warmupTicks={GRAPH_WARMUP_TICKS}
+            cooldownTicks={GRAPH_COOLDOWN_TICKS}
+            d3VelocityDecay={GRAPH_VELOCITY_DECAY}
+            onEngineStop={fitGraphToCanvas}
+            nodeColor={(n: any) => KIND_COLOR[(n as GraphNode).kind] ?? accent}
+            nodeRelSize={NODE_REL_SIZE}
+            nodeLabel={() => ''}
+            nodeCanvasObjectMode={() => 'replace'}
+            nodeCanvasObject={(n: any, ctx: CanvasRenderingContext2D, scale: number) =>
+              paintGraphNode(
+                n as GraphNode,
+                ctx,
+                scale,
+                selected?.id ?? null,
+                hovered?.id ?? null,
+                neighborhood,
+              )
+            }
+            nodePointerAreaPaint={(n: any, color: string, ctx: CanvasRenderingContext2D) =>
+              paintGraphNodePointerArea(n as GraphNode, color, ctx, selected?.id ?? null)
+            }
+            linkColor={(l: any) =>
+              paintGraphLinkColor(
+                (l as GraphLink).rel,
+                graphEndId((l as GraphLink).source),
+                graphEndId((l as GraphLink).target),
+                neighborhood,
+              )
+            }
+            linkWidth={(l: any) =>
+              linkWidthOf(
+                (l as GraphLink).rel,
+                neighborhood,
+                graphEndId((l as GraphLink).source),
+                graphEndId((l as GraphLink).target),
+              )
+            }
+            linkDirectionalArrowLength={0}
+            onNodeClick={(n: any) => selectNode(n as GraphNode)}
+            onNodeHover={(n: any) => {
+              const next = n ? (n as GraphNode) : null;
+              hoveredRef.current = next;
+              setHovered(next);
+              if (next) setPointer(pointerRef.current);
             }}
-          >
-            ×
-          </button>
-          <div
-            className="mono"
-            style={{
-              fontSize: 10,
-              letterSpacing: 1.5,
-              textTransform: 'uppercase',
-              color: KIND_COLOR[selected.kind],
-              marginBottom: 6,
-            }}
-          >
-            {selected.kind}
-          </div>
-          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>
-            {selected.label}
-          </div>
-          <a
-            href={'/' + selected.kind + '/' + selected.id}
-            style={{
-              color: accent,
-              fontSize: 14,
-              textDecoration: 'none',
-              fontWeight: 600,
-            }}
-          >
-            → open
-          </a>
-        </div>
-      )}
-    </main>
+            backgroundColor="rgba(0,0,0,0)"
+          />
 
-      {/* Desktop detail rail (proto-desktop.jsx ScreenDesktopGraph 265–291). */}
+          <GraphCanvasControls
+            spacing={spacing}
+            onSpacingChange={handleSpacingChange}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onReset={handleReset}
+            onFullscreen={handleFullscreen}
+          />
+
+          <GraphHoverCard node={hovered} x={pointer.x} y={pointer.y} />
+
+          {selected && (
+            <div
+              className="graph-mobile-card"
+              style={{
+                position: 'absolute',
+                left: 'clamp(10px, 4vw, 16px)',
+                right: 'clamp(10px, 4vw, 16px)',
+                bottom: 'calc(var(--dock-control-clearance, 72px) + 74px)',
+                zIndex: 3,
+                maxWidth: 360,
+                margin: '0 auto',
+                padding: 14,
+                borderRadius: 14,
+                background: 'var(--bg-elev, #111)',
+                border: '1px solid var(--border-soft)',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                aria-label="close"
+                className="mono"
+                style={{
+                  position: 'absolute',
+                  top: 10,
+                  right: 12,
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-55)',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                }}
+              >
+                ×
+              </button>
+              <div
+                className="mono"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: 1.5,
+                  textTransform: 'uppercase',
+                  color: KIND_COLOR[selected.kind],
+                  marginBottom: 6,
+                }}
+              >
+                {selected.kind}
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>
+                {selected.label}
+              </div>
+              <a
+                href={selectedHref ?? '#'}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  minHeight: 32,
+                  color: accent,
+                  fontSize: 14,
+                  textDecoration: 'none',
+                  fontWeight: 600,
+                }}
+              >
+                → open
+              </a>
+            </div>
+          )}
+        </div>
+      </main>
+
       <aside
         className="desktop-pane detail-rail"
-        style={{ padding: '20px 18px', background: 'rgba(255,255,255,0.01)' }}
+        style={{
+          padding: 'clamp(14px, 3vw, 20px) clamp(12px, 2vw, 18px)',
+          background: 'rgba(255,255,255,0.01)',
+        }}
         aria-label="selected node"
       >
         {selected ? (
@@ -302,7 +469,7 @@ export function GraphClient({ data }: { data: GraphData }) {
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
               <button
                 type="button"
                 disabled={
@@ -346,7 +513,8 @@ export function GraphClient({ data }: { data: GraphData }) {
                   }
                 }}
                 style={{
-                  flex: 1,
+                  flex: '1 1 190px',
+                  minHeight: 42,
                   padding: 10,
                   borderRadius: 10,
                   background: accent,
@@ -369,33 +537,21 @@ export function GraphClient({ data }: { data: GraphData }) {
                       : 'draft check-in →'}
               </button>
               <a
-                href={
-                  selected.kind === 'topic'
-                    ? undefined
-                    : '/' + selected.kind + '/' + selected.id
-                }
-                aria-disabled={selected.kind === 'topic' || undefined}
-                onClick={(e) => {
-                  if (selected.kind === 'topic') e.preventDefault();
-                }}
-                title={
-                  selected.kind === 'topic'
-                    ? 'topics have no detail page yet'
-                    : `open ${selected.kind}`
-                }
+                href={selectedHref ?? '#'}
+                title={`open ${selected.kind}`}
                 className="mono"
                 style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: 42,
                   padding: '10px 14px',
                   borderRadius: 10,
-                  color:
-                    selected.kind === 'topic'
-                      ? 'rgba(255,255,255,0.25)'
-                      : 'rgba(255,255,255,0.55)',
+                  color: 'rgba(255,255,255,0.55)',
                   fontSize: 12,
                   textDecoration: 'none',
-                  border: '1px solid var(--hair)',
-                  cursor: selected.kind === 'topic' ? 'not-allowed' : 'pointer',
-                  pointerEvents: selected.kind === 'topic' ? 'none' : 'auto',
+                  border: '1px solid var(--border-soft)',
+                  cursor: 'pointer',
                 }}
               >
                 open

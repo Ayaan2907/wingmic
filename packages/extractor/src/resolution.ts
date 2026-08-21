@@ -8,7 +8,15 @@ import {
   type PersonCandidate,
 } from './schema';
 import { embedText, embedTexts, cosine } from './embeddings';
-import { nameSimilarity, slugify } from './slug';
+import { canonicalizeLinkedin, harvestLinkedinFromTranscript, isLinkedinUrlDebrisTopic } from './linkedin';
+import { applyHarvestedEvent, parseEventExternal } from './eventUrl';
+import { entityMatchesPersonName, nameSimilarity, slugify } from './slug';
+
+export interface CommitPersonResolution {
+  entityId: string;
+  created: boolean;
+  score: number | null;
+}
 
 export interface CommitResult {
   interactionId: string;
@@ -18,6 +26,7 @@ export interface CommitResult {
   topicIds: string[];
   newEntities: number;
   matchedEntities: number;
+  persons: CommitPersonResolution[];
 }
 
 interface ResolveContext {
@@ -27,6 +36,17 @@ interface ResolveContext {
   capturedAt: Date;
   /** Optional client-generated idempotency key (interactions.client_capture_id). */
   clientCaptureId?: string | null;
+  /** Prior capture this memo replies to. Written onto the new interaction. */
+  parentInteractionId?: string | null;
+  /** Root of the follow-up chain (`parent.threadRootId ?? parent.id`). */
+  threadRootId?: string | null;
+  /**
+   * Person the user opened in chat. Applied to person index 0 unless that
+   * candidate uniquely names someone else (email / LinkedIn / exact name).
+   */
+  preferredEntityId?: string | null;
+  /** Event session still open in chat. Injected when the memo names no event. */
+  preferredEventId?: string | null;
 }
 
 /**
@@ -36,8 +56,9 @@ interface ResolveContext {
  *   2. Upsert canonical Event rows (slug + date-proximity match)
  *   3. Upsert canonical Topic rows
  *   4. Persist Interaction (needed before facts/topics for sourceInteractionId)
- *   5. Resolve Person candidates against this user's entities; create new
- *      ones if confidence < 0.85, link if >= 0.85
+ *   5. Resolve Person candidates: preferredEntityId on person 0 unless that
+ *      candidate uniquely names someone else; then strong keys + unique
+ *      same-owner name, then fuzzy score ≥ 0.85, else create
  *   6. Wire EntityCompany / EntityEvent / EntityTopic edges
  *   7. Persist notes/email/linkedin as EntityFact rows (stamped with interaction)
  *
@@ -48,6 +69,63 @@ export async function commit(
   ctx: ResolveContext,
 ): Promise<CommitResult> {
   const { db, userId, transcript, capturedAt, clientCaptureId } = ctx;
+
+  if (ctx.preferredEntityId && extracted.persons.length === 0) {
+    const preferred = await db.query.entities.findFirst({
+      where: and(
+        eq(schema.entities.id, ctx.preferredEntityId),
+        eq(schema.entities.ownerUserId, userId),
+        isNull(schema.entities.deletedAt),
+      ),
+    });
+    if (preferred) {
+      const aliases = Array.isArray(preferred.aliases)
+        ? preferred.aliases.filter(Boolean)
+        : [];
+      extracted.persons.push({
+        name: preferred.name,
+        role: null,
+        companyHint: null,
+        topics: [],
+        notes: transcript,
+        email: null,
+        linkedin: null,
+        aliases,
+      });
+    }
+  }
+
+  const spokenLinkedin = harvestLinkedinFromTranscript(transcript);
+  if (spokenLinkedin) {
+    const bindToFirst = extracted.persons.length <= 1 || Boolean(ctx.preferredEntityId);
+    extracted.topics = extracted.topics.filter(
+      (t) => !isLinkedinUrlDebrisTopic(t, spokenLinkedin),
+    );
+    extracted.persons = extracted.persons.map((p, i) => ({
+      ...p,
+      linkedin: p.linkedin || (bindToFirst && i === 0 ? spokenLinkedin : p.linkedin),
+      topics: p.topics.filter((t) => !isLinkedinUrlDebrisTopic(t, spokenLinkedin)),
+    }));
+  }
+
+  const harvestedEvents = applyHarvestedEvent(extracted, transcript);
+  extracted.persons = harvestedEvents.persons;
+  extracted.events = harvestedEvents.events;
+  extracted.topics = harvestedEvents.topics;
+
+  if (ctx.preferredEventId && extracted.events.length === 0) {
+    const preferredEvent = await db.query.events.findFirst({
+      where: eq(schema.events.id, ctx.preferredEventId),
+    });
+    if (preferredEvent) {
+      extracted.events.push({
+        name: preferredEvent.name,
+        dateHint: null,
+        location: preferredEvent.location ?? null,
+        url: preferredEvent.url ?? null,
+      });
+    }
+  }
 
   // ── Embeddings (parallel) ────────────────────────────────────────────
   const transcriptEmbedding = await embedText(transcript);
@@ -105,6 +183,8 @@ export async function commit(
       capturedAt,
       embedding: transcriptEmbedding,
       ...(clientCaptureId ? { clientCaptureId } : {}),
+      ...(ctx.parentInteractionId ? { parentInteractionId: ctx.parentInteractionId } : {}),
+      ...(ctx.threadRootId ? { threadRootId: ctx.threadRootId } : {}),
     })
     .returning({ id: schema.interactions.id });
   const interactionId = insertedInteraction[0].id;
@@ -135,7 +215,41 @@ export async function commit(
     emailsByEntity.set(f.entityId, list);
   }
 
+  const linkedinFacts =
+    ownedIds.length > 0
+      ? await writeDb.query.entityFacts.findMany({
+          where: and(
+            inArray(schema.entityFacts.entityId, ownedIds),
+            eq(schema.entityFacts.key, 'linkedin'),
+          ),
+          columns: { entityId: true, value: true },
+        })
+      : [];
+  const linkedinsByEntity = new Map<string, string[]>();
+  for (const f of linkedinFacts) {
+    const canon = canonicalizeLinkedin(f.value);
+    if (!canon) continue;
+    const list = linkedinsByEntity.get(f.entityId) ?? [];
+    list.push(canon);
+    linkedinsByEntity.set(f.entityId, list);
+  }
+
+  const entityCompanyRows =
+    ownedIds.length > 0
+      ? await writeDb.query.entityCompanies.findMany({
+          where: inArray(schema.entityCompanies.entityId, ownedIds),
+          columns: { entityId: true, companyId: true },
+        })
+      : [];
+  const companiesByEntity = new Map<string, Set<string>>();
+  for (const row of entityCompanyRows) {
+    const set = companiesByEntity.get(row.entityId) ?? new Set<string>();
+    set.add(row.companyId);
+    companiesByEntity.set(row.entityId, set);
+  }
+
   const entityIds: string[] = [];
+  const persons: CommitPersonResolution[] = [];
   let newEntities = 0;
   let matchedEntities = 0;
 
@@ -143,20 +257,26 @@ export async function commit(
     const cand = extracted.persons[i];
     const candEmbedding = personEmbeddings[i];
 
-    const match = resolvePerson(
+    const localMatch = matchLocalPerson(
       cand,
       userEntities,
       candEmbedding,
       companyIds,
-      topicIds,
       emailsByEntity,
+      linkedinsByEntity,
+      companiesByEntity,
+      i === 0 ? ctx.preferredEntityId : undefined,
     );
 
     let entityId: string;
-    if (match && match.score >= 0.85) {
-      entityId = match.entityId;
+    if (localMatch) {
+      entityId = localMatch.entityId;
       matchedEntities++;
-      // Refresh the cached entity's embedding when we have a stronger signal
+      persons.push({ entityId, created: false, score: localMatch.score });
+      const matchedEntity = userEntities.find((e) => e.id === entityId);
+      if (localMatch.appendAlias && matchedEntity) {
+        await maybeAppendAlias(writeDb, entityId, cand.name, matchedEntity);
+      }
       await writeDb
         .update(schema.entities)
         .set({ updatedAt: new Date(), embedding: candEmbedding })
@@ -175,6 +295,7 @@ export async function commit(
         .returning({ id: schema.entities.id });
       entityId = inserted[0].id;
       newEntities++;
+      persons.push({ entityId, created: true, score: null });
     }
     entityIds.push(entityId);
 
@@ -214,9 +335,18 @@ export async function commit(
       }
     }
 
-    for (const topicName of cand.topics) {
+    const personTopicNames = new Set<string>(cand.topics);
+    for (const t of extracted.topics) personTopicNames.add(t);
+    for (const topicName of personTopicNames) {
       const topicId = topicIds.get(topicName);
       if (!topicId) continue;
+      const existingTopic = await writeDb.query.entityTopics.findFirst({
+        where: and(
+          eq(schema.entityTopics.entityId, entityId),
+          eq(schema.entityTopics.topicId, topicId),
+        ),
+      });
+      if (existingTopic) continue;
       await writeDb.insert(schema.entityTopics).values({
         entityId,
         topicId,
@@ -225,7 +355,6 @@ export async function commit(
       });
     }
 
-    // EntityFact for free-form notes
     if (cand.notes) {
       await writeDb.insert(schema.entityFacts).values({
         entityId,
@@ -236,22 +365,38 @@ export async function commit(
       });
     }
     if (cand.email) {
-      await writeDb.insert(schema.entityFacts).values({
+      const hasEmail = await entityHasComparableFact(
+        writeDb,
         entityId,
-        key: 'email',
-        value: cand.email,
-        confidence: 95,
-        sourceInteractionId: interactionId,
-      });
+        'email',
+        cand.email,
+      );
+      if (!hasEmail) {
+        await writeDb.insert(schema.entityFacts).values({
+          entityId,
+          key: 'email',
+          value: cand.email,
+          confidence: 95,
+          sourceInteractionId: interactionId,
+        });
+      }
     }
     if (cand.linkedin) {
-      await writeDb.insert(schema.entityFacts).values({
+      const hasLinkedin = await entityHasComparableFact(
+        writeDb,
         entityId,
-        key: 'linkedin',
-        value: cand.linkedin,
-        confidence: 95,
-        sourceInteractionId: interactionId,
-      });
+        'linkedin',
+        cand.linkedin,
+      );
+      if (!hasLinkedin) {
+        await writeDb.insert(schema.entityFacts).values({
+          entityId,
+          key: 'linkedin',
+          value: cand.linkedin,
+          confidence: 95,
+          sourceInteractionId: interactionId,
+        });
+      }
     }
   }
 
@@ -263,6 +408,7 @@ export async function commit(
     topicIds: [...topicIds.values()],
     newEntities,
     matchedEntities,
+    persons,
   };
   });
 }
@@ -324,28 +470,66 @@ async function upsertCompany(db: DB, c: CompanyCandidate): Promise<string> {
 async function upsertEvent(
   db: DB,
   e: EventCandidate,
-  capturedAt: Date,
+  _capturedAt: Date,
 ): Promise<string> {
-  const slug = slugify(e.name);
-  const dateGuess = e.dateHint && /^\d{4}-\d{2}-\d{2}/.test(e.dateHint)
-    ? new Date(e.dateHint)
-    : capturedAt;
+  let slug = slugify(e.name);
+  const dateGuess =
+    e.dateHint && /^\d{4}-\d{2}-\d{2}/.test(e.dateHint) ? new Date(e.dateHint) : null;
+  const harvested = e.url ? parseEventExternal(e.url) : null;
+
+  if (harvested) {
+    const byExternal = await db.query.events.findFirst({
+      where: and(
+        eq(schema.events.externalSource, harvested.source),
+        eq(schema.events.externalId, harvested.id),
+      ),
+    });
+    if (byExternal) {
+      const patch: Partial<typeof schema.events.$inferInsert> = {
+        observedCount: byExternal.observedCount + 1,
+        promotedAt:
+          byExternal.observedCount + 1 >= 2 && !byExternal.promotedAt
+            ? new Date()
+            : byExternal.promotedAt,
+      };
+      if (!byExternal.url && e.url) patch.url = e.url;
+      if (!byExternal.location && e.location) patch.location = e.location;
+      await db.update(schema.events).set(patch).where(eq(schema.events.id, byExternal.id));
+      return byExternal.id;
+    }
+  }
 
   const existing = await db.query.events.findFirst({
     where: eq(schema.events.slug, slug),
   });
-  if (existing) {
-    await db
-      .update(schema.events)
-      .set({
-        observedCount: existing.observedCount + 1,
-        promotedAt:
-          existing.observedCount + 1 >= 2 && !existing.promotedAt
-            ? new Date()
-            : existing.promotedAt,
-      })
-      .where(eq(schema.events.id, existing.id));
+  const externalCollision =
+    existing &&
+    harvested &&
+    existing.externalSource !== null &&
+    existing.externalId !== null &&
+    (existing.externalSource !== harvested.source || existing.externalId !== harvested.id);
+  if (existing && !externalCollision) {
+    const patch: Partial<typeof schema.events.$inferInsert> = {
+      observedCount: existing.observedCount + 1,
+      promotedAt:
+        existing.observedCount + 1 >= 2 && !existing.promotedAt
+          ? new Date()
+          : existing.promotedAt,
+    };
+    if (!existing.url && e.url) patch.url = e.url;
+    if (!existing.location && e.location) patch.location = e.location;
+    if (!existing.externalSource && !existing.externalId && harvested) {
+      patch.externalSource = harvested.source;
+      patch.externalId = harvested.id;
+    }
+    await db.update(schema.events).set(patch).where(eq(schema.events.id, existing.id));
     return existing.id;
+  }
+  if (externalCollision) {
+    const encodedId = Array.from(new TextEncoder().encode(harvested.id), (byte) =>
+      byte.toString(16).padStart(2, '0'),
+    ).join('');
+    slug = `${slug.slice(0, 40)}-${harvested.source}-${encodedId}`;
   }
   const inserted = await db
     .insert(schema.events)
@@ -355,6 +539,9 @@ async function upsertEvent(
       dateRangeStart: dateGuess,
       dateRangeEnd: dateGuess,
       location: e.location ?? null,
+      url: e.url ?? null,
+      externalSource: harvested?.source ?? null,
+      externalId: harvested?.id ?? null,
       observedCount: 1,
     })
     .returning({ id: schema.events.id });
@@ -381,17 +568,238 @@ interface ResolvedMatch {
   score: number;
 }
 
+type LocalMatchReason =
+  | 'uniqueEmail'
+  | 'uniqueLinkedin'
+  | 'collidingIdentifier'
+  | 'uniqueNameAtCompany'
+  | 'uniqueName'
+  | 'fuzzy'
+  | 'preferred';
+
+const STRONG_FOREIGN_REASONS: ReadonlySet<LocalMatchReason> = new Set([
+  'uniqueEmail',
+  'uniqueLinkedin',
+  'uniqueName',
+  'uniqueNameAtCompany',
+]);
+
+interface LocalMatch extends ResolvedMatch {
+  reason: LocalMatchReason;
+  appendAlias: boolean;
+}
+
+function factValuesEqual(key: string, a: string, b: string): boolean {
+  if (key === 'email') return a.trim().toLowerCase() === b.trim().toLowerCase();
+  if (key === 'linkedin') {
+    const ca = canonicalizeLinkedin(a);
+    const cb = canonicalizeLinkedin(b);
+    return ca !== null && ca === cb;
+  }
+  return a === b;
+}
+
+async function entityHasComparableFact(
+  db: DB,
+  entityId: string,
+  key: string,
+  value: string,
+): Promise<boolean> {
+  const rows = await db.query.entityFacts.findMany({
+    where: and(eq(schema.entityFacts.entityId, entityId), eq(schema.entityFacts.key, key)),
+    columns: { value: true },
+  });
+  return rows.some((r) => factValuesEqual(key, r.value, value));
+}
+
+async function maybeAppendAlias(
+  db: DB,
+  entityId: string,
+  candidateName: string,
+  entity: schema.Entity,
+): Promise<void> {
+  if (entityMatchesPersonName(candidateName, entity)) return;
+  const aliases = entity.aliases ?? [];
+  if (aliases.some((a) => entityMatchesPersonName(candidateName, { name: a, aliases: [] }))) {
+    return;
+  }
+  await db
+    .update(schema.entities)
+    .set({ aliases: [...aliases, candidateName], updatedAt: new Date() })
+    .where(eq(schema.entities.id, entityId));
+}
+
+/** Strong-key and unique-name match before fuzzy score. Same owner only. */
+export function matchLocalPerson(
+  cand: PersonCandidate,
+  userEntities: schema.Entity[],
+  candEmbedding: number[],
+  companyIds: Map<string, string>,
+  emailsByEntity: Map<string, string[]>,
+  linkedinsByEntity: Map<string, string[]>,
+  companiesByEntity: Map<string, Set<string>>,
+  preferredEntityId?: string | null,
+): LocalMatch | null {
+  const natural = matchLocalPersonNatural(
+    cand,
+    userEntities,
+    candEmbedding,
+    companyIds,
+    emailsByEntity,
+    linkedinsByEntity,
+    companiesByEntity,
+  );
+  if (
+    preferredEntityId &&
+    userEntities.some((e) => e.id === preferredEntityId)
+  ) {
+    const steal =
+      natural != null &&
+      natural.entityId !== preferredEntityId &&
+      STRONG_FOREIGN_REASONS.has(natural.reason);
+    if (!steal) {
+      return {
+        entityId: preferredEntityId,
+        score: 1,
+        reason: 'preferred',
+        appendAlias: true,
+      };
+    }
+  }
+  return natural;
+}
+
+function matchLocalPersonNatural(
+  cand: PersonCandidate,
+  userEntities: schema.Entity[],
+  candEmbedding: number[],
+  companyIds: Map<string, string>,
+  emailsByEntity: Map<string, string[]>,
+  linkedinsByEntity: Map<string, string[]>,
+  companiesByEntity: Map<string, Set<string>>,
+): LocalMatch | null {
+  if (userEntities.length === 0) return null;
+
+  const candEmail = cand.email?.trim().toLowerCase();
+  if (candEmail) {
+    const hits = userEntities.filter((e) => (emailsByEntity.get(e.id) ?? []).includes(candEmail));
+    if (hits.length === 1) {
+      return {
+        entityId: hits[0]!.id,
+        score: 1,
+        reason: 'uniqueEmail',
+        appendAlias: true,
+      };
+    }
+    if (hits.length > 1) {
+      const best = resolvePerson(
+        cand,
+        hits,
+        candEmbedding,
+        companyIds,
+        emailsByEntity,
+        companiesByEntity,
+      );
+      if (best) {
+        return {
+          entityId: best.entityId,
+          score: best.score,
+          reason: 'collidingIdentifier',
+          appendAlias: true,
+        };
+      }
+    }
+  }
+
+  const candLinkedin = cand.linkedin ? canonicalizeLinkedin(cand.linkedin) : null;
+  if (candLinkedin) {
+    const hits = userEntities.filter((e) =>
+      (linkedinsByEntity.get(e.id) ?? []).includes(candLinkedin),
+    );
+    if (hits.length === 1) {
+      return {
+        entityId: hits[0]!.id,
+        score: 1,
+        reason: 'uniqueLinkedin',
+        appendAlias: true,
+      };
+    }
+    if (hits.length > 1) {
+      const best = resolvePerson(
+        cand,
+        hits,
+        candEmbedding,
+        companyIds,
+        emailsByEntity,
+        companiesByEntity,
+      );
+      if (best) {
+        return {
+          entityId: best.entityId,
+          score: best.score,
+          reason: 'collidingIdentifier',
+          appendAlias: true,
+        };
+      }
+    }
+  }
+
+  const companyId = cand.companyHint ? companyIds.get(cand.companyHint) : undefined;
+  const nameMatches = userEntities.filter((e) => entityMatchesPersonName(cand.name, e));
+
+  if (companyId && nameMatches.length > 0) {
+    const atCompany = nameMatches.filter((e) => companiesByEntity.get(e.id)?.has(companyId));
+    if (atCompany.length === 1) {
+      return {
+        entityId: atCompany[0]!.id,
+        score: 1,
+        reason: 'uniqueNameAtCompany',
+        appendAlias: false,
+      };
+    }
+  }
+
+  if (nameMatches.length === 1) {
+    return {
+      entityId: nameMatches[0]!.id,
+      score: 1,
+      reason: 'uniqueName',
+      appendAlias: false,
+    };
+  }
+
+  const fuzzy = resolvePerson(
+    cand,
+    userEntities,
+    candEmbedding,
+    companyIds,
+    emailsByEntity,
+    companiesByEntity,
+  );
+  if (fuzzy && fuzzy.score >= 0.85) {
+    return {
+      entityId: fuzzy.entityId,
+      score: fuzzy.score,
+      reason: 'fuzzy',
+      appendAlias: false,
+    };
+  }
+
+  return null;
+}
+
 function resolvePerson(
   cand: PersonCandidate,
   userEntities: schema.Entity[],
   candEmbedding: number[],
   companyIds: Map<string, string>,
-  _topicIds: Map<string, string>,
   emailsByEntity: Map<string, string[]> = new Map(),
+  companiesByEntity: Map<string, Set<string>> = new Map(),
 ): ResolvedMatch | null {
   if (userEntities.length === 0) return null;
 
   let best: ResolvedMatch | null = null;
+  let bestIsTied = false;
   for (const entity of userEntities) {
     const nameScore = nameSimilarity(cand.name, entity.name);
     const aliasScore = (entity.aliases ?? []).reduce(
@@ -402,9 +810,10 @@ function resolvePerson(
 
     let companyBoost = 0;
     if (cand.companyHint && companyIds.has(cand.companyHint)) {
-      // We know the candidate's company id; if entity has any edge to that company,
-      // boost. (Edge lookup deferred for v0.1.1: rely on name + embedding for now.)
-      companyBoost = 0;
+      const companyId = companyIds.get(cand.companyHint)!;
+      if (companiesByEntity.get(entity.id)?.has(companyId)) {
+        companyBoost = 1;
+      }
     }
 
     let embeddingScore = 0;
@@ -419,7 +828,6 @@ function resolvePerson(
       if (emails.includes(candEmail)) emailBoost = 1;
     }
 
-    // Prefer imported contacts on near-ties so cold-start LinkedIn/vCard wins.
     const importBoost =
       entity.importSource && entity.importSource !== 'voice-capture' ? 0.05 : 0;
 
@@ -427,7 +835,10 @@ function resolvePerson(
       0.5 * nameMax + 0.2 * embeddingScore + 0.15 * companyBoost + 0.3 * emailBoost + importBoost;
     if (!best || score > best.score) {
       best = { entityId: entity.id, score };
+      bestIsTied = false;
+    } else if (score === best.score) {
+      bestIsTied = true;
     }
   }
-  return best;
+  return bestIsTied ? null : best;
 }

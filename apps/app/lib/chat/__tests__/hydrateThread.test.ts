@@ -118,6 +118,7 @@ describe('hydrateThreadItems', () => {
     expect(g.extracted.companies.map((c) => c.name)).toContain('Acme Corp');
     expect(g.extracted.topics).toContain('rust');
     expect(g.extracted.actions[0]?.body).toBe('send the repo');
+    expect(g.extracted.actions[0]?.targetPersonName).toBe('Grace Hopper');
     expect(g.entityIds).toEqual(['e1']);
     expect(g.companyIds).toEqual(['c1']);
 

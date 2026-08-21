@@ -1,0 +1,1 @@
+CREATE INDEX `attachment_event_idx` ON `interaction_attachment` (`event_id`);

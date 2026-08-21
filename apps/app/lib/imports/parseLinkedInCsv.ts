@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { importContactDraftSchema, isLinkedInHost, type ImportContactDraft } from './types';
+import { importContactDraftSchema, normalizeLinkedInUrl, type ImportContactDraft } from './types';
 
 /** LinkedIn Connections.csv header aliases (export variants). */
 const HEADER_ALIASES: Record<string, keyof RowFields> = {
@@ -93,22 +93,6 @@ function parseEmail(raw: string | null): string | null {
   if (!raw) return null;
   const parsed = z.string().trim().email().safeParse(raw);
   return parsed.success ? parsed.data : null;
-}
-
-function normalizeLinkedInUrl(raw: string | null): string | null {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  try {
-    const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
-    const u = new URL(withScheme);
-    if (!isLinkedInHost(u.hostname)) return null;
-    u.hash = '';
-    u.search = '';
-    return u.toString().replace(/\/$/, '');
-  } catch {
-    return null;
-  }
 }
 
 /**

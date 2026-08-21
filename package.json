@@ -36,6 +36,8 @@
     "db:studio":          "bun --filter=@wingmic/db studio",
     "db:apply:doppler":   "doppler run -- bun run db:apply",
     "db:studio:doppler":  "doppler run -- bun run db:studio",
+    "email:send":         "bun scripts/send-email.ts",
+    "email:send:doppler": "doppler run -- bun scripts/send-email.ts",
     "extract:eval":       "bun --filter=@wingmic/extractor eval",
     "extract:eval:doppler":"doppler run -- bun run extract:eval",
     "clean":              "rm -rf node_modules apps/*/node_modules packages/*/node_modules packages/config/*/node_modules .turbo apps/*/.turbo packages/*/.turbo apps/app/.next apps/web/.next apps/web/out packages/brand/dist packages/db/dist packages/design-tokens/dist packages/extractor/dist coverage .open-next .vercel && find . -name '*.tsbuildinfo' -not -path './node_modules/*' -delete 2>/dev/null || true",

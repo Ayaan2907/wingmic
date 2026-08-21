@@ -26,42 +26,6 @@ import { micOrbStateFor, type MicOrbState } from '@/app/capture/micOrbState';
 const accent = '#FFC452';
 const coral = '#FF6B6B';
 
-/** localStorage key — first-run teaching beat for the capture orb (U5). */
-export const ORB_HINT_STORAGE_KEY = 'wingmic.orb-hint-seen';
-
-/** Session fallback when localStorage is blocked (private browsing). */
-let orbHintSessionSeen = false;
-
-/** @internal Vitest-only — module session flag survives across cases. */
-export function resetOrbHintSessionState() {
-  orbHintSessionSeen = false;
-}
-
-function useOrbHint() {
-  const [show, setShow] = React.useState(false);
-
-  React.useEffect(() => {
-    if (orbHintSessionSeen) return;
-    try {
-      if (localStorage.getItem(ORB_HINT_STORAGE_KEY) !== '1') setShow(true);
-    } catch {
-      if (!orbHintSessionSeen) setShow(true);
-    }
-  }, []);
-
-  const dismiss = React.useCallback(() => {
-    orbHintSessionSeen = true;
-    setShow(false);
-    try {
-      localStorage.setItem(ORB_HINT_STORAGE_KEY, '1');
-    } catch {
-      // session flag covers private browsing
-    }
-  }, []);
-
-  return { show, dismiss };
-}
-
 /** Bottom-nav height — kept in sync with chat/_components/tokens.ts. */
 export const TAB_BAR_HEIGHT_PX = 56;
 
@@ -91,6 +55,8 @@ export function NavLink({ tab, active }: { tab: (typeof NAV_TABS)[number]; activ
   return (
     <Link
       href={tab.href as Route}
+      prefetch
+      scroll={false}
       aria-current={active ? 'page' : undefined}
       style={{
         flex: 1,
@@ -99,19 +65,40 @@ export function NavLink({ tab, active }: { tab: (typeof NAV_TABS)[number]; activ
         alignItems: 'center',
         justifyContent: 'center',
         gap: 2,
+        minHeight: 48,
         textDecoration: 'none',
         position: 'relative',
         fontFamily: 'JetBrains Mono, monospace',
         fontSize: 9,
         letterSpacing: 0.5,
         textTransform: 'uppercase',
+        WebkitTapHighlightColor: 'transparent',
+        transition: 'color 0.16s ease-out, transform 0.16s ease-out',
+        transform: active ? 'translateY(-1px)' : 'none',
       }}
     >
       {active && (
         <span aria-hidden="true" style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: 18, height: 2, background: accent, borderRadius: 999 }} />
       )}
-      <span aria-hidden="true" style={{ fontSize: 20, color: active ? accent : 'var(--text-55)' }}>{tab.glyph}</span>
-      <span style={{ color: active ? accent : 'var(--text-40)' }}>{tab.label}</span>
+      <span
+        aria-hidden="true"
+        style={{
+          fontSize: 20,
+          color: active ? accent : 'var(--text-55)',
+          transform: active ? 'translateY(-1px) scale(1.03)' : 'none',
+          transition: 'color 0.16s ease-out, transform 0.16s ease-out',
+        }}
+      >
+        {tab.glyph}
+      </span>
+      <span
+        style={{
+          color: active ? accent : 'var(--text-40)',
+          transition: 'color 0.16s ease-out',
+        }}
+      >
+        {tab.label}
+      </span>
     </Link>
   );
 }
@@ -125,7 +112,6 @@ interface CaptureOrbProps {
 
 export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureOrbProps) {
   const [isHovered, setIsHovered] = React.useState(false);
-  const { show: showHint, dismiss: dismissHint } = useOrbHint();
 
   const status = recorder.status;
   const orbState: MicOrbState = micOrbStateFor(status, isHovered);
@@ -137,7 +123,6 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
   // stale closure), leaving the recorder running with no way to stop. A plain
   // toggle reads the live status on each tap, so it can't get stuck.
   function onOrbClick() {
-    dismissHint();
     const s = recorder.status;
     if (s === 'idle' || s === 'ready' || s === 'error' || s === 'encoding') {
       vibrate(8);
@@ -160,36 +145,9 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
         position: 'relative',
       }}
     >
-      {showHint && !isActiveRec ? (
-        <div
-          role="status"
-          data-testid="orb-hint"
-          className="mono"
-          style={{
-            position: 'absolute',
-            top: -52,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            padding: '6px 10px',
-            borderRadius: 8,
-            background: accent,
-            color: '#000',
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: 0.4,
-            textTransform: 'lowercase',
-            border: '1.5px solid #000',
-            boxShadow: '2px 2px 0 #000',
-            whiteSpace: 'nowrap',
-            pointerEvents: 'none',
-            zIndex: 2,
-          }}
-        >
-          tap to talk
-        </div>
-      ) : null}
       <button
         type="button"
+        className="capture-orb"
         aria-label={
           isActiveRec ? 'recording — tap to stop and send' : 'tap to record voice memo'
         }
@@ -204,7 +162,6 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
         onBlur={() => setIsHovered(false)}
         style={{
           position: 'relative',
-          top: -28,
           width: 52,
           height: 52,
           borderRadius: '50%',
@@ -219,7 +176,7 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
               ? '5px 5px 0 #000'
               : '3px 3px 0 #000',
           cursor: 'pointer',
-          touchAction: 'none',
+          touchAction: 'manipulation',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -279,10 +236,11 @@ export function LockedBar({ onStop, onDiscard, duration }: LockedBarProps) {
       className="app-nav"
       style={{
         alignItems: 'center',
-        gap: 10,
-        padding: '0 12px',
+        gap: 6,
+        padding: '0 8px',
         paddingTop: 0,
         paddingBottom: 'env(safe-area-inset-bottom)',
+        overflow: 'hidden',
       }}
     >
       <span
@@ -311,10 +269,14 @@ export function LockedBar({ onStop, onDiscard, duration }: LockedBarProps) {
         aria-label={`recording locked, ${mm}:${ss}`}
         style={{
           flex: 1,
-          fontSize: 12,
+          minWidth: 0,
+          fontSize: 11,
           color: accent,
           fontVariantNumeric: 'tabular-nums',
           letterSpacing: 0.5,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
         }}
       >
         ● rec · {mm}:{ss}
@@ -324,27 +286,30 @@ export function LockedBar({ onStop, onDiscard, duration }: LockedBarProps) {
         onClick={onDiscard}
         aria-label="discard recording"
         style={{
-          padding: '6px 10px',
+          minHeight: 40,
+          padding: '8px 10px',
           borderRadius: 8,
           background: 'transparent',
           color: coral,
           border: `1.5px solid ${coral}`,
           cursor: 'pointer',
           fontFamily: 'JetBrains Mono, monospace',
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: 700,
           letterSpacing: 0.5,
           textTransform: 'uppercase',
+          flexShrink: 0,
         }}
       >
-        × discard
+        discard
       </button>
       <button
         type="button"
         onClick={onStop}
         aria-label="send recording"
         style={{
-          padding: '6px 14px',
+          minHeight: 40,
+          padding: '8px 12px',
           borderRadius: 8,
           background: accent,
           color: '#000',
@@ -352,13 +317,14 @@ export function LockedBar({ onStop, onDiscard, duration }: LockedBarProps) {
           boxShadow: '3px 3px 0 #000',
           cursor: 'pointer',
           fontFamily: 'JetBrains Mono, monospace',
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: 800,
           letterSpacing: 0.5,
           textTransform: 'uppercase',
+          flexShrink: 0,
         }}
       >
-        send →
+        send
       </button>
     </nav>
   );

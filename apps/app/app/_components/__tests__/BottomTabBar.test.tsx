@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import { CaptureOrb, ORB_HINT_STORAGE_KEY, resetOrbHintSessionState } from '../BottomTabBar';
+import { CaptureOrb } from '../BottomTabBar';
 
 const beginCapture = vi.fn();
 const recorder = {
@@ -22,13 +22,12 @@ const recorder = {
 
 afterEach(() => {
   cleanup();
-  localStorage.clear();
-  resetOrbHintSessionState();
   beginCapture.mockClear();
+  recorder.stop.mockClear();
 });
 
-describe('CaptureOrb first-run hint', () => {
-  it('shows tap to talk until the orb is tapped, then persists dismiss', () => {
+describe('CaptureOrb', () => {
+  it('does not render a tap-to-talk teaching bubble', () => {
     render(
       <CaptureOrb
         isActive={false}
@@ -37,15 +36,24 @@ describe('CaptureOrb first-run hint', () => {
         beginCapture={beginCapture}
       />,
     );
-    expect(screen.getByTestId('orb-hint').textContent).toMatch(/tap to talk/i);
-
-    fireEvent.click(screen.getByRole('button', { name: /record voice memo/i }));
-    expect(beginCapture).toHaveBeenCalled();
-    expect(localStorage.getItem(ORB_HINT_STORAGE_KEY)).toBe('1');
     expect(screen.queryByTestId('orb-hint')).toBeNull();
+    expect(screen.queryByText(/tap to talk/i)).toBeNull();
   });
 
-  it('hides the hint while recording', () => {
+  it('taps idle to begin capture', () => {
+    render(
+      <CaptureOrb
+        isActive={false}
+        label="capture"
+        recorder={recorder}
+        beginCapture={beginCapture}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /record voice memo/i }));
+    expect(beginCapture).toHaveBeenCalled();
+  });
+
+  it('taps recording to stop', () => {
     render(
       <CaptureOrb
         isActive={false}
@@ -54,53 +62,8 @@ describe('CaptureOrb first-run hint', () => {
         beginCapture={beginCapture}
       />,
     );
-    expect(screen.queryByTestId('orb-hint')).toBeNull();
-  });
-
-  it('shows at most once per session when localStorage throws', () => {
-    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-      throw new Error('blocked');
-    });
-    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('blocked');
-    });
-
-    const { unmount } = render(
-      <CaptureOrb
-        isActive={false}
-        label="capture"
-        recorder={recorder}
-        beginCapture={beginCapture}
-      />,
-    );
-    expect(screen.getByTestId('orb-hint')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /record voice memo/i }));
-    unmount();
-
-    render(
-      <CaptureOrb
-        isActive={false}
-        label="capture"
-        recorder={recorder}
-        beginCapture={beginCapture}
-      />,
-    );
-    expect(screen.queryByTestId('orb-hint')).toBeNull();
-
-    getItem.mockRestore();
-    setItem.mockRestore();
-  });
-
-  it('does not show the hint after it was dismissed in a prior session', () => {
-    localStorage.setItem(ORB_HINT_STORAGE_KEY, '1');
-    render(
-      <CaptureOrb
-        isActive={false}
-        label="capture"
-        recorder={recorder}
-        beginCapture={beginCapture}
-      />,
-    );
-    expect(screen.queryByTestId('orb-hint')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /recording/i }));
+    expect(recorder.stop).toHaveBeenCalled();
+    expect(beginCapture).not.toHaveBeenCalled();
   });
 });

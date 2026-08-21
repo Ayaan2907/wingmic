@@ -25,6 +25,14 @@ const { mutateAsyncMock, deleteMutateMock, restoreMutateMock, recallFetchMock, c
     createDraftMutate: vi.fn(),
   }));
 
+const { compressImageMock } = vi.hoisted(() => ({
+  compressImageMock: vi.fn(),
+}));
+
+vi.mock('@/lib/chat/compressImage', () => ({
+  compressImageFile: compressImageMock,
+}));
+
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     capture: {
@@ -60,6 +68,17 @@ vi.mock('@/lib/trpc/client', () => ({
     recall: {
       query: {
         fetch: recallFetchMock,
+      },
+    },
+    settings: {
+      get: {
+        useQuery: () => ({
+          data: {
+            calendarIcsUrl:
+              'https://calendar.google.com/calendar/ical/x/public/basic.ics',
+          },
+          isLoading: false,
+        }),
       },
     },
     useUtils: () => ({
@@ -134,6 +153,7 @@ vi.mock('@/app/capture/_components/useAudioRecorder', () => {
 
 import ChatClient from '@/app/chat/ChatClient';
 import { RecordingOverlay } from '@/app/_components/RecordingOverlay';
+import { useCapture } from '@/app/_components/CaptureProvider';
 import { renderWithShell } from '@/test/renderWithShell';
 import * as React from 'react';
 
@@ -148,6 +168,21 @@ function renderChat(props: { userName: string | null; initialThread?: Parameters
       <ChatClient {...props} />
       <RecordingOverlay />
     </>,
+  );
+}
+
+function DuplicateSubmitHarness() {
+  const { submitText } = useCapture();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void submitText('met Ada Lovelace');
+        void submitText('met Ada Lovelace');
+      }}
+    >
+      submit twice
+    </button>
   );
 }
 
@@ -183,6 +218,12 @@ describe('ChatClient', () => {
       durationMs: 12,
       mode: 'semantic',
     });
+    compressImageMock.mockReset();
+    compressImageMock.mockResolvedValue({
+      jpegBase64: 'default-photo',
+      byteSize: 12,
+      qrText: null,
+    });
     // fetch is replaced per test
     (globalThis as { fetch?: unknown }).fetch = vi.fn();
   });
@@ -212,6 +253,14 @@ describe('ChatClient', () => {
     expect(nav.textContent).not.toContain('settings');
     // hold-to-talk orb lives in the bottom nav (PR β₁-D — the orb IS the dock).
     expect(screen.getByRole('button', { name: /record voice memo/i })).toBeTruthy();
+  });
+
+  it('chat composer sits on an opaque pill so the thread cannot show through', () => {
+    renderChat({ userName: 'ada' });
+    const composer = screen.getByTestId('chat-composer');
+    expect(composer.style.background).toMatch(/var\(--bg-page\)|#0a0a0a/);
+    const pill = composer.firstElementChild as HTMLElement;
+    expect(pill.style.background).toMatch(/var\(--bg-card\)|#141414|rgb\(20,\s*20,\s*20\)/);
   });
 
   it('runs the full record → transcribe → commit cycle and renders a committed bubble + graph card', async () => {
@@ -279,20 +328,19 @@ describe('ChatClient', () => {
     await waitFor(() => {
       expect(screen.getAllByText('sarah').length).toBeGreaterThanOrEqual(1);
     });
-    // PR ε / A6: agent reply with live draft follow-up when a person was extracted.
+    // #146: in-thread person card. dump-to-acts CTAs are gone.
     const reply = await waitFor(() => screen.getByTestId('agent-reply'));
     expect(reply.textContent).toMatch(/acknowledged/i);
     expect(reply.textContent).toMatch(/1 person/);
     expect(reply.textContent).toMatch(/1 company/);
-    const draftBtn = screen.getByRole('button', { name: /draft follow-up/i });
-    expect((draftBtn as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.click(draftBtn);
-    expect(createDraftMutate).toHaveBeenCalledWith({
-      kind: 'email',
-      intent: 'follow-up',
-      targetEntityId: 'en_sarah',
-      sourceInteractionId: 'int-1',
-    });
+    expect(screen.queryByRole('button', { name: /draft follow-up/i })).toBeNull();
+    expect(screen.queryByTestId('open-card')).toBeNull();
+    const card = screen.getByTestId('person-capture-card');
+    expect(card.textContent).toMatch(/sarah/i);
+    const photoBtn = screen.getByRole('button', { name: /add photo for sarah/i });
+    fireEvent.click(photoBtn);
+    expect(screen.getByTestId('open-capture-chip').textContent).toMatch(/adding to sarah/i);
+    expect(createDraftMutate).not.toHaveBeenCalled();
   });
 
   it('renders a soft agent reply when extracted entities are all empty', async () => {
@@ -652,7 +700,386 @@ describe('ChatClient', () => {
     expect(screen.getAllByText(/Ada Lovelace/i).length).toBeGreaterThanOrEqual(1);
   });
 
-  it('thread dims (opacity 0.4, pointer-events none) when recorder transitions to recording', async () => {
+  it('renders a person card for every extracted person, not only the first', () => {
+    renderChat({
+      userName: 'ada',
+      initialThread: [
+        {
+          id: 'ix_three',
+          transcript: 'met sara, priya, and marcus at the rust booth',
+          capturedAt: '2026-08-20T21:14:00Z',
+          graphResult: {
+            extracted: {
+              persons: [
+                { name: 'Sara Chen', role: 'rust lead', companyHint: 'Acme', topics: ['rust'] },
+                { name: 'Priya Mehta', role: 'hiring', companyHint: 'Linear', topics: [] },
+                { name: 'Marcus Kim', role: null, companyHint: 'Stripe', topics: ['deck'] },
+              ],
+              companies: [{ name: 'Acme' }, { name: 'Linear' }, { name: 'Stripe' }],
+              events: [{ name: 'eth denver' }],
+              topics: [],
+              actions: [
+                {
+                  kind: 'email',
+                  body: 'send the deck',
+                  whenHint: 'monday',
+                  targetPersonName: 'Marcus Kim',
+                },
+              ],
+            },
+            newEntities: 3,
+            matchedEntities: 0,
+            interactionId: 'ix_three',
+            entityIds: ['en_sara', 'en_priya', 'en_marcus'],
+          },
+        },
+      ],
+    });
+    const cards = screen.getAllByTestId('person-capture-card');
+    expect(cards).toHaveLength(3);
+    expect(screen.getByText('promised monday')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /draft follow-up/i })).toBeNull();
+    expect(screen.queryByTestId('open-card')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /add photo for Priya Mehta/i }));
+    expect(screen.getByTestId('open-capture-chip').textContent).toMatch(/adding to priya mehta/i);
+  });
+
+  it('keeps the newest attachment when an older compression finishes last', async () => {
+    let resolveFirst!: (value: unknown) => void;
+    let resolveSecond!: (value: unknown) => void;
+    compressImageMock
+      .mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveSecond = resolve; }));
+
+    renderChat({ userName: 'ada' });
+    const input = screen.getByTestId('composer-pin-input');
+    fireEvent.change(input, {
+      target: { files: [new File(['first'], 'first.jpg', { type: 'image/jpeg' })] },
+    });
+    fireEvent.change(input, {
+      target: { files: [new File(['second'], 'second.jpg', { type: 'image/jpeg' })] },
+    });
+
+    await act(async () => {
+      resolveSecond({ jpegBase64: 'second-photo', byteSize: 12, qrText: null });
+      await Promise.resolve();
+    });
+    expect(screen.getByAltText('attached photo').getAttribute('src')).toContain('second-photo');
+
+    await act(async () => {
+      resolveFirst({ jpegBase64: 'first-photo', byteSize: 12, qrText: null });
+      await Promise.resolve();
+    });
+    expect(screen.getByAltText('attached photo').getAttribute('src')).toContain('second-photo');
+  });
+
+  it('prevents duplicate composer submissions while commit is in flight', async () => {
+    let resolveCommit!: (value: unknown) => void;
+    mutateAsyncMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCommit = resolve;
+      }),
+    );
+    renderWithShell(<DuplicateSubmitHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'submit twice' }));
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveCommit({
+        extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+        newEntities: 0,
+        matchedEntities: 0,
+        interactionId: 'ix-once',
+      });
+      await Promise.resolve();
+    });
+  });
+
+  it('keeps a replacement attachment while an earlier attachment commit is in flight', async () => {
+    let resolveCommit!: (value: unknown) => void;
+    mutateAsyncMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCommit = resolve;
+      }),
+    );
+    compressImageMock
+      .mockResolvedValueOnce({ jpegBase64: 'first-photo', byteSize: 12, qrText: null })
+      .mockResolvedValueOnce({ jpegBase64: 'second-photo', byteSize: 12, qrText: null });
+    renderChat({ userName: 'ada' });
+    const fileInput = screen.getByTestId('composer-pin-input');
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['first'], 'first.jpg', { type: 'image/jpeg' })] },
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('composer-attachment-preview').querySelector('img')?.getAttribute('src'),
+      ).toContain('first-photo'),
+    );
+    fireEvent.change(screen.getByLabelText('chat composer'), { target: { value: 'first memo' } });
+    fireEvent.submit(screen.getByTestId('chat-composer'));
+    expect(mutateAsyncMock.mock.calls[0]?.[0]).toMatchObject({
+      attachment: { jpegBase64: 'first-photo' },
+    });
+
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['second'], 'second.jpg', { type: 'image/jpeg' })] },
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('composer-attachment-preview').querySelector('img')?.getAttribute('src'),
+      ).toContain('second-photo'),
+    );
+    await act(async () => {
+      resolveCommit({
+        extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+        newEntities: 0,
+        matchedEntities: 0,
+        interactionId: 'ix-first-photo',
+      });
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByTestId('composer-attachment-preview').querySelector('img')?.getAttribute('src'),
+    ).toContain('second-photo');
+  });
+
+  it('does not submit while a replacement attachment is still compressing', async () => {
+    let resolveReplacement!: (value: unknown) => void;
+    compressImageMock
+      .mockResolvedValueOnce({ jpegBase64: 'first-photo', byteSize: 12, qrText: null })
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveReplacement = resolve;
+        }),
+      );
+    mutateAsyncMock.mockResolvedValue({
+      extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+      newEntities: 0,
+      matchedEntities: 0,
+      interactionId: 'ix-replacement',
+    });
+    renderChat({ userName: 'ada' });
+    const fileInput = screen.getByTestId('composer-pin-input');
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['first'], 'first.jpg', { type: 'image/jpeg' })] },
+    });
+    await waitFor(() => expect(screen.getByTestId('composer-attachment-preview')).toBeTruthy());
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['second'], 'second.jpg', { type: 'image/jpeg' })] },
+    });
+    fireEvent.change(screen.getByLabelText('chat composer'), { target: { value: 'replacement' } });
+    fireEvent.submit(screen.getByTestId('chat-composer'));
+    expect(mutateAsyncMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveReplacement({ jpegBase64: 'second-photo', byteSize: 12, qrText: null });
+      await Promise.resolve();
+    });
+    fireEvent.submit(screen.getByTestId('chat-composer'));
+    await waitFor(() => expect(mutateAsyncMock).toHaveBeenCalledTimes(1));
+    expect(mutateAsyncMock.mock.calls[0]?.[0]).toMatchObject({
+      attachment: { jpegBase64: 'second-photo' },
+    });
+  });
+
+  it('requires a person choice or explicit unassigned choice for a multi-person photo', async () => {
+    renderChat({
+      userName: 'ada',
+      initialThread: [
+        {
+          id: 'ix-people',
+          transcript: 'met Ada Lovelace and Grace Hopper',
+          capturedAt: '2026-08-20T21:14:00Z',
+          graphResult: {
+            extracted: {
+              persons: [
+                { name: 'Ada Lovelace', role: null, companyHint: null, topics: [] },
+                { name: 'Grace Hopper', role: null, companyHint: null, topics: [] },
+              ],
+              companies: [],
+              events: [],
+              topics: [],
+              actions: [],
+            },
+            newEntities: 2,
+            matchedEntities: 0,
+            interactionId: 'ix-people',
+            entityIds: ['en-ada', 'en-grace'],
+          },
+        },
+      ],
+    });
+    fireEvent.change(screen.getByTestId('composer-pin-input'), {
+      target: { files: [new File(['photo'], 'people.jpg', { type: 'image/jpeg' })] },
+    });
+    await waitFor(() => expect(screen.getByTestId('photo-bind-picker')).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('chat composer'), { target: { value: 'conference photo' } });
+    fireEvent.submit(screen.getByTestId('chat-composer'));
+    expect(mutateAsyncMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /leave photo unassigned/i }));
+    mutateAsyncMock.mockResolvedValue({
+      extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+      newEntities: 0,
+      matchedEntities: 0,
+      interactionId: 'ix-photo',
+    });
+    fireEvent.submit(screen.getByTestId('chat-composer'));
+    await waitFor(() => expect(mutateAsyncMock).toHaveBeenCalledTimes(1));
+    expect(mutateAsyncMock.mock.calls[0]?.[0]).not.toHaveProperty('targetEntityId');
+  });
+
+  it('shows attachment compression errors in the composer', async () => {
+    compressImageMock.mockRejectedValue(new Error('couldnt read that photo'));
+    renderChat({ userName: 'ada' });
+    fireEvent.change(screen.getByTestId('composer-pin-input'), {
+      target: { files: [new File(['bad'], 'bad.png', { type: 'image/png' })] },
+    });
+    expect((await screen.findByRole('alert')).textContent).toContain('couldnt read that photo');
+  });
+
+  it('restores the last event session past a newer ordinary memo', () => {
+    renderChat({
+      userName: 'ada',
+      initialThread: [
+        {
+          id: 'ix-event',
+          transcript: 'at Open Source Summit',
+          capturedAt: '2026-08-20T20:00:00Z',
+          graphResult: {
+            extracted: {
+              persons: [],
+              companies: [],
+              events: [{ name: 'Open Source Summit' }],
+              topics: [],
+              actions: [],
+            },
+            newEntities: 1,
+            matchedEntities: 0,
+            interactionId: 'ix-event',
+            eventIds: ['ev-summit'],
+          },
+        },
+        {
+          id: 'ix-ordinary',
+          transcript: 'remember the compiler notes',
+          capturedAt: '2026-08-20T21:00:00Z',
+          graphResult: {
+            extracted: {
+              persons: [],
+              companies: [],
+              events: [],
+              topics: ['compilers'],
+              actions: [],
+            },
+            newEntities: 0,
+            matchedEntities: 0,
+            interactionId: 'ix-ordinary',
+          },
+        },
+      ],
+    });
+    expect(screen.getByTestId('open-event-chip').textContent).toContain(
+      'open source summit · open',
+    );
+  });
+
+  it('exposes pin and camera attach on the composer', () => {
+    renderChat({ userName: 'ada' });
+    expect(screen.getByTestId('composer-attach-pin')).toBeTruthy();
+    expect(screen.getByTestId('composer-attach-camera')).toBeTruthy();
+  });
+
+  it('opens a live camera preview instead of a file picker', async () => {
+    const stop = vi.fn();
+    const getUserMedia = vi.fn(async (_constraints?: MediaStreamConstraints) => ({
+      getTracks: () => [{ stop }],
+    }));
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
+
+    renderChat({ userName: 'ada' });
+    expect(screen.queryByTestId('composer-camera-input')).toBeNull();
+    fireEvent.click(screen.getByTestId('composer-attach-camera'));
+
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(1));
+    expect(getUserMedia.mock.calls[0]?.[0]).toMatchObject({ audio: false });
+    expect(getUserMedia.mock.calls[0]?.[0]).toMatchObject({
+      video: expect.anything(),
+    });
+    expect(screen.getByTestId('camera-preview')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /snap/i })).toBeTruthy();
+  });
+
+  it('sends parentInteractionId and targetEntityId on the next memo after photo', async () => {
+    mutateAsyncMock.mockResolvedValue({
+      extracted: {
+        persons: [{ name: 'Ada Lovelace', role: null, companyHint: null, topics: [] }],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      newEntities: 0,
+      matchedEntities: 1,
+      interactionId: 'ix_followup',
+      entityIds: ['en_ada'],
+    });
+
+    renderChat({
+      userName: 'ada',
+      initialThread: [
+        {
+          id: 'ix_hydrated',
+          transcript: 'met Ada Lovelace, rust lead',
+          capturedAt: '2026-06-01T14:00:00Z',
+          graphResult: {
+            extracted: {
+              persons: [
+                {
+                  name: 'Ada Lovelace',
+                  role: 'rust lead',
+                  companyHint: null,
+                  topics: ['rust'],
+                },
+              ],
+              companies: [],
+              events: [],
+              topics: ['rust'],
+              actions: [],
+            },
+            newEntities: 1,
+            matchedEntities: 0,
+            interactionId: 'ix_hydrated',
+            entityIds: ['en_ada'],
+          },
+        },
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /add photo for Ada Lovelace/i }));
+    expect(screen.getByTestId('open-capture-chip').textContent).toMatch(/adding to ada lovelace/i);
+
+    const input = screen.getByLabelText('chat composer');
+    fireEvent.change(input, { target: { value: 'her linkedin is /in/adalovelace' } });
+    fireEvent.submit(screen.getByTestId('chat-composer'));
+
+    await waitFor(() => {
+      expect(mutateAsyncMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          transcript: 'her linkedin is /in/adalovelace',
+          parentInteractionId: 'ix_hydrated',
+          targetEntityId: 'en_ada',
+        }),
+      );
+    });
+  });
+
+  it('thread blocks pointer events when recorder transitions to recording', async () => {
     renderChat({
       userName: 'ada',
       initialThread: [
@@ -660,26 +1087,20 @@ describe('ChatClient', () => {
       ],
     });
     const pastBubble = screen.getByText('past memo one');
-    // Walk up to the dim wrapper — it's the parent div with opacity:1 initially.
-    const dimWrapper = pastBubble.closest('div[style*="opacity"]') as HTMLElement | null;
-    expect(dimWrapper).toBeTruthy();
-    // Idle: opacity 1, pointer-events auto
-    expect(dimWrapper!.style.opacity).toBe('1');
-    expect(dimWrapper!.style.pointerEvents).toBe('auto');
+    const threadWrapper = pastBubble.closest('div[style*="pointer-events"]') as HTMLElement | null;
+    expect(threadWrapper).toBeTruthy();
+    expect(threadWrapper!.style.pointerEvents).toBe('auto');
 
-    // Transition the recorder into a recording status.
     await act(async () => {
       setStatusHook?.('recording');
       await Promise.resolve();
     });
 
-    // After transition, the same wrapper should have opacity 0.4.
-    const dimWrapperAfter = screen
+    const threadWrapperAfter = screen
       .getByText('past memo one')
-      .closest('div[style*="opacity"]') as HTMLElement | null;
-    expect(dimWrapperAfter).toBeTruthy();
-    expect(dimWrapperAfter!.style.opacity).toBe('0.4');
-    expect(dimWrapperAfter!.style.pointerEvents).toBe('none');
+      .closest('div[style*="pointer-events"]') as HTMLElement | null;
+    expect(threadWrapperAfter).toBeTruthy();
+    expect(threadWrapperAfter!.style.pointerEvents).toBe('none');
   });
 
   it('can start a second recording while the first bubble is still linking', async () => {

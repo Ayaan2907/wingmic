@@ -43,6 +43,41 @@
       "when": 1786133746879,
       "tag": "0005_rich_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1787249758981,
+      "tag": "0006_tired_norrin_radd",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1787265858289,
+      "tag": "0007_odd_shadow_king",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1787269794443,
+      "tag": "0008_chief_bedlam",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1787272000000,
+      "tag": "0009_calendar_ics",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1787283043613,
+      "tag": "0010_illegal_stone_men",
+      "breakpoints": true
     }
   ]
 }

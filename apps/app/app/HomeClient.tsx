@@ -51,6 +51,12 @@ export interface HomeClientProps {
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
+function firstNameOf(userName: string | null): string {
+  const trimmed = userName?.trim();
+  if (!trimmed) return 'you';
+  return trimmed.split(/\s+/)[0]!;
+}
+
 function timeOf(iso: string): string {
   try {
     return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -77,18 +83,30 @@ export default function HomeClient({ userName, initialData }: HomeClientProps) {
       <Header userName={userName} />
 
       <section
+        className="surface-wrap surface-wrap-compact"
         style={{
-          padding: '20px 20px 0',
-          maxWidth: 640,
-          width: '100%',
-          margin: '0 auto',
+          paddingTop: 16,
+          paddingBottom: 8,
           boxSizing: 'border-box',
         }}
       >
+        <h1
+          data-testid="home-greeting"
+          style={{
+            font: '800 clamp(28px, 8.2vw, 38px)/1.05 var(--font-sans)',
+            letterSpacing: '-0.03em',
+            margin: '0 0 16px',
+          }}
+        >
+          hey,{' '}
+          <span className="serif" style={{ fontStyle: 'italic', color: accent, fontWeight: 400 }}>
+            {firstNameOf(userName)}.
+          </span>
+        </h1>
         <StatsRow today={todayCount} week={weekCount} />
-        <ImportsCue />
         <HomeActsPanel fallbackCount={pendingActs} />
         <ActivityList items={recent} />
+        <ImportsCue />
       </section>
     </main>
   );
@@ -99,17 +117,12 @@ export default function HomeClient({ userName, initialData }: HomeClientProps) {
 function Header({ userName }: { userName: string | null }) {
   return (
     <header
+      className="surface-header"
       style={{
-        padding: '14px 20px',
-        borderBottom: '1px solid var(--border-soft)',
+        padding: '14px 16px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        position: 'sticky',
-        top: 0,
-        background: 'rgba(10,10,10,0.85)',
-        backdropFilter: 'blur(20px)',
-        zIndex: 30,
         gap: 12,
       }}
     >
@@ -121,6 +134,7 @@ function Header({ userName }: { userName: string | null }) {
         wingmic<span style={{ color: 'var(--text-30)' }}>.xyz</span>
       </Link>
       <span
+        aria-hidden="true"
         className="mono"
         style={{
           fontSize: 10,
@@ -139,7 +153,9 @@ function Header({ userName }: { userName: string | null }) {
           aria-label="search"
           className="mono"
           style={{
-            padding: '6px 10px',
+            minWidth: 48,
+            minHeight: 48,
+            padding: '0 12px',
             borderRadius: 8,
             background: 'var(--surface-1)',
             border: '1px solid var(--border-soft)',
@@ -148,6 +164,9 @@ function Header({ userName }: { userName: string | null }) {
             fontSize: 11,
             letterSpacing: 1,
             textTransform: 'uppercase',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
           search
@@ -155,9 +174,10 @@ function Header({ userName }: { userName: string | null }) {
         <Link
           href="/settings"
           aria-label="settings"
+          className="mono"
           style={{
-            width: 30,
-            height: 30,
+            minWidth: 48,
+            minHeight: 48,
             borderRadius: 8,
             background: 'var(--surface-1)',
             border: '1px solid var(--border-soft)',
@@ -166,11 +186,13 @@ function Header({ userName }: { userName: string | null }) {
             justifyContent: 'center',
             color: 'var(--text-55)',
             textDecoration: 'none',
-            fontSize: 14,
+            fontSize: 10,
+            letterSpacing: 0.5,
+            textTransform: 'uppercase',
             flexShrink: 0,
           }}
         >
-          ⚙
+          set
         </Link>
       </div>
     </header>
@@ -187,7 +209,7 @@ function ImportsCue() {
       style={{
         display: 'block',
         marginBottom: 20,
-        padding: '14px 16px',
+        padding: '16px',
         borderRadius: 14,
         border: `1.5px dashed ${accent}66`,
         background: `${accent}0d`,
@@ -195,7 +217,7 @@ function ImportsCue() {
         color: 'inherit',
       }}
     >
-      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
         import contacts →
       </div>
       <div className="mono" style={{ fontSize: 11, color: 'var(--text-55)', lineHeight: 1.4 }}>
@@ -220,8 +242,8 @@ function StatsRow({ today, week }: { today: number; week: number }) {
       style={{
         display: 'grid',
         gridTemplateColumns: '1fr 1fr',
-        gap: 12,
-        marginBottom: 24,
+        gap: 10,
+        marginBottom: 20,
       }}
       data-testid="home-stats"
     >
@@ -229,7 +251,7 @@ function StatsRow({ today, week }: { today: number; week: number }) {
         <div
           key={s.l}
           style={{
-            padding: '18px 16px 14px',
+            padding: '16px 14px 12px',
             borderRadius: 14,
             background: 'var(--surface-1, rgba(255,255,255,0.02))',
             border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
@@ -243,7 +265,7 @@ function StatsRow({ today, week }: { today: number; week: number }) {
             style={{
               fontStyle: 'italic',
               fontWeight: 400,
-              fontSize: 56,
+              fontSize: 'clamp(44px, 12vw, 56px)',
               lineHeight: 0.85,
               color: s.c,
               letterSpacing: '-0.04em',
@@ -325,8 +347,9 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
                 data-testid={`home-activity-row-${item.id}`}
                 style={{
                   display: 'flex',
-                  alignItems: 'center',
+                  alignItems: 'flex-start',
                   gap: 12,
+                  minHeight: 56,
                   padding: '12px 14px',
                   textDecoration: 'none',
                   color: 'inherit',
@@ -346,7 +369,8 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
                   color: 'var(--text-85)',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
+                  whiteSpace: 'normal',
+                  wordBreak: 'break-word',
                 }}
               >
                 {item.transcriptPreview || '— (no transcript)'}
@@ -355,7 +379,8 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
                 className="mono"
                 aria-label={`${item.entityCount} entities`}
                 style={{
-                  padding: '2px 8px',
+                  marginTop: 2,
+                  padding: '3px 8px',
                   borderRadius: 999,
                   background: `${third}1f`,
                   color: third,
@@ -372,6 +397,7 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
               <span
                 className="mono"
                 style={{
+                  marginTop: 3,
                   fontSize: 10,
                   color: 'var(--text-30)',
                   flexShrink: 0,
@@ -516,10 +542,13 @@ function HomeActsPanel({ fallbackCount }: { fallbackCount: number }) {
                 marginTop: 8,
                 fontSize: 11,
                 color: accent,
-                background: 'none',
-                border: 'none',
+                minHeight: 40,
+                padding: '0 10px',
+                borderRadius: 8,
+                background: `${accent}12`,
+                border: `1px solid ${accent}4d`,
                 cursor: 'pointer',
-                padding: 0,
+                fontWeight: 700,
               }}
             >
               retry →

@@ -57,6 +57,8 @@ export const users = sqliteTable('user', {
   preferredMicDeviceId: text('preferred_mic_device_id'),
   asrLanguage: text('asr_language').notNull().default('en-US'),
   acknowledgedPrivacy: integer('acknowledged_privacy', { mode: 'boolean' }).notNull().default(false),
+  /** Public Google Calendar iCal URL (`/public/basic.ics`). Never log. */
+  calendarIcsUrl: text('calendar_ics_url'),
 });
 
 // BetterAuth core tables — kept in sync with @better-auth/cli expectations.
@@ -166,11 +168,18 @@ export const events = sqliteTable(
     dateRangeEnd: integer('date_range_end', { mode: 'timestamp' }),
     location: text('location'),
     url: text('url'),
+    externalSource: text('external_source', {
+      enum: ['luma', 'partiful', 'web'],
+    }),
+    externalId: text('external_id'),
     observedCount: integer('observed_count').notNull().default(1),
     promotedAt: integer('promoted_at', { mode: 'timestamp' }),
     createdAt: ts('created_at'),
   },
-  (t) => [index('event_name_idx').on(t.name)],
+  (t) => [
+    index('event_name_idx').on(t.name),
+    uniqueIndex('event_external_idx').on(t.externalSource, t.externalId),
+  ],
 );
 
 export const topics = sqliteTable('topic', {
@@ -254,6 +263,27 @@ export const interactions = sqliteTable(
     index('interaction_user_idx').on(t.userId),
     index('interaction_captured_at_idx').on(t.capturedAt),
     uniqueIndex('interaction_user_client_capture_idx').on(t.userId, t.clientCaptureId),
+  ],
+);
+
+export const interactionAttachments = sqliteTable(
+  'interaction_attachment',
+  {
+    id: id(),
+    interactionId: text('interaction_id')
+      .notNull()
+      .references(() => interactions.id, { onDelete: 'cascade' }),
+    entityId: text('entity_id').references(() => entities.id, { onDelete: 'set null' }),
+    eventId: text('event_id').references(() => events.id, { onDelete: 'set null' }),
+    mimeType: text('mime_type').notNull().default('image/jpeg'),
+    jpegBase64: text('jpeg_base64').notNull(),
+    byteSize: integer('byte_size').notNull(),
+    createdAt: ts('created_at'),
+  },
+  (t) => [
+    index('attachment_interaction_idx').on(t.interactionId),
+    index('attachment_entity_idx').on(t.entityId),
+    index('attachment_event_idx').on(t.eventId),
   ],
 );
 
@@ -366,6 +396,9 @@ export const entityMerges = sqliteTable(
     // Audit table: SET NULL preserves merge history if the acting user is later deleted.
     mergedByUserId: text('merged_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     mergedAt: ts('merged_at'),
+    reversedAt: integer('reversed_at', { mode: 'timestamp' }),
+    /** JSON EntityMergeMoves — row ids re-pointed during merge for 30s undo. */
+    moves: text('moves'),
   },
   (t) => [
     index('entity_merge_target_idx').on(t.targetEntityId),
@@ -461,6 +494,8 @@ export type Event = typeof events.$inferSelect;
 export type Topic = typeof topics.$inferSelect;
 export type Interaction = typeof interactions.$inferSelect;
 export type NewInteraction = typeof interactions.$inferInsert;
+export type InteractionAttachment = typeof interactionAttachments.$inferSelect;
+export type NewInteractionAttachment = typeof interactionAttachments.$inferInsert;
 export type EntityFact = typeof entityFacts.$inferSelect;
 export type EntityNote = typeof entityNotes.$inferSelect;
 export type EntityMerge = typeof entityMerges.$inferSelect;

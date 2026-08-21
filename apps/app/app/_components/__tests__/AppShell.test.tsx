@@ -4,6 +4,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // next/link → plain <a> for tests (typedRoutes adds runtime indirection we
 // don't need; matches the entity detail test pattern). Needed for the
 // back-affordance test which renders EntityDetailScaffold.
+let calendarNudgeUrl: string | null = null;
+
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: any) => (
     <a href={typeof href === 'string' ? href : String(href)} {...rest}>
@@ -24,6 +26,14 @@ vi.mock('@/lib/trpc/client', () => ({
         useMutation: () => ({ mutate: vi.fn(), isPending: false }),
       },
     },
+    settings: {
+      get: {
+        useQuery: () => ({
+          data: { calendarIcsUrl: calendarNudgeUrl },
+          isLoading: false,
+        }),
+      },
+    },
     useUtils: () => ({
       acts: { list: { invalidate: vi.fn() } },
     }),
@@ -40,6 +50,7 @@ function mockPath(path: string) {
 describe('AppShell', () => {
   beforeEach(() => {
     vi.resetModules();
+    calendarNudgeUrl = null;
   });
   afterEach(() => {
     cleanup();
@@ -63,12 +74,28 @@ describe('AppShell', () => {
     expect(chat?.getAttribute('aria-current')).toBe('page');
   });
 
+  it('keeps chat tab active on /search for seamless recall navigation', async () => {
+    mockPath('/search');
+    const { AppShell: Shell } = await import('../AppShell');
+    render(<Shell><div>s</div></Shell>);
+    const chat = screen.getByText('chat').closest('a');
+    expect(chat?.getAttribute('aria-current')).toBe('page');
+  });
+
   it('marks the active tab from the pathname', async () => {
     mockPath('/graph');
     const { AppShell: Shell } = await import('../AppShell');
     render(<Shell><div>g</div></Shell>);
     const graph = screen.getByText('graph').closest('a');
     expect(graph?.getAttribute('aria-current')).toBe('page');
+  });
+
+  it('keeps home tab active on /settings', async () => {
+    mockPath('/settings');
+    const { AppShell: Shell } = await import('../AppShell');
+    render(<Shell><div>settings</div></Shell>);
+    const home = screen.getByText('home').closest('a');
+    expect(home?.getAttribute('aria-current')).toBe('page');
   });
 
   it('renders NO nav chrome on /signin and /onboarding', async () => {
@@ -100,6 +127,32 @@ describe('AppShell', () => {
     );
     const orbs = screen.getAllByRole('button', { name: /record voice memo/i });
     expect(orbs).toHaveLength(1);
+  });
+
+  it('prompts to add a public calendar in settings until one is saved', async () => {
+    mockPath('/chat');
+    const { AppShell: Shell } = await import('../AppShell');
+    render(<Shell><div>c</div></Shell>);
+    const nudge = screen.getByTestId('calendar-settings-nudge');
+    expect(nudge.getAttribute('href')).toBe('/settings#calendars');
+    expect(nudge.textContent).toMatch(/settings/i);
+    expect(nudge.closest('.app-content')).toBeTruthy();
+  });
+
+  it('hides the calendar settings nudge once a public ics url is saved', async () => {
+    calendarNudgeUrl =
+      'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics';
+    mockPath('/chat');
+    const { AppShell: Shell } = await import('../AppShell');
+    render(<Shell><div>c</div></Shell>);
+    expect(screen.queryByTestId('calendar-settings-nudge')).toBeNull();
+  });
+
+  it('hides the calendar settings nudge on settings itself', async () => {
+    mockPath('/settings');
+    const { AppShell: Shell } = await import('../AppShell');
+    render(<Shell><div>s</div></Shell>);
+    expect(screen.queryByTestId('calendar-settings-nudge')).toBeNull();
   });
 
   it('entity back link is tagged .app-backlink for desktop hiding', async () => {
