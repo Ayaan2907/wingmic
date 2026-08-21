@@ -18,6 +18,7 @@ import { useCapture } from '@/app/_components/CaptureProvider';
 import { ChatHeader } from './_components/ChatHeader';
 import { ChatThread, UndoChip } from './_components/ChatThread';
 import { ChatEntityRail } from './_components/ChatEntityRail';
+import { CameraCapture } from './_components/CameraCapture';
 import { TAB_BAR_HEIGHT_PX, accent } from './_components/tokens';
 import type { ChatInitialItem } from './_components/types';
 
@@ -44,7 +45,7 @@ function ChatComposer() {
   const [text, setText] = useState('');
   const [dropping, setDropping] = useState(false);
   const pinInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const hot =
     recorder.status === 'arming' ||
     recorder.status === 'recording' ||
@@ -86,6 +87,16 @@ function ChatComposer() {
   }
 
   return (
+    <>
+    {cameraOpen ? (
+      <CameraCapture
+        onCapture={(file) => {
+          setCameraOpen(false);
+          void attachFiles([file]);
+        }}
+        onCancel={() => setCameraOpen(false)}
+      />
+    ) : null}
     <form
       onSubmit={onSubmit}
       onDragOver={onDragOver}
@@ -280,18 +291,6 @@ function ChatComposer() {
             e.target.value = '';
           }}
         />
-        <input
-          ref={cameraInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          hidden
-          data-testid="composer-camera-input"
-          onChange={(e) => {
-            void attachFiles(e.target.files);
-            e.target.value = '';
-          }}
-        />
         <button
           type="button"
           data-testid="composer-attach-pin"
@@ -316,7 +315,7 @@ function ChatComposer() {
           type="button"
           data-testid="composer-attach-camera"
           aria-label="take photo"
-          onClick={() => cameraInputRef.current?.click()}
+          onClick={() => setCameraOpen(true)}
           style={{
             width: 28,
             height: 28,
@@ -364,6 +363,7 @@ function ChatComposer() {
         </button>
       </div>
     </form>
+    </>
   );
 }
 

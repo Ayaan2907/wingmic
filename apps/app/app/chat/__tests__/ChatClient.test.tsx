@@ -720,6 +720,30 @@ describe('ChatClient', () => {
     expect(screen.getByTestId('composer-attach-camera')).toBeTruthy();
   });
 
+  it('opens a live camera preview instead of a file picker', async () => {
+    const stop = vi.fn();
+    const getUserMedia = vi.fn(async () => ({
+      getTracks: () => [{ stop }],
+    }));
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
+
+    renderChat({ userName: 'ada' });
+    expect(screen.queryByTestId('composer-camera-input')).toBeNull();
+    fireEvent.click(screen.getByTestId('composer-attach-camera'));
+
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(1));
+    expect(getUserMedia.mock.calls[0]?.[0]).toMatchObject({ audio: false });
+    expect(getUserMedia.mock.calls[0]?.[0]).toMatchObject({
+      video: expect.anything(),
+    });
+    expect(screen.getByTestId('camera-preview')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /snap/i })).toBeTruthy();
+  });
+
   it('sends parentInteractionId and targetEntityId on the next memo after photo', async () => {
     mutateAsyncMock.mockResolvedValue({
       extracted: {
