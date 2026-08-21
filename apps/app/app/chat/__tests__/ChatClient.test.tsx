@@ -703,6 +703,12 @@ describe('ChatClient', () => {
     expect(screen.getByTestId('open-capture-chip').textContent).toMatch(/adding to priya mehta/i);
   });
 
+  it('exposes pin and camera attach on the composer', () => {
+    renderChat({ userName: 'ada' });
+    expect(screen.getByTestId('composer-attach-pin')).toBeTruthy();
+    expect(screen.getByTestId('composer-attach-camera')).toBeTruthy();
+  });
+
   it('sends parentInteractionId and targetEntityId on the next memo after photo', async () => {
     mutateAsyncMock.mockResolvedValue({
       extracted: {

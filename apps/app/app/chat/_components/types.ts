@@ -49,6 +49,7 @@ export interface GraphResult {
       role: string | null;
       companyHint: string | null;
       topics: string[];
+      linkedin?: string | null;
     }>;
     companies: Array<{ name: string }>;
     events: Array<{ name: string }>;
@@ -73,6 +74,11 @@ export interface GraphResult {
   entityIds?: string[];
   companyIds?: string[];
   eventIds?: string[];
+  attachments?: Array<{
+    id: string;
+    entityId: string | null;
+    jpegBase64: string;
+  }>;
 }
 
 export interface ThreadMessage {
@@ -94,6 +100,8 @@ export interface ThreadMessage {
   /** memo vs ask routing (#59) */
   intent?: 'memo' | 'ask';
   ask?: AskResult | null;
+  /** Local preview of a pending / just-committed JPEG. */
+  previewJpegBase64?: string | null;
 }
 
 export interface ChatInitialItem {

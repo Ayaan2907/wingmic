@@ -496,6 +496,14 @@ describe('commit() sourceInteractionId', () => {
       ),
     });
     expect(notes.some((f) => f.value === 'her linkedin is /in/gracehopper')).toBe(true);
+
+    const linkedin = await db.query.entityFacts.findMany({
+      where: and(
+        eq(schema.entityFacts.entityId, 'pref_grace'),
+        eq(schema.entityFacts.key, 'linkedin'),
+      ),
+    });
+    expect(linkedin[0]?.value).toBe('https://www.linkedin.com/in/gracehopper');
   });
 
   it('does not force preferred onto a differently named unique person', async () => {
@@ -617,6 +625,97 @@ describe('commit() sourceInteractionId', () => {
     expect(child?.parentInteractionId).toBe(first.interactionId);
     expect(child?.threadRootId).toBe(first.interactionId);
     expect(second.persons[0]!.entityId).toBe(first.entityIds[0]);
+  });
+
+  it('stamps a pasted LinkedIn URL on the unique person and skips url-token topics', async () => {
+    const bindUserId = 'user_commit_linkedin_url';
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO user (id, email, email_verified, name, image, created_at, updated_at)
+            VALUES (?, 'li-url@example.com', 1, 'Ada', null, ?, ?)`,
+      args: [bindUserId, now, now],
+    });
+
+    const first = await commit(
+      {
+        persons: [
+          {
+            name: 'Tanzila Sameen',
+            role: null,
+            companyHint: 'Noemai',
+            topics: ['novium'],
+            notes: 'met at salesforce event',
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [{ name: 'Noemai', domainHint: null, industry: [] }],
+        events: [],
+        topics: ['novium'],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId: bindUserId,
+        transcript: 'met Tanzila Sameen at Noemai',
+        capturedAt: new Date(),
+      },
+    );
+
+    const second = await commit(
+      {
+        persons: [
+          {
+            name: 'Tanzila Sameen',
+            role: null,
+            companyHint: null,
+            topics: ['https', 'linkedin', 'tanzeela-sameen'],
+            notes: null,
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [],
+        events: [],
+        topics: ['https', 'linkedin', 'tanzeela-sameen'],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId: bindUserId,
+        transcript: 'https://in.linkedin.com/in/tanzeela-sameen her linkedin',
+        capturedAt: new Date(),
+        parentInteractionId: first.interactionId,
+        threadRootId: first.interactionId,
+        preferredEntityId: first.entityIds[0],
+      },
+    );
+
+    expect(second.persons[0]!.entityId).toBe(first.entityIds[0]);
+    const linkedin = await db.query.entityFacts.findMany({
+      where: and(
+        eq(schema.entityFacts.entityId, first.entityIds[0]!),
+        eq(schema.entityFacts.key, 'linkedin'),
+      ),
+    });
+    expect(linkedin[0]?.value).toBe('https://www.linkedin.com/in/tanzeela-sameen');
+
+    const topicRows = await db.query.entityTopics.findMany({
+      where: eq(schema.entityTopics.sourceInteractionId, second.interactionId),
+    });
+    const topicIds = topicRows.map((t) => t.topicId);
+    const topics =
+      topicIds.length > 0
+        ? await db.query.topics.findMany()
+        : [];
+    const names = topics
+      .filter((t) => topicIds.includes(t.id))
+      .map((t) => t.name.toLowerCase());
+    expect(names).not.toContain('https');
+    expect(names).not.toContain('linkedin');
+    expect(names).not.toContain('tanzeela-sameen');
   });
 
   it('leaves event dates blank when speech has no date hint', async () => {

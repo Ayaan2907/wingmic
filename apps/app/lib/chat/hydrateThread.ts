@@ -30,7 +30,7 @@ export async function hydrateThreadItems(
 
   const interactionIds = rows.map((r) => r.id);
 
-  const [factRows, topicEdgeRows, actRows] = await Promise.all([
+  const [factRows, topicEdgeRows, actRows, attachmentRows] = await Promise.all([
     db
       .select({
         interactionId: schema.entityFacts.sourceInteractionId,
@@ -68,6 +68,15 @@ export async function hydrateThreadItems(
           inArray(schema.acts.sourceInteractionId, interactionIds),
         ),
       ),
+    db
+      .select({
+        interactionId: schema.interactionAttachments.interactionId,
+        id: schema.interactionAttachments.id,
+        entityId: schema.interactionAttachments.entityId,
+        jpegBase64: schema.interactionAttachments.jpegBase64,
+      })
+      .from(schema.interactionAttachments)
+      .where(inArray(schema.interactionAttachments.interactionId, interactionIds)),
   ]);
 
   const entityIds = [
@@ -152,8 +161,12 @@ export async function hydrateThreadItems(
 
     const roleByEntity = new Map<string, string | null>();
     const companyHintByEntity = new Map<string, string | null>();
+    const linkedinByEntity = new Map<string, string | null>();
     for (const f of facts) {
       if (f.key === 'role' && !roleByEntity.has(f.entityId)) roleByEntity.set(f.entityId, f.value);
+      if (f.key === 'linkedin' && !linkedinByEntity.has(f.entityId)) {
+        linkedinByEntity.set(f.entityId, f.value);
+      }
       if (f.key === 'company' && !companyHintByEntity.has(f.entityId)) {
         companyHintByEntity.set(f.entityId, f.value);
       }
@@ -181,6 +194,7 @@ export async function hydrateThreadItems(
         role: roleByEntity.get(id) ?? companyEdge?.role ?? null,
         companyHint: companyName,
         topics: topicsByEntity.get(id) ?? [],
+        linkedin: linkedinByEntity.get(id) ?? null,
       };
     });
 
@@ -206,6 +220,14 @@ export async function hydrateThreadItems(
       }
     }
 
+    const attachments = attachmentRows
+      .filter((a) => a.interactionId === row.id)
+      .map((a) => ({
+        id: a.id,
+        entityId: a.entityId,
+        jpegBase64: a.jpegBase64,
+      }));
+
     const graphResult: GraphResult = {
       extracted: {
         persons,
@@ -227,6 +249,7 @@ export async function hydrateThreadItems(
       entityIds: personIdOrder,
       companyIds: companyIdOrder,
       eventIds: eventIdOrder,
+      attachments,
     };
 
     const capturedAt =

@@ -8,7 +8,7 @@ import {
   type PersonCandidate,
 } from './schema';
 import { embedText, embedTexts, cosine } from './embeddings';
-import { canonicalizeLinkedin } from './linkedin';
+import { canonicalizeLinkedin, harvestLinkedinFromTranscript, isLinkedinUrlDebrisTopic } from './linkedin';
 import { entityMatchesPersonName, nameSimilarity, slugify } from './slug';
 
 export interface CommitPersonResolution {
@@ -90,6 +90,19 @@ export async function commit(
         aliases,
       });
     }
+  }
+
+  const spokenLinkedin = harvestLinkedinFromTranscript(transcript);
+  if (spokenLinkedin) {
+    const bindToFirst = extracted.persons.length <= 1 || Boolean(ctx.preferredEntityId);
+    extracted.topics = extracted.topics.filter(
+      (t) => !isLinkedinUrlDebrisTopic(t, spokenLinkedin),
+    );
+    extracted.persons = extracted.persons.map((p, i) => ({
+      ...p,
+      linkedin: p.linkedin || (bindToFirst && i === 0 ? spokenLinkedin : p.linkedin),
+      topics: p.topics.filter((t) => !isLinkedinUrlDebrisTopic(t, spokenLinkedin)),
+    }));
   }
 
   // ── Embeddings (parallel) ────────────────────────────────────────────

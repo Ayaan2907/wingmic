@@ -3,6 +3,7 @@
 import type { Route } from 'next';
 import Link from 'next/link';
 import { accent, blue, second, violet } from './tokens';
+import { canonicalizeLinkedin, linkedinHandle } from '@wingmic/extractor/linkedin';
 
 export type PersonCaptureAction = {
   kind: string;
@@ -15,6 +16,7 @@ export type PersonCaptureCardPerson = {
   role: string | null;
   companyHint: string | null;
   topics: string[];
+  linkedin?: string | null;
 };
 
 export function PersonCaptureCard({
@@ -32,6 +34,8 @@ export function PersonCaptureCard({
   onPhoto: () => void;
   onCorrect: () => void;
 }) {
+  const handle = linkedinHandle(person.linkedin ?? null);
+  const linkedinHref = person.linkedin ? canonicalizeLinkedin(person.linkedin) : null;
   const monogram = person.name
     .split(/\s+/)
     .map((s) => s[0])
@@ -104,6 +108,17 @@ export function PersonCaptureCard({
                 {person.companyHint ? <span style={{ color: blue }}>{person.companyHint}</span> : null}
               </div>
             )}
+            {handle && linkedinHref ? (
+              <a
+                href={linkedinHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mono"
+                style={{ fontSize: 11, color: accent, textDecoration: 'none', display: 'inline-block', marginTop: 3 }}
+              >
+                in/{handle} →
+              </a>
+            ) : null}
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             <GhostAction

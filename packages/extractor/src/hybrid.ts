@@ -28,6 +28,7 @@ import type { AssemblyAIEntity } from './types';
 import { linkerModel } from './models';
 import { STOPWORDS } from './stopwords';
 import { env } from '../../../apps/app/lib/config/env';
+import { harvestLinkedinFromTranscript, isLinkedinUrlDebrisTopic } from './linkedin';
 
 export interface HybridInput {
   transcript: string;
@@ -83,7 +84,7 @@ export async function extractHybrid({
   const filled = applyHeuristics(skeleton, transcript, dateSpans);
   const llm = await runLinkerLLM(transcript, filled, knownContacts);
   const merged = mergeResults(filled, llm);
-  return sanitizeExtraction(merged);
+  return applyHarvestedLinkedin(sanitizeExtraction(merged), transcript);
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -569,6 +570,28 @@ export function sanitizeExtraction(r: ExtractionResult): ExtractionResult {
     topics: sanitizeTopics(r.topics, entityBag),
     actions: r.actions,
   };
+}
+
+/**
+ * Spoken/pasted LinkedIn profile URLs become person.linkedin.
+ * URL path tokens must not become topics (https / linkedin / handle).
+ * Binds to person[0] only when there is one person, or bindToFirst is set
+ * (chat follow-up with an open card).
+ */
+export function applyHarvestedLinkedin(
+  extracted: ExtractionResult,
+  transcript: string,
+  bindToFirst = extracted.persons.length <= 1,
+): ExtractionResult {
+  const url = harvestLinkedinFromTranscript(transcript);
+  if (!url) return extracted;
+  const topics = extracted.topics.filter((t) => !isLinkedinUrlDebrisTopic(t, url));
+  const persons = extracted.persons.map((p, i) => ({
+    ...p,
+    linkedin: p.linkedin || (bindToFirst && i === 0 ? url : p.linkedin),
+    topics: p.topics.filter((t) => !isLinkedinUrlDebrisTopic(t, url)),
+  }));
+  return { ...extracted, topics, persons };
 }
 
 /**

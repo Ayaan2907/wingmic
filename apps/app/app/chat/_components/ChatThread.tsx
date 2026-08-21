@@ -288,6 +288,28 @@ function MessageBubble(props: MessageBubbleProps) {
               {m.transcript}
             </p>
           ) : null}
+          {(() => {
+            const jpeg =
+              m.previewJpegBase64 ??
+              m.graphResult?.attachments?.[0]?.jpegBase64 ??
+              null;
+            if (!jpeg) return null;
+            return (
+              // data-url capture; next/image does not take in-memory jpeg
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                alt="attached photo"
+                src={`data:image/jpeg;base64,${jpeg}`}
+                style={{
+                  width: '100%',
+                  maxHeight: 180,
+                  objectFit: 'cover',
+                  borderRadius: 10,
+                  border: '1px solid rgba(0,0,0,0.35)',
+                }}
+              />
+            );
+          })()}
           {showLinkSweep && (
             <div
               aria-hidden="true"

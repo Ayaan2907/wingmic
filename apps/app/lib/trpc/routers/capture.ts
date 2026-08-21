@@ -12,7 +12,48 @@ import { webSearchProviderFromEnv } from '@/lib/web-search';
 import { enrichPersonsAfterCommit } from '@/lib/enrich/enrichPersons';
 import { enrichEventsAfterCommit } from '@/lib/enrich/enrichEvents';
 import { scheduleEnrich } from '@/lib/enrich/schedule';
+import { MAX_ATTACHMENT_BYTES } from '@/lib/chat/compressImage';
 import * as schema from '@wingmic/db/schema';
+import type { DB } from '@wingmic/db';
+
+export type CaptureAttachment = {
+  id: string;
+  entityId: string | null;
+  jpegBase64: string;
+};
+
+async function persistCaptureAttachment(args: {
+  db: DB;
+  interactionId: string;
+  entityId: string | null;
+  jpegBase64: string | undefined;
+}): Promise<CaptureAttachment[]> {
+  if (!args.jpegBase64) return [];
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(args.jpegBase64, 'base64');
+  } catch {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'photo couldnt be read' });
+  }
+  if (bytes.byteLength < 32 || bytes.byteLength > MAX_ATTACHMENT_BYTES) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'photo is too large — try a closer crop' });
+  }
+  const inserted = await args.db
+    .insert(schema.interactionAttachments)
+    .values({
+      interactionId: args.interactionId,
+      entityId: args.entityId,
+      mimeType: 'image/jpeg',
+      jpegBase64: args.jpegBase64,
+      byteSize: bytes.byteLength,
+    })
+    .returning({
+      id: schema.interactionAttachments.id,
+      entityId: schema.interactionAttachments.entityId,
+      jpegBase64: schema.interactionAttachments.jpegBase64,
+    });
+  return inserted;
+}
 
 export const captureRouter = router({
   /**
@@ -40,6 +81,11 @@ export const captureRouter = router({
         parentInteractionId: z.string().min(1).max(128).optional(),
         /** Person the user opened in chat. Must be an owned, living person. */
         targetEntityId: z.string().min(1).max(128).optional(),
+        attachment: z
+          .object({
+            jpegBase64: z.string().min(32).max(600_000),
+          })
+          .optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -54,7 +100,7 @@ export const captureRouter = router({
             columns: { id: true },
           });
           if (existing) {
-            const [factLinks, topicLinks] = await Promise.all([
+            const [factLinks, topicLinks, attachmentRows] = await Promise.all([
               ctx.db.query.entityFacts.findMany({
                 where: eq(schema.entityFacts.sourceInteractionId, existing.id),
                 columns: { entityId: true },
@@ -62,6 +108,10 @@ export const captureRouter = router({
               ctx.db.query.entityTopics.findMany({
                 where: eq(schema.entityTopics.sourceInteractionId, existing.id),
                 columns: { entityId: true },
+              }),
+              ctx.db.query.interactionAttachments.findMany({
+                where: eq(schema.interactionAttachments.interactionId, existing.id),
+                columns: { id: true, entityId: true, jpegBase64: true },
               }),
             ]);
             const entityIds = [
@@ -81,6 +131,7 @@ export const captureRouter = router({
               interactionId: existing.id,
               entityIds,
               duplicate: true as const,
+              attachments: attachmentRows,
             };
           }
         }
@@ -339,7 +390,14 @@ export const captureRouter = router({
           });
         }
 
-        return { extracted, ...result };
+        const attachments = await persistCaptureAttachment({
+          db: ctx.db,
+          interactionId: result.interactionId,
+          entityId: preferredEntity?.id ?? null,
+          jpegBase64: input.attachment?.jpegBase64,
+        });
+
+        return { extracted, ...result, attachments };
       } catch (err) {
         if (err instanceof ExtractionError) {
           throw new TRPCError({

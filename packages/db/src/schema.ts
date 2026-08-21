@@ -264,6 +264,26 @@ export const interactions = sqliteTable(
   ],
 );
 
+export const interactionAttachments = sqliteTable(
+  'interaction_attachment',
+  {
+    id: id(),
+    interactionId: text('interaction_id')
+      .notNull()
+      .references(() => interactions.id, { onDelete: 'cascade' }),
+    entityId: text('entity_id').references(() => entities.id, { onDelete: 'set null' }),
+    eventId: text('event_id').references(() => events.id, { onDelete: 'set null' }),
+    mimeType: text('mime_type').notNull().default('image/jpeg'),
+    jpegBase64: text('jpeg_base64').notNull(),
+    byteSize: integer('byte_size').notNull(),
+    createdAt: ts('created_at'),
+  },
+  (t) => [
+    index('attachment_interaction_idx').on(t.interactionId),
+    index('attachment_entity_idx').on(t.entityId),
+  ],
+);
+
 export const entityFacts = sqliteTable(
   'entity_fact',
   {
@@ -468,6 +488,8 @@ export type Event = typeof events.$inferSelect;
 export type Topic = typeof topics.$inferSelect;
 export type Interaction = typeof interactions.$inferSelect;
 export type NewInteraction = typeof interactions.$inferInsert;
+export type InteractionAttachment = typeof interactionAttachments.$inferSelect;
+export type NewInteractionAttachment = typeof interactionAttachments.$inferInsert;
 export type EntityFact = typeof entityFacts.$inferSelect;
 export type EntityNote = typeof entityNotes.$inferSelect;
 export type EntityMerge = typeof entityMerges.$inferSelect;

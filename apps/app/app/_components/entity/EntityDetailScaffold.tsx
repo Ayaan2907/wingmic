@@ -16,6 +16,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { PersonAvatar, CompanyTile, EventDiamond } from './EntityAvatar';
 import { accent, third, blue, violet } from '@/app/chat/_components/tokens';
+import { linkedinHandle } from '@wingmic/extractor/linkedin';
 
 export type EntityKind = 'person' | 'company' | 'event';
 
@@ -708,7 +709,7 @@ function PublicProfileCard({ profile }: { profile: EntityPublicProfile | null })
           className="mono"
           style={{ color: accent, fontSize: 12.5, textDecoration: 'none' }}
         >
-          linkedin →
+          {linkedinHandle(linkedin) ? `in/${linkedinHandle(linkedin)} →` : 'linkedin →'}
         </a>
       )}
       {url && (
