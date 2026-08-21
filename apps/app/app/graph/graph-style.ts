@@ -2,7 +2,10 @@ import { accent, blue, violet } from '@/app/chat/_components/tokens';
 import {
   graphNodeCaption,
   graphNodeInitials,
+  graphLinkNeighborhoodAlpha,
+  graphNeighborhoodAlpha,
   isHighlightedGraphNode,
+  shouldShowGraphNodeCaption,
 } from './graph-node-label';
 import type { GraphNode, LinkRel, NodeKind } from './graph-types';
 
@@ -15,12 +18,18 @@ export const KIND_COLOR: Record<NodeKind, string> = {
 };
 
 export const LINK_COLOR: Record<LinkRel, string> = {
-  works_at: blue,
-  attended: '#d4d4d8',
-  discussed: violet,
+  works_at: '#5a8fb0',
+  attended: '#6b7280',
+  discussed: '#7c6a9e',
 };
 
-export const LINK_WIDTH = 1.8;
+/** Resting edge opacity when nothing is selected. */
+export const GRAPH_LINK_REST_ALPHA = 0.2;
+/** Edge opacity for selected neighborhood. */
+export const GRAPH_LINK_FOCUS_ALPHA = 0.55;
+
+export const LINK_WIDTH = 1;
+export const LINK_WIDTH_FOCUS = 1.35;
 export const NODE_REL_SIZE = 8;
 export const NODE_PAINT_RADIUS = 14;
 
@@ -36,23 +45,56 @@ export function linkColorOf(rel: LinkRel | undefined): string {
   return LINK_COLOR[rel];
 }
 
-export function linkWidthOf(_rel?: LinkRel): number {
-  return LINK_WIDTH;
+export function linkWidthOf(
+  rel: LinkRel | undefined,
+  neighborhood: Set<string>,
+  sourceId: string,
+  targetId: string,
+): number {
+  if (neighborhood.size === 0) return LINK_WIDTH;
+  const focused =
+    neighborhood.has(sourceId) && neighborhood.has(targetId);
+  return focused ? LINK_WIDTH_FOCUS : LINK_WIDTH * 0.85;
+}
+
+export function paintGraphLinkColor(
+  rel: LinkRel | undefined,
+  sourceId: string,
+  targetId: string,
+  neighborhood: Set<string>,
+): string {
+  const base = linkColorOf(rel);
+  const hex = base.replace('#', '');
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  if (neighborhood.size === 0) {
+    return `rgba(${r},${g},${b},${GRAPH_LINK_REST_ALPHA})`;
+  }
+  const alpha = graphLinkNeighborhoodAlpha(sourceId, targetId, neighborhood);
+  const painted =
+    alpha >= 1 ? GRAPH_LINK_FOCUS_ALPHA : Math.min(alpha, GRAPH_LINK_REST_ALPHA * 0.75);
+  return `rgba(${r},${g},${b},${painted})`;
 }
 
 type CanvasNode = GraphNode & { x?: number; y?: number };
 
-/** Paint a node with initials inside the disc and a short name beside it. */
+/** Paint a node with initials inside the disc; caption when zoom/hover/select. */
 export function paintGraphNode(
   node: CanvasNode,
   ctx: CanvasRenderingContext2D,
   globalScale: number,
   selectedId: string | null,
+  hoveredId: string | null,
+  neighborhood: Set<string>,
 ): void {
   const x = node.x ?? 0;
   const y = node.y ?? 0;
   const highlighted = isHighlightedGraphNode(node.id, selectedId);
+  const alpha = graphNeighborhoodAlpha(node.id, neighborhood);
   const r = highlighted ? NODE_PAINT_RADIUS * 1.35 : NODE_PAINT_RADIUS;
+  ctx.save();
+  ctx.globalAlpha = alpha;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, 2 * Math.PI);
   ctx.fillStyle = KIND_COLOR[node.kind] ?? accent;
@@ -68,11 +110,14 @@ export function paintGraphNode(
   ctx.textBaseline = 'middle';
   ctx.fillText(graphNodeInitials(node.label), x, y);
 
-  const fontSize = Math.max(10, 12 / Math.max(globalScale, 0.7));
-  ctx.font = `600 ${fontSize}px Inter, system-ui, sans-serif`;
-  ctx.fillStyle = highlighted ? '#ffffff' : 'rgba(255,255,255,0.88)';
-  ctx.textBaseline = 'top';
-  ctx.fillText(graphNodeCaption(node.label), x, y + r + 4);
+  if (shouldShowGraphNodeCaption(node.id, selectedId, hoveredId, globalScale)) {
+    const fontSize = Math.max(10, 12 / Math.max(globalScale, 0.7));
+    ctx.font = `600 ${fontSize}px Inter, system-ui, sans-serif`;
+    ctx.fillStyle = highlighted ? '#ffffff' : 'rgba(255,255,255,0.88)';
+    ctx.textBaseline = 'top';
+    ctx.fillText(graphNodeCaption(node.label), x, y + r + 4);
+  }
+  ctx.restore();
 }
 
 export function paintGraphNodePointerArea(

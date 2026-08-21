@@ -135,8 +135,18 @@ describe('graph.get', () => {
     expect(res.links).toContainEqual({ source: 'en_sarah', target: 'ev_dc', rel: 'attended' });
     expect(res.links).toContainEqual({ source: 'en_marcus', target: 'tp_rust', rel: 'discussed' });
     expect(res.links).toContainEqual({ source: 'en_sarah', target: 'tp_rust', rel: 'discussed' });
-    expect(res.links).toContainEqual({ source: 'co_acme', target: 'tp_rust', rel: 'discussed' });
-    expect(res.links).toContainEqual({ source: 'ev_dc', target: 'tp_rust', rel: 'discussed' });
+    expect(res.links).toContainEqual({
+      source: 'co_acme',
+      target: 'tp_rust',
+      rel: 'discussed',
+      hub: true,
+    });
+    expect(res.links).toContainEqual({
+      source: 'ev_dc',
+      target: 'tp_rust',
+      rel: 'discussed',
+      hub: true,
+    });
     expect(res.links).toHaveLength(6);
   });
 
@@ -148,8 +158,8 @@ describe('graph.get', () => {
         [{ entityId: 'en_sarah', topicId: 'tp_rust' }],
       ),
     ).toEqual([
-      { source: 'co_acme', target: 'tp_rust', rel: 'discussed' },
-      { source: 'ev_dc', target: 'tp_rust', rel: 'discussed' },
+      { source: 'co_acme', target: 'tp_rust', rel: 'discussed', hub: true },
+      { source: 'ev_dc', target: 'tp_rust', rel: 'discussed', hub: true },
     ]);
   });
 

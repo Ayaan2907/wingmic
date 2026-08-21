@@ -28,8 +28,6 @@ import type { AssemblyAIEntity } from './types';
 import { linkerModel } from './models';
 import { STOPWORDS } from './stopwords';
 import { env } from '../../../apps/app/lib/config/env';
-import { harvestLinkedinFromTranscript, isLinkedinUrlDebrisTopic } from './linkedin';
-import { applyHarvestedEvent } from './eventUrl';
 
 export interface HybridInput {
   transcript: string;
@@ -85,7 +83,7 @@ export async function extractHybrid({
   const filled = applyHeuristics(skeleton, transcript, dateSpans);
   const llm = await runLinkerLLM(transcript, filled, knownContacts);
   const merged = mergeResults(filled, llm);
-  return applyHarvestedEvent(applyHarvestedLinkedin(sanitizeExtraction(merged), transcript), transcript);
+  return sanitizeExtraction(merged);
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -574,28 +572,6 @@ export function sanitizeExtraction(r: ExtractionResult): ExtractionResult {
 }
 
 /**
- * Spoken/pasted LinkedIn profile URLs become person.linkedin.
- * URL path tokens must not become topics (https / linkedin / handle).
- * Binds to person[0] only when there is one person, or bindToFirst is set
- * (chat follow-up with an open card).
- */
-export function applyHarvestedLinkedin(
-  extracted: ExtractionResult,
-  transcript: string,
-  bindToFirst = extracted.persons.length <= 1,
-): ExtractionResult {
-  const url = harvestLinkedinFromTranscript(transcript);
-  if (!url) return extracted;
-  const topics = extracted.topics.filter((t) => !isLinkedinUrlDebrisTopic(t, url));
-  const persons = extracted.persons.map((p, i) => ({
-    ...p,
-    linkedin: p.linkedin || (bindToFirst && i === 0 ? url : p.linkedin),
-    topics: p.topics.filter((t) => !isLinkedinUrlDebrisTopic(t, url)),
-  }));
-  return { ...extracted, topics, persons };
-}
-
-/**
  * Topics must be recallable subjects — not speech verbs, not echoes of
  * entities already captured as people/companies/events.
  */
@@ -611,7 +587,7 @@ export function sanitizeTopics(
   // Only single-token *company/event* names suppress same-token topics
   // ("lucas" ↔ Lucas). Multi-word orgs (e.g. "Research Labs") must not erase
   // independent subjects like "research". Person first/last tokens do suppress
-  // unigram topics so "Tomo Matsuo" does not mint a "tomo" topic.
+  // unigram topics so "Jordan Lee" does not mint a "jordan" topic.
   const entityTokens = new Set<string>();
   const personTokens = new Set<string>();
   for (const e of [...entities.persons, ...entities.companies, ...entities.events]) {
@@ -737,7 +713,6 @@ export function mergeResults(
     } else {
       existing.dateHint = existing.dateHint ?? e.dateHint;
       existing.location = existing.location ?? e.location;
-      existing.url = existing.url ?? e.url;
     }
   }
   const events = [...eventByName.values()];

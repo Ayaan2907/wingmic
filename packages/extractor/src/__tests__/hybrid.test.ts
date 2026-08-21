@@ -159,12 +159,12 @@ describe('applyHeuristics', () => {
 
   it('extracts merchant cash advance and does not mint an undated meeting', () => {
     const transcript =
-      'Hey. I met with Tomo Matsuo who is the co founder of AdvanceIQ AI and we discussed a lot about merchant cash advance business.';
+      'Hey. I met with Morgan Blake who is the co founder of AdvanceIQ AI and we discussed a lot about merchant cash advance business.';
     const skeleton: ExtractionResult = {
       ...emptyResult(),
       persons: [
         {
-          name: 'Tomo Matsuo',
+          name: 'Morgan Blake',
           aliases: [],
           role: null,
           companyHint: 'AdvanceIQ AI',
@@ -179,8 +179,8 @@ describe('applyHeuristics', () => {
     const result = applyHeuristics(skeleton, transcript);
     expect(result.actions.filter((a) => a.kind === 'meeting')).toHaveLength(0);
     expect(result.topics.some((t) => t.includes('merchant') && t.includes('advance'))).toBe(true);
-    expect(result.topics.join(' ')).not.toMatch(/\btomo\b/);
-    expect(result.topics.join(' ')).not.toMatch(/\bmatsuo\b/);
+    expect(result.topics.join(' ')).not.toMatch(/\bmorgan\b/);
+    expect(result.topics.join(' ')).not.toMatch(/\bblake\b/);
   });
 
   it('filters expanded stopwords (today, tomorrow, things, really, talked, discussed) from topic candidates', () => {

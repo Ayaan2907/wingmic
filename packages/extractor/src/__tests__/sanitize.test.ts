@@ -151,10 +151,10 @@ describe('sanitizeExtraction', () => {
   it('drops unigram topics that are tokens of a person name', () => {
     const r = sanitizeExtraction({
       ...empty(),
-      topics: ['tomo', 'merchant cash advance'],
+      topics: ['jordan', 'merchant cash advance'],
       persons: [
         {
-          name: 'Tomo Matsuo',
+          name: 'Jordan Lee',
           role: null,
           companyHint: null,
           topics: [],

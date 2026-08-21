@@ -236,25 +236,25 @@ describe('commit() sourceInteractionId', () => {
   });
 
   it('creates a third person when two same-name people already exist', async () => {
-    const tomoUserId = 'user_commit_tomo_dup';
+    const dupUserId = 'user_commit_dup_name';
     const now = Date.now();
     await client.execute({
       sql: `INSERT INTO user (id, email, email_verified, name, image, created_at, updated_at)
-            VALUES (?, 'tomo-dup@example.com', 1, 'Tomo', null, ?, ?)`,
-      args: [tomoUserId, now, now],
+            VALUES (?, 'dup-name@example.com', 1, 'Jordan', null, ?, ?)`,
+      args: [dupUserId, now, now],
     });
     await client.execute({
       sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, import_source, embedding, created_at, updated_at)
-            VALUES ('tomo_a', ?, 'person', 'Tomo Matsuo', '[]', 'voice-capture', NULL, ?, ?),
-                   ('tomo_b', ?, 'person', 'Tomo Matsuo', '[]', 'voice-capture', NULL, ?, ?)`,
-      args: [tomoUserId, now, now, tomoUserId, now, now],
+            VALUES ('dup_a', ?, 'person', 'Jordan Lee', '[]', 'voice-capture', NULL, ?, ?),
+                   ('dup_b', ?, 'person', 'Jordan Lee', '[]', 'voice-capture', NULL, ?, ?)`,
+      args: [dupUserId, now, now, dupUserId, now, now],
     });
 
     const result = await commit(
       {
         persons: [
           {
-            name: 'Tomo Matsuo',
+            name: 'Jordan Lee',
             role: null,
             companyHint: null,
             topics: [],
@@ -271,8 +271,8 @@ describe('commit() sourceInteractionId', () => {
       },
       {
         db: db as never,
-        userId: tomoUserId,
-        transcript: 'met Tomo Matsuo again',
+        userId: dupUserId,
+        transcript: 'met Jordan Lee again',
         capturedAt: new Date(),
       },
     );
@@ -281,28 +281,28 @@ describe('commit() sourceInteractionId', () => {
     expect(result.persons[0]!.created).toBe(true);
 
     const people = await db.query.entities.findMany({
-      where: and(eq(schema.entities.ownerUserId, tomoUserId), eq(schema.entities.kind, 'person')),
+      where: and(eq(schema.entities.ownerUserId, dupUserId), eq(schema.entities.kind, 'person')),
     });
     expect(people).toHaveLength(3);
   });
 
-  it('reuses the Tomo with a unique email when two same-name people exist', async () => {
-    const tomoUserId = 'user_commit_tomo_email';
+  it('reuses the person with a unique email when two same-name people exist', async () => {
+    const dupUserId = 'user_commit_dup_email';
     const now = Date.now();
     await client.execute({
       sql: `INSERT INTO user (id, email, email_verified, name, image, created_at, updated_at)
-            VALUES (?, 'tomo-email@example.com', 1, 'Tomo', null, ?, ?)`,
-      args: [tomoUserId, now, now],
+            VALUES (?, 'dup-email@example.com', 1, 'Jordan', null, ?, ?)`,
+      args: [dupUserId, now, now],
     });
     await client.execute({
       sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, import_source, embedding, created_at, updated_at)
-            VALUES ('tomo_email_a', ?, 'person', 'Tomo Matsuo', '[]', 'voice-capture', NULL, ?, ?),
-                   ('tomo_email_b', ?, 'person', 'Tomo Matsuo', '[]', 'voice-capture', NULL, ?, ?)`,
-      args: [tomoUserId, now, now, tomoUserId, now, now],
+            VALUES ('dup_email_a', ?, 'person', 'Jordan Lee', '[]', 'voice-capture', NULL, ?, ?),
+                   ('dup_email_b', ?, 'person', 'Jordan Lee', '[]', 'voice-capture', NULL, ?, ?)`,
+      args: [dupUserId, now, now, dupUserId, now, now],
     });
     await client.execute({
       sql: `INSERT INTO entity_fact (id, entity_id, key, value, confidence, created_at)
-            VALUES ('fact_tomo_email', 'tomo_email_a', 'email', 'tomo@example.com', 95, ?)`,
+            VALUES ('fact_dup_email', 'dup_email_a', 'email', 'jordan@example.com', 95, ?)`,
       args: [now],
     });
 
@@ -310,12 +310,12 @@ describe('commit() sourceInteractionId', () => {
       {
         persons: [
           {
-            name: 'Tomo Matsuo',
+            name: 'Jordan Lee',
             role: null,
             companyHint: null,
             topics: [],
             notes: null,
-            email: 'tomo@example.com',
+            email: 'jordan@example.com',
             linkedin: null,
             aliases: [],
           },
@@ -327,22 +327,22 @@ describe('commit() sourceInteractionId', () => {
       },
       {
         db: db as never,
-        userId: tomoUserId,
-        transcript: 'email follow-up with Tomo',
+        userId: dupUserId,
+        transcript: 'email follow-up with Jordan',
         capturedAt: new Date(),
       },
     );
 
     expect(result.persons[0]!.created).toBe(false);
-    expect(result.persons[0]!.entityId).toBe('tomo_email_a');
+    expect(result.persons[0]!.entityId).toBe('dup_email_a');
   });
 
   it('does not reuse a full name when the candidate is only a first name', async () => {
-    const partialUserId = 'user_commit_tomo_partial';
+    const partialUserId = 'user_commit_partial_name';
     const now = Date.now();
     await client.execute({
       sql: `INSERT INTO user (id, email, email_verified, name, image, created_at, updated_at)
-            VALUES (?, 'tomo-partial@example.com', 1, 'Tomo', null, ?, ?)`,
+            VALUES (?, 'partial-name@example.com', 1, 'Jordan', null, ?, ?)`,
       args: [partialUserId, now, now],
     });
 
@@ -350,7 +350,7 @@ describe('commit() sourceInteractionId', () => {
       {
         persons: [
           {
-            name: 'Tomo Matsuo',
+            name: 'Jordan Lee',
             role: null,
             companyHint: null,
             topics: [],
@@ -368,7 +368,7 @@ describe('commit() sourceInteractionId', () => {
       {
         db: db as never,
         userId: partialUserId,
-        transcript: 'met Tomo Matsuo',
+        transcript: 'met Jordan Lee',
         capturedAt: new Date(),
       },
     );
@@ -377,7 +377,7 @@ describe('commit() sourceInteractionId', () => {
       {
         persons: [
           {
-            name: 'Tomo',
+            name: 'Jordan',
             role: null,
             companyHint: null,
             topics: [],
@@ -395,7 +395,7 @@ describe('commit() sourceInteractionId', () => {
       {
         db: db as never,
         userId: partialUserId,
-        transcript: 'saw Tomo',
+        transcript: 'saw Jordan',
         capturedAt: new Date(),
       },
     );
@@ -415,8 +415,8 @@ describe('commit() sourceInteractionId', () => {
     });
     await client.execute({
       sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, import_source, embedding, created_at, updated_at)
-            VALUES ('pref_tomo_a', ?, 'person', 'Tomo Matsuo', '[]', 'voice-capture', NULL, ?, ?),
-                   ('pref_tomo_b', ?, 'person', 'Tomo Matsuo', '[]', 'voice-capture', NULL, ?, ?)`,
+            VALUES ('pref_jordan_a', ?, 'person', 'Jordan Lee', '[]', 'voice-capture', NULL, ?, ?),
+                   ('pref_jordan_b', ?, 'person', 'Jordan Lee', '[]', 'voice-capture', NULL, ?, ?)`,
       args: [bindUserId, now, now, bindUserId, now, now],
     });
 
@@ -424,7 +424,7 @@ describe('commit() sourceInteractionId', () => {
       {
         persons: [
           {
-            name: 'Tomo Matsuo',
+            name: 'Jordan Lee',
             role: null,
             companyHint: null,
             topics: [],
@@ -444,13 +444,13 @@ describe('commit() sourceInteractionId', () => {
         userId: bindUserId,
         transcript: 'add to the one I just opened',
         capturedAt: new Date(),
-        preferredEntityId: 'pref_tomo_a',
+        preferredEntityId: 'pref_jordan_a',
       },
     );
 
     expect(result.newEntities).toBe(0);
     expect(result.persons[0]!.created).toBe(false);
-    expect(result.persons[0]!.entityId).toBe('pref_tomo_a');
+    expect(result.persons[0]!.entityId).toBe('pref_jordan_a');
   });
 
   it('injects and links the preferred person when extraction returns none', async () => {

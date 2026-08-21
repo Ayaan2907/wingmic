@@ -304,8 +304,7 @@ For each PersonCandidate from the extractor:
   the page is login-walled.
 
   normalizePersonName = lowercase tokens, punctuation stripped, space-joined.
-  Partial names ("Tomo" vs "Tomo Matsuo") do NOT auto-link.
-
+  Partial names ("Jordan" vs "Jordan Lee") do NOT auto-link.
   resolvePerson score (when fuzzy runs):
     nameScore = max(nameSimilarity(cand.name, entity.name), alias scores)
     embedScore = cosine(entity.embedding, cand.embedding)

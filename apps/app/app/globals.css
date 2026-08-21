@@ -301,3 +301,49 @@ a {
   /* the graph's mobile floating selected-card is redundant beside the rail */
   .graph-mobile-card { display: none; }
 }
+
+/* ── graph page: toolbar + bounded canvas viewport ─────────────────────── */
+.graph-shell .graph-surface {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 110px);
+  max-height: calc(100dvh - 110px);
+  overflow: hidden;
+  background: var(--bg-page);
+  color: var(--ink);
+}
+@media (min-width: 1120px) {
+  .graph-shell .graph-surface {
+    min-height: 100dvh;
+    max-height: 100dvh;
+  }
+}
+.graph-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-page);
+  z-index: 4;
+}
+.graph-toolbar-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+.graph-viewport {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-page);
+}
+.graph-viewport:fullscreen {
+  background: var(--bg-page);
+}

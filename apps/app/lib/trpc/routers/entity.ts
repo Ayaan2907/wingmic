@@ -6,15 +6,17 @@ import type { DB } from '@wingmic/db';
 import * as schema from '@wingmic/db/schema';
 import { linkedinProfileHref } from '@/lib/acts/linkedinHref';
 import { namesOverlap } from '@/lib/entity/namesOverlap';
+import { mergePersonEntities, undoPersonMerge } from '@/lib/entity/mergePerson';
 
 // entity.detail — single procedure powering /person/[id], /company/[id],
-// /event/[id]. Source of truth: docs/superpowers/plans/2026-05-23-...md §18
+// /event/[id], /topic/[id]. Source of truth: docs/superpowers/plans/2026-05-23-...md §18
 // PR β₂ and design/v2/design.md §13.
 //
 // id semantics differ by kind:
 //   - person:  id = entities.id (private, owner-scoped)
 //   - company: id = companies.id (canonical, global)
 //   - event:   id = events.id   (canonical, global)
+//   - topic:   id = topics.id   (canonical, global)
 //
 // All edges respect soft-delete:
 //   entities.deletedAt IS NULL · entityCompanies.sourceDeleted = false ·
@@ -40,7 +42,8 @@ type Capture = {
   interactionId: string;
   capturedAt: string; // ISO
   transcript: string;
-  eventName?: string;
+  topics: string[];
+  eventName?: string | null;
   jpegBase64?: string | null;
 };
 
@@ -71,7 +74,7 @@ export const entityRouter = router({
   detail: protectedProcedure
     .input(
       z.object({
-        kind: z.enum(['person', 'company', 'event']),
+        kind: z.enum(['person', 'company', 'event', 'topic']),
         id: z.string().min(1),
       }),
     )
@@ -86,7 +89,45 @@ export const entityRouter = router({
       if (kind === 'company') {
         return await loadCompany(db, userId, id);
       }
-      return await loadEvent(db, userId, id);
+      if (kind === 'event') {
+        return await loadEvent(db, userId, id);
+      }
+      return await loadTopic(db, userId, id);
+    }),
+
+  merge: protectedProcedure
+    .input(z.object({ sourceId: z.string().min(1), targetId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await mergePersonEntities(
+          ctx.db,
+          ctx.user.id,
+          input.sourceId,
+          input.targetId,
+        );
+      } catch (e) {
+        if (e instanceof Error && e.message === 'MERGE_NOT_ALLOWED') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'cannot merge these people' });
+        }
+        throw e;
+      }
+    }),
+
+  undoMerge: protectedProcedure
+    .input(z.object({ mergeId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await undoPersonMerge(ctx.db, ctx.user.id, input.mergeId);
+        return { ok: true as const };
+      } catch (e) {
+        if (e instanceof Error && e.message === 'MERGE_UNDO_EXPIRED') {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'undo window closed' });
+        }
+        if (e instanceof Error && e.message === 'MERGE_NOT_FOUND') {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'merge not found' });
+        }
+        throw e;
+      }
     }),
 
   /** Desktop person rail — owned people, newest first. */
@@ -197,7 +238,21 @@ async function loadPerson(
   const uniqueInteractionIds = [...new Set(interactionIds)];
 
   const interactions = await loadOwnedInteractions(db, userId, uniqueInteractionIds);
-  const captures = await attachCaptureMedia(db, interactions, { entityId });
+  const topicById = new Map(topics.map((t: any) => [t.id as string, t.name as string]));
+  const topicsByInteraction = new Map<string, string[]>();
+  for (const link of et) {
+    const iid = (link as { sourceInteractionId?: string | null }).sourceInteractionId;
+    if (!iid) continue;
+    const name = topicById.get((link as { topicId: string }).topicId);
+    if (!name) continue;
+    const list = topicsByInteraction.get(iid) ?? [];
+    if (!list.includes(name)) list.push(name);
+    topicsByInteraction.set(iid, list);
+  }
+  const captures = await attachCaptureMedia(db, interactions, {
+    entityId,
+    topicsByInteraction,
+  });
 
   // Stats
   const edgesCount = ec.length + ee.length + et.length;
@@ -614,7 +669,12 @@ async function loadOwnedInteractions(
 async function attachCaptureMedia(
   db: DB,
   interactions: Array<{ id: string; capturedAt: Date | number | null; transcript: string | null }>,
-  opts: { eventName?: string; entityId?: string; eventId?: string },
+  opts: {
+    eventName?: string;
+    entityId?: string;
+    eventId?: string;
+    topicsByInteraction?: Map<string, string[]>;
+  },
 ): Promise<Capture[]> {
   if (interactions.length === 0) return [];
   const rows = await db.query.interactionAttachments.findMany({
@@ -645,10 +705,143 @@ async function attachCaptureMedia(
       interactionId: i.id,
       capturedAt: (toDate(i.capturedAt) ?? new Date()).toISOString(),
       transcript: i.transcript ?? '',
+      topics: opts.topicsByInteraction?.get(i.id) ?? [],
       ...(opts.eventName ? { eventName: opts.eventName } : {}),
       jpegBase64: preferred?.jpegBase64 ?? null,
     };
   });
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Topic
+// ────────────────────────────────────────────────────────────────────
+
+async function loadTopic(db: DB, userId: string, topicId: string) {
+  const topic = await db.query.topics.findFirst({
+    where: eq(schema.topics.id, topicId),
+  });
+  if (!topic) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'topic not found' });
+  }
+
+  const etAll = await db.query.entityTopics.findMany({
+    where: and(
+      eq(schema.entityTopics.topicId, topicId),
+      eq(schema.entityTopics.sourceDeleted, false),
+    ),
+  });
+
+  const candidateEntityIds = [...new Set(etAll.map((x: any) => x.entityId as string))];
+  const myEntities: any[] = candidateEntityIds.length
+    ? await db.query.entities.findMany({
+        where: and(
+          inArray(schema.entities.id, candidateEntityIds),
+          eq(schema.entities.ownerUserId, userId),
+          isNull(schema.entities.deletedAt),
+        ),
+      })
+    : [];
+
+  if (myEntities.length === 0) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'topic not found' });
+  }
+
+  const myEntityIds = myEntities.map((e: any) => e.id);
+  const etMine = etAll.filter((x: any) => myEntityIds.includes(x.entityId));
+
+  const interactionIds = [
+    ...new Set(
+      etMine
+        .map((t: any) => t.sourceInteractionId as string | null)
+        .filter((x): x is string => !!x),
+    ),
+  ];
+
+  const interactions = await loadOwnedInteractions(db, userId, interactionIds);
+  const topicsByInteraction = new Map<string, string[]>();
+  for (const i of interactions) {
+    topicsByInteraction.set(i.id, [topic.name]);
+  }
+  const captures = await attachCaptureMedia(db, interactions, { topicsByInteraction });
+
+  const [ec, ee] = await Promise.all([
+    db.query.entityCompanies.findMany({
+      where: and(
+        inArray(schema.entityCompanies.entityId, myEntityIds),
+        eq(schema.entityCompanies.sourceDeleted, false),
+      ),
+    }),
+    db.query.entityEvents.findMany({
+      where: and(
+        inArray(schema.entityEvents.entityId, myEntityIds),
+        eq(schema.entityEvents.sourceDeleted, false),
+      ),
+    }),
+  ]);
+
+  const companyIds = [...new Set(ec.map((x: any) => x.companyId as string))];
+  const eventIds = [...new Set(ee.map((x: any) => x.eventId as string))];
+  const [companies, events] = await Promise.all([
+    companyIds.length
+      ? db.query.companies.findMany({ where: inArray(schema.companies.id, companyIds) })
+      : Promise.resolve([] as any[]),
+    eventIds.length
+      ? db.query.events.findMany({ where: inArray(schema.events.id, eventIds) })
+      : Promise.resolve([] as any[]),
+  ]);
+
+  const companyById = new Map<string, any>(companies.map((c: any) => [c.id, c]));
+  const roleByEntity = new Map<string, string>();
+  for (const row of ec) {
+    if (roleByEntity.has(row.entityId)) continue;
+    const c = companyById.get(row.companyId);
+    const parts: string[] = [];
+    if (c?.name) parts.push(c.name);
+    if (row.role) parts.push(row.role);
+    if (parts.length) roleByEntity.set(row.entityId, parts.join(' · '));
+  }
+
+  const related: Related[] = [
+    ...myEntities.map((p: any) => ({
+      kind: 'person' as const,
+      id: p.id,
+      name: p.name,
+      role: roleByEntity.get(p.id) ?? 'discussed this',
+    })),
+    ...companies.map((c: any) => ({
+      kind: 'company' as const,
+      id: c.id,
+      name: c.name,
+      role: 'shared topic',
+    })),
+    ...events.map((e: any) => ({
+      kind: 'event' as const,
+      id: e.id,
+      name: e.name,
+      role: 'shared topic',
+    })),
+  ].slice(0, 15);
+
+  const mostRecent = interactions[0] ? toDate(interactions[0].capturedAt) : null;
+
+  return {
+    kind: 'topic' as const,
+    id: topic.id,
+    name: topic.name,
+    sub: { slug: topic.slug ?? null } satisfies DetailSub,
+    stats: [
+      { key: 'people', value: String(myEntities.length) },
+      { key: 'commits', value: String(interactionIds.length) },
+      {
+        key: 'last touch',
+        value: daysSince(mostRecent) == null ? '—' : `${daysSince(mostRecent)}d`,
+      },
+    ] satisfies DetailStats,
+    captures,
+    followups: [] as Array<{ id: string; body: string; dueHint?: string }>,
+    related,
+    topics: [] as Array<{ id: string; name: string }>,
+  };
 }
 
 function firstFactValue(

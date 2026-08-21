@@ -77,6 +77,15 @@ describe('entity.detail', () => {
         byte_size INTEGER NOT NULL,
         created_at INTEGER NOT NULL
       );
+      CREATE TABLE entity_merge (
+        id TEXT PRIMARY KEY,
+        source_entity_id TEXT NOT NULL,
+        target_entity_id TEXT NOT NULL,
+        merged_by_user_id TEXT,
+        merged_at INTEGER NOT NULL,
+        reversed_at INTEGER,
+        moves TEXT
+      );
     `);
 
     const now = Date.now();
@@ -282,6 +291,28 @@ describe('entity.detail', () => {
   it('NOT_FOUND on missing ids', async () => {
     await expect(caller().detail({ kind: 'company', id: 'co_nope' })).rejects.toThrow();
     await expect(caller().detail({ kind: 'event', id: 'ev_nope' })).rejects.toThrow();
+    await expect(caller().detail({ kind: 'topic', id: 'tp_nope' })).rejects.toThrow();
+  });
+
+  it('topic detail returns people, companies, events, and captures', async () => {
+    const res = await caller().detail({ kind: 'topic', id: 'tp_rust' });
+    expect(res.kind).toBe('topic');
+    expect(res.name).toBe('rust');
+    expect(res.stats[0]!.value).toBe('3');
+    expect(res.related.some((r) => r.kind === 'person' && r.id === 'en_sarah')).toBe(true);
+    expect(res.related.some((r) => r.kind === 'company' && r.id === 'co_acme')).toBe(true);
+    expect(res.related.some((r) => r.kind === 'event' && r.id === 'ev_dc')).toBe(true);
+    expect(res.captures.length).toBeGreaterThan(0);
+    expect(res.captures[0]!.topics).toEqual(['rust']);
+  });
+
+  it('topic detail 404s when the user has no mentions', async () => {
+    await expect(caller(otherUserId).detail({ kind: 'topic', id: 'tp_rust' })).rejects.toThrow();
+  });
+
+  it('includes per-capture topic chips on person detail', async () => {
+    const res = await caller().detail({ kind: 'person', id: 'en_sarah' });
+    expect(res.captures.some((c) => c.topics?.includes('rust'))).toBe(true);
   });
 
   it('respects soft-deleted entities (deletedAt)', async () => {

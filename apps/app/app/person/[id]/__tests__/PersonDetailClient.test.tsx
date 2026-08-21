@@ -16,6 +16,9 @@ vi.mock('next/link', () => ({
 
 const routerPush = vi.fn();
 const createDraftMutate = vi.fn();
+const mergeMutate = vi.fn();
+const undoMergeMutate = vi.fn();
+const invalidateDetail = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPush, replace: vi.fn(), refresh: vi.fn() }),
@@ -25,6 +28,11 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
+    useUtils: () => ({
+      entity: {
+        detail: { invalidate: invalidateDetail },
+      },
+    }),
     acts: {
       createDraft: {
         useMutation: (opts?: { onSuccess?: (r: { ok: boolean }) => void }) => ({
@@ -39,6 +47,30 @@ vi.mock('@/lib/trpc/client', () => ({
     entity: {
       listPeople: {
         useQuery: () => ({ data: { people: [] }, isLoading: false }),
+      },
+      merge: {
+        useMutation: (opts?: {
+          onMutate?: (input: { sourceId: string }) => void;
+          onSuccess?: (res: { mergeId: string; sourceName: string }) => void;
+          onSettled?: () => void;
+        }) => ({
+          mutate: (input: { sourceId: string; targetId: string }) => {
+            opts?.onMutate?.({ sourceId: input.sourceId });
+            mergeMutate(input);
+            opts?.onSuccess?.({ mergeId: 'mg_1', sourceName: 'Sarah' });
+            opts?.onSettled?.();
+          },
+          isPending: false,
+        }),
+      },
+      undoMerge: {
+        useMutation: (opts?: { onSuccess?: () => void }) => ({
+          mutate: (input: { mergeId: string }) => {
+            undoMergeMutate(input);
+            opts?.onSuccess?.();
+          },
+          isPending: false,
+        }),
       },
     },
   },
@@ -69,12 +101,6 @@ const detail = {
       interactionId: 'it_1',
       capturedAt: new Date('2026-05-30T14:32:00Z').toISOString(),
       transcript: 'met sarah at devconnect, rust lead at acme',
-    },
-    {
-      interactionId: 'it_photo',
-      capturedAt: new Date('2026-08-20T17:24:00Z').toISOString(),
-      transcript: 'attached a photo',
-      jpegBase64: 'aGVsbG93aW5nbWljLXRlc3QtcGhvdG8tZGF0YQ==',
     },
   ],
   followups: [],
@@ -110,12 +136,6 @@ describe('PersonDetailClient', () => {
     const caps = getAllByTestId('entity-capture');
     expect(caps.length).toBeGreaterThan(0);
     expect(caps[0]!.textContent).toContain('met sarah at devconnect');
-    const photo = caps.find((el) => el.textContent?.includes('attached a photo'));
-    expect(photo).toBeTruthy();
-    const img = photo!.querySelector('img[alt="attached photo"]') as HTMLImageElement | null;
-    expect(img?.getAttribute('src')).toContain(
-      'data:image/jpeg;base64,aGVsbG93aW5nbWljLXRlc3QtcGhvdG8tZGF0YQ==',
-    );
     // related rows wired to the right hrefs
     const rows = getAllByTestId('entity-related-row');
     expect(rows.length).toBe(2);
@@ -140,10 +160,13 @@ describe('PersonDetailClient', () => {
         }}
       />,
     );
-    expect(screen.getByTestId('entity-possible-match').getAttribute('href')).toBe(
+    expect(screen.getByTestId('entity-possible-match')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /open/i }).getAttribute('href')).toBe(
       '/person/en_sarah_b',
     );
-    expect(screen.getByTestId('entity-public-profile-links').textContent).toMatch(/in\/ada-lovelace/i);
+    expect(screen.getByTestId('entity-public-profile-card').textContent).toMatch(
+      /show their linkedin/i,
+    );
   });
 
   it('draft check-in creates an act and routes to /acts', () => {

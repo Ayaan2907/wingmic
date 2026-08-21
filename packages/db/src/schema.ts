@@ -395,6 +395,9 @@ export const entityMerges = sqliteTable(
     // Audit table: SET NULL preserves merge history if the acting user is later deleted.
     mergedByUserId: text('merged_by_user_id').references(() => users.id, { onDelete: 'set null' }),
     mergedAt: ts('merged_at'),
+    reversedAt: integer('reversed_at', { mode: 'timestamp' }),
+    /** JSON EntityMergeMoves — row ids re-pointed during merge for 30s undo. */
+    moves: text('moves'),
   },
   (t) => [
     index('entity_merge_target_idx').on(t.targetEntityId),
