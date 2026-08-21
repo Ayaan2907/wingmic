@@ -1,4 +1,5 @@
 import SignInClient from './SignInClient';
+import { safeNextPath } from './safeNext';
 
 export const metadata = {
   title: 'sign in',
@@ -8,8 +9,8 @@ export const metadata = {
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string | string[] }>;
 }) {
   const sp = await searchParams;
-  return <SignInClient next={sp?.next ?? '/chat'} />;
+  return <SignInClient next={safeNextPath(sp?.next)} />;
 }

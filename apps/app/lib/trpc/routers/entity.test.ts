@@ -301,6 +301,7 @@ describe('entity.detail', () => {
     expect(res.related.some((r) => r.kind === 'company' && r.id === 'co_acme')).toBe(true);
     expect(res.related.some((r) => r.kind === 'event' && r.id === 'ev_dc')).toBe(true);
     expect(res.captures.length).toBeGreaterThan(0);
+    expect(res.stats.find((s) => s.key === 'commits')?.value).toBe(String(res.captures.length));
     expect(res.captures[0]!.topics).toEqual(['rust']);
   });
 

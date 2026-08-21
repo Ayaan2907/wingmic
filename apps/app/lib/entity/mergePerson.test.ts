@@ -59,6 +59,16 @@ describe('mergePersonEntities', () => {
         reversed_at INTEGER,
         moves TEXT
       );
+      CREATE TABLE interaction_attachment (
+        id TEXT PRIMARY KEY,
+        interaction_id TEXT NOT NULL,
+        entity_id TEXT,
+        event_id TEXT,
+        mime_type TEXT NOT NULL DEFAULT 'image/jpeg',
+        jpeg_base64 TEXT NOT NULL,
+        byte_size INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
     `);
 
     const now = Date.now();
@@ -83,12 +93,24 @@ describe('mergePersonEntities', () => {
       args: ['fact_src', 'en_src', now],
     });
     await client.execute({
+      sql: `INSERT INTO entity_fact (id, entity_id, key, value, source_interaction_id, confidence, created_at) VALUES (?, ?, 'email', 'from source', null, 80, ?)`,
+      args: ['fact_keep_email', 'en_keep', now],
+    });
+    await client.execute({
       sql: `INSERT INTO entity_company (id, entity_id, company_id, role, created_at, source_deleted) VALUES (?, ?, ?, 'eng', ?, 0)`,
       args: ['ec_src', 'en_src', 'co_x', now],
     });
     await client.execute({
       sql: `INSERT INTO act (id, user_id, kind, status, body, target_entity_id, confidence, created_at, updated_at) VALUES (?, ?, 'email', 'drafted', 'ping', ?, 80, ?, ?)`,
       args: ['act_1', userId, 'en_src', now, now],
+    });
+    await client.execute({
+      sql: `INSERT INTO act (id, user_id, kind, status, body, target_entity_id, secondary_entity_id, confidence, created_at, updated_at) VALUES (?, ?, 'intro', 'drafted', 'intro', ?, ?, 80, ?, ?)`,
+      args: ['act_intro', userId, 'en_keep', 'en_src', now, now],
+    });
+    await client.execute({
+      sql: `INSERT INTO interaction_attachment (id, interaction_id, entity_id, mime_type, jpeg_base64, byte_size, created_at) VALUES (?, 'it_1', ?, 'image/jpeg', 'aaa', 3, ?)`,
+      args: ['att_src', 'en_src', now],
     });
   });
 
@@ -106,6 +128,7 @@ describe('mergePersonEntities', () => {
       where: (t, { eq }) => eq(t.id, 'fact_src'),
     });
     expect(fact?.entityId).toBe('en_keep');
+    expect(fact?.key).toBe('note');
 
     const ec = await db.query.entityCompanies.findFirst({
       where: (t, { eq }) => eq(t.id, 'ec_src'),
@@ -116,6 +139,16 @@ describe('mergePersonEntities', () => {
       where: (t, { eq }) => eq(t.id, 'act_1'),
     });
     expect(act?.targetEntityId).toBe('en_keep');
+
+    const intro = await db.query.acts.findFirst({
+      where: (t, { eq }) => eq(t.id, 'act_intro'),
+    });
+    expect(intro?.secondaryEntityId).toBe('en_keep');
+
+    const photo = await db.query.interactionAttachments.findFirst({
+      where: (t, { eq }) => eq(t.id, 'att_src'),
+    });
+    expect(photo?.entityId).toBe('en_keep');
 
     const target = await db.query.entities.findFirst({
       where: (t, { eq }) => eq(t.id, 'en_keep'),
@@ -133,5 +166,15 @@ describe('mergePersonEntities', () => {
       where: (t, { eq }) => eq(t.id, 'fact_src'),
     });
     expect(factBack?.entityId).toBe('en_src');
+
+    const introBack = await db.query.acts.findFirst({
+      where: (t, { eq }) => eq(t.id, 'act_intro'),
+    });
+    expect(introBack?.secondaryEntityId).toBe('en_src');
+
+    const photoBack = await db.query.interactionAttachments.findFirst({
+      where: (t, { eq }) => eq(t.id, 'att_src'),
+    });
+    expect(photoBack?.entityId).toBe('en_src');
   });
 });

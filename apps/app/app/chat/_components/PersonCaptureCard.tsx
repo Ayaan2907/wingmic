@@ -25,14 +25,12 @@ export function PersonCaptureCard({
   selected,
   action,
   onPhoto,
-  onCorrect,
 }: {
   person: PersonCaptureCardPerson;
   href: string | null;
   selected?: boolean;
   action?: PersonCaptureAction | null;
   onPhoto: () => void;
-  onCorrect: () => void;
 }) {
   const handle = linkedinHandle(person.linkedin ?? null);
   const linkedinHref = person.linkedin ? canonicalizeLinkedin(person.linkedin) : null;
@@ -126,12 +124,6 @@ export function PersonCaptureCard({
               ariaLabel={`add photo for ${person.name}`}
               testId={`person-photo-${nameId}`}
               onClick={onPhoto}
-            />
-            <GhostAction
-              label="correct"
-              ariaLabel={`correct ${person.name}`}
-              testId={`person-correct-${nameId}`}
-              onClick={onCorrect}
             />
           </div>
         </div>

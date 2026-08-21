@@ -52,6 +52,12 @@ describe('normalizePersonName', () => {
     expect(entityMatchesPersonName('Jordan', { name: 'Jordan Lee', aliases: [] })).toBe(false);
   });
 
+  it('keeps non-latin combining marks so distinct names stay distinct', () => {
+    const withVirama = 'मा\u094dन';
+    const withoutVirama = 'मान';
+    expect(normalizePersonName(withVirama)).not.toBe(normalizePersonName(withoutVirama));
+  });
+
   it('matches via alias on the entity', () => {
     expect(
       entityMatchesPersonName('Ada', {

@@ -3,6 +3,7 @@ import * as schema from '@wingmic/db/schema';
 import { and, eq, isNull } from 'drizzle-orm';
 import {
   fingerprint,
+  isStrongFingerprint,
   type CommitPersonResolution,
   type PersonCandidate,
 } from '@wingmic/extractor';
@@ -53,29 +54,33 @@ export async function enrichPersonsAfterCommit(opts: {
     });
     if (!query.q.trim()) continue;
 
-    const hits = await provider.search(query);
-    const draft = hitsToPersonaDraft(cand, hits);
+    try {
+      const hits = await provider.search(query);
+      const draft = hitsToPersonaDraft(cand, hits);
 
-    if (draft.sourceUrl && !isBlockedExtractUrl(draft.sourceUrl)) {
-      try {
-        await provider.extract({ urls: [draft.sourceUrl], query: cand.name });
-      } catch {
-        // snippets are enough
+      if (draft.sourceUrl && !isBlockedExtractUrl(draft.sourceUrl)) {
+        try {
+          await provider.extract({ urls: [draft.sourceUrl], query: cand.name });
+        } catch {
+          // snippets are enough
+        }
       }
+
+      const facts = [
+        draft.sourceUrl ? { key: 'source_url', value: draft.sourceUrl, confidence: WEB_CONFIDENCE } : null,
+        draft.sourceUrl ? { key: 'url', value: draft.sourceUrl, confidence: WEB_CONFIDENCE } : null,
+        draft.linkedin ? { key: 'linkedin', value: draft.linkedin, confidence: WEB_CONFIDENCE } : null,
+      ].filter((f): f is { key: string; value: string; confidence: number } => f != null);
+
+      const fp = fingerprint(draft);
+      if (fp && isStrongFingerprint(fp.kind)) {
+        facts.push({ key: 'fingerprint', value: fp.id, confidence: WEB_CONFIDENCE });
+      }
+
+      await insertBlankFacts(db, resolved.entityId, facts, interactionId);
+    } catch {
+      // one vendor miss must not skip later people
     }
-
-    const facts = [
-      draft.sourceUrl ? { key: 'source_url', value: draft.sourceUrl, confidence: WEB_CONFIDENCE } : null,
-      draft.sourceUrl ? { key: 'url', value: draft.sourceUrl, confidence: WEB_CONFIDENCE } : null,
-      draft.linkedin ? { key: 'linkedin', value: draft.linkedin, confidence: WEB_CONFIDENCE } : null,
-    ].filter((f): f is { key: string; value: string; confidence: number } => f != null);
-
-    const fp = fingerprint(draft);
-    if (fp) {
-      facts.push({ key: 'fingerprint', value: fp.id, confidence: WEB_CONFIDENCE });
-    }
-
-    await insertBlankFacts(db, resolved.entityId, facts, interactionId);
   }
 }
 

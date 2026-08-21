@@ -53,7 +53,7 @@ export function GraphCanvasControls({
       style={{
         position: 'absolute',
         right: 10,
-        bottom: 'var(--dock-control-clearance, 72px)',
+        bottom: 12,
         zIndex: 5,
         display: 'flex',
         flexDirection: 'column',

@@ -2,7 +2,9 @@ import type { WebSearchIntent, WebSearchQuery } from './types';
 
 export function isBlockedExtractUrl(raw: string): boolean {
   try {
-    const host = new URL(raw).hostname.replace(/^www\./, '').toLowerCase();
+    const url = new URL(raw);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return true;
+    const host = url.hostname.replace(/^www\./, '').toLowerCase();
     return (
       host === 'linkedin.com' ||
       host.endsWith('.linkedin.com') ||

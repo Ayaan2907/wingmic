@@ -21,6 +21,7 @@ export function normalizeLinkedInUrl(raw: string | null | undefined): string | n
     const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;
     const u = new URL(withScheme);
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    if (u.username || u.password) return null;
     if (!isLinkedInHost(u.hostname)) return null;
     u.hash = '';
     u.search = '';

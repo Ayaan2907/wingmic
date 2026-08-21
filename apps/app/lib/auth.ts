@@ -29,10 +29,9 @@ export const auth = betterAuth({
     magicLink({
       sendMagicLink: async ({ email, url }) => {
         const html = sendMagicLinkEmail({ email, url });
-        // Always log — ops need the link when Resend is down, misconfigured, or key missing.
-        console.log(`[wingmic auth] magic link for ${email}: ${url}`);
-
         if (!resend) {
+          // Local fallback only — the URL is a bearer credential.
+          console.log(`[wingmic auth] magic link for ${email}: ${url}`);
           console.log('[wingmic auth] RESEND_API_KEY not set — email not sent');
           return;
         }

@@ -14,11 +14,13 @@ function memDb() {
 
 describe('enrichPersonsAfterCommit', () => {
   let db: ReturnType<typeof drizzle<typeof schema>>;
+  let client: ReturnType<typeof createClient>;
   const now = Date.now();
 
   beforeAll(async () => {
     const mem = memDb();
     db = mem.db;
+    client = mem.client;
     await mem.client.executeMultiple(`
       CREATE TABLE user (id TEXT PRIMARY KEY, email TEXT NOT NULL, email_verified INTEGER DEFAULT 0, name TEXT, image TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
       CREATE TABLE entity (
@@ -117,5 +119,45 @@ describe('enrichPersonsAfterCommit', () => {
         provider: null,
       }),
     ).resolves.toBeUndefined();
+  });
+
+  it('continues later people when one search fails', async () => {
+    await client.execute({
+      sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, created_at, updated_at) VALUES ('en_bob', 'user_e2', 'person', 'Bob', '[]', ?, ?)`,
+      args: [now, now],
+    });
+    const search = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('vendor down'))
+      .mockResolvedValueOnce([
+        {
+          title: 'Bob',
+          url: 'https://www.analytical-engines.example/bob',
+          snippet: 'engineer',
+        },
+      ]);
+    await enrichPersonsAfterCommit({
+      db: db as never,
+      userId: 'user_e2',
+      interactionId: 'it_1',
+      extractedPersons: [personCand, { ...personCand, name: 'Bob' }],
+      persons: [
+        { entityId: 'en_ada', created: true, score: null },
+        { entityId: 'en_bob', created: true, score: null },
+      ],
+      provider: { id: 'tavily', search, extract: async () => [] },
+    });
+    expect(search).toHaveBeenCalledTimes(2);
+    const bobFacts = await db.query.entityFacts.findMany({
+      where: eq(schema.entityFacts.entityId, 'en_bob'),
+    });
+    expect(bobFacts.some((f) => f.key === 'url')).toBe(true);
+  });
+
+  it('does not persist a weak name_company fingerprint', async () => {
+    const facts = await db.query.entityFacts.findMany({
+      where: eq(schema.entityFacts.entityId, 'en_ada'),
+    });
+    expect(facts.some((f) => f.key === 'fingerprint')).toBe(false);
   });
 });

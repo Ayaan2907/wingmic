@@ -246,7 +246,7 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
                 key={m.id}
                 match={m}
                 onMerge={onMergePossibleMatch}
-                pending={mergePendingId === m.id}
+                pending={Boolean(mergePendingId)}
               />
             ))}
           </Section>

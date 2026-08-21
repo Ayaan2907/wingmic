@@ -56,7 +56,6 @@ export function NavLink({ tab, active }: { tab: (typeof NAV_TABS)[number]; activ
     <Link
       href={tab.href as Route}
       prefetch
-      scroll={false}
       aria-current={active ? 'page' : undefined}
       style={{
         flex: 1,
