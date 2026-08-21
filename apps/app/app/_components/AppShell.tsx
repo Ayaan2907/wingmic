@@ -69,10 +69,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <a href="#main-content" className="skip-link">
         skip to content
       </a>
-      <main className="app-content" id="main-content">
+      <div className="app-content" id="main-content">
         {showCalendarNudge ? <CalendarSettingsNudge /> : null}
         {children}
-      </main>
+      </div>
       {locked ? (
         <LockedBar onStop={() => recorder.stop()} onDiscard={() => recorder.discard()} duration={recorder.duration} />
       ) : (

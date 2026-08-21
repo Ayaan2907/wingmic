@@ -23,9 +23,9 @@ export async function enrichOwnerAfterLinkedin(opts: {
   if (!provider) return;
 
   const query = buildWebSearchQuery({
-    intent: 'profile',
-    linkedinUrl,
+    intent: 'person',
     name: name ?? undefined,
+    q: [name, linkedinUrl].filter((v) => v?.trim()).join(' '),
   });
   if (!query.q.trim()) return;
 

@@ -10,23 +10,27 @@ export type ParsedEventFields = {
 };
 
 export function parseEventFields(hits: WebSearchHit[]): ParsedEventFields {
-  let url: string | null = null;
+  let firstUrl: string | null = null;
+  let platformUrl: string | null = null;
   let external: ParsedEventFields['external'] = null;
-  const blob = hits.map((h) => `${h.title}\n${h.snippet}\n${h.url}`).join('\n');
+  const blob = hits.map((h) => `${h.title}\n${h.snippet}`).join('\n');
 
   for (const hit of hits) {
-    if (!external) {
-      external = parseEventExternal(hit.url) ?? parseEventExternal(hit.snippet);
+    const hitExternal = parseEventExternal(hit.url) ?? parseEventExternal(hit.snippet);
+    if (!external && hitExternal) {
+      external = hitExternal;
+      if (!isBlockedExtractUrl(hit.url)) platformUrl = hit.url;
     }
-    if (!url && !isBlockedExtractUrl(hit.url)) {
-      url = hit.url;
+    if (!firstUrl && !isBlockedExtractUrl(hit.url)) {
+      firstUrl = hit.url;
     }
   }
+  let url = platformUrl ?? firstUrl;
   if (!url && external) {
     const fromBlob = blob.match(
       /https?:\/\/(?:www\.)?(?:lu\.ma|luma\.com|partiful\.com)\/[^\s)]+/i,
     );
-    if (fromBlob) url = fromBlob[0];
+    if (fromBlob) url = fromBlob[0].replace(/[.,;:!?)\]>]+$/, '');
   }
 
   const dates = parseDateRange(blob);

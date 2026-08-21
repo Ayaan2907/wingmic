@@ -41,7 +41,7 @@ export function canonicalizeLinkedin(raw: string): string | null {
 
 const LINKEDIN_URL_PATTERNS: RegExp[] = [
   /https?:\/\/(?:[\w-]+\.)?linkedin\.com\/in\/[A-Za-z0-9_-]+/gi,
-  /(?:www\.)?linkedin\.com\/in\/[A-Za-z0-9_-]+/gi,
+  /(?<![a-z0-9.-])(?:www\.)?linkedin\.com\/in\/[A-Za-z0-9_-]+/gi,
   /(?<![\w./:-])\/?in\/[A-Za-z0-9_-]+/gi,
 ];
 

@@ -835,10 +835,6 @@ function GraphCard({ message, result }: { message: ThreadMessage; result: GraphR
                   if (!entityId) return;
                   setOpenTarget({ interactionId: result.interactionId, entityId, name: p.name });
                 }}
-                onCorrect={() => {
-                  if (!entityId) return;
-                  setOpenTarget({ interactionId: result.interactionId, entityId, name: p.name });
-                }}
               />
             );
           })}

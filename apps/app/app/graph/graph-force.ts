@@ -1,5 +1,4 @@
 import type { ForceGraphMethods } from 'react-force-graph-2d';
-import { NODE_PAINT_RADIUS } from './graph-style';
 import type { GraphLink } from './graph-types';
 
 /** d3-force tuning for readable, iterable entity graphs at product scale. */
@@ -8,7 +7,6 @@ export const GRAPH_WARMUP_TICKS = 80;
 export const GRAPH_COOLDOWN_TICKS = 400;
 export const GRAPH_VELOCITY_DECAY = 0.3;
 export const GRAPH_CHARGE_STRENGTH = -220;
-export const GRAPH_COLLIDE_RADIUS = NODE_PAINT_RADIUS + 16;
 export const GRAPH_CENTER_STRENGTH = 0.14;
 export const GRAPH_LINK_STRENGTH = 0.55;
 
@@ -57,8 +55,6 @@ type ForceGraphWithD3 = ForceGraphMethods & {
   d3Force?: (name: string) => {
     strength?: (n: number) => void;
     distance?: (d: number | ((link: GraphLink) => number)) => void;
-    radius?: (d: number | ((node: unknown) => number)) => void;
-    iterations?: (n: number) => void;
   } | undefined;
   d3ReheatSimulation?: () => void;
 };
@@ -78,7 +74,6 @@ export function configureGraphForces(
   link.distance((l: GraphLink) => graphLinkDistance(l, spacing));
   link.strength(GRAPH_LINK_STRENGTH);
 
-  // collide is not registered by default in force-graph — charge + distance drive spacing.
   return true;
 }
 

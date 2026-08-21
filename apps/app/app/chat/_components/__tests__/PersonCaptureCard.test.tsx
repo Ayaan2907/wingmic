@@ -6,7 +6,6 @@ import { PersonCaptureCard } from '../PersonCaptureCard';
 describe('PersonCaptureCard', () => {
   it('renders name, company, topics, and promised hint', () => {
     const onPhoto = vi.fn();
-    const onCorrect = vi.fn();
     render(
       <PersonCaptureCard
         person={{
@@ -18,7 +17,6 @@ describe('PersonCaptureCard', () => {
         href="/person/e1"
         action={{ kind: 'email', body: 'send the deck', whenHint: 'monday' }}
         onPhoto={onPhoto}
-        onCorrect={onCorrect}
       />,
     );
 
@@ -31,9 +29,8 @@ describe('PersonCaptureCard', () => {
     expect(screen.getByText('promised monday')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'add photo for Sara Chen' }));
-    fireEvent.click(screen.getByRole('button', { name: 'correct Sara Chen' }));
     expect(onPhoto).toHaveBeenCalledTimes(1);
-    expect(onCorrect).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'correct Sara Chen' })).toBeNull();
   });
 
   it('renders every person as its own card, not a dump CTA', () => {
@@ -42,7 +39,6 @@ describe('PersonCaptureCard', () => {
         person={{ name: 'Priya Mehta', role: 'hiring', companyHint: 'Linear', topics: [] }}
         href="/person/e2"
         onPhoto={() => {}}
-        onCorrect={() => {}}
       />,
     );
     expect(screen.queryByRole('button', { name: /draft follow-up/i })).toBeNull();
@@ -51,7 +47,6 @@ describe('PersonCaptureCard', () => {
         person={{ name: 'Marcus Kim', role: null, companyHint: 'Stripe', topics: ['deck'] }}
         href="/person/e3"
         onPhoto={() => {}}
-        onCorrect={() => {}}
       />,
     );
     expect(screen.getByText('Marcus Kim')).toBeTruthy();

@@ -59,8 +59,6 @@ apps/web/public/*
 !apps/web/public/.gitkeep
 # committed source assets (not build-copied)
 !apps/web/public/wingmic-explainer.mp4
-# email-safe animated still of the explainer — referenced by emails/beta-launch.html
-!apps/web/public/wingmic-explainer.gif
 apps/app/public/*
 !apps/app/public/.gitkeep
 

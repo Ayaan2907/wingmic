@@ -40,5 +40,7 @@ describe('isBlockedExtractUrl', () => {
     expect(isBlockedExtractUrl('https://uk.linkedin.com/in/ada-lovelace')).toBe(true);
     expect(isBlockedExtractUrl('https://lnkd.in/abc')).toBe(true);
     expect(isBlockedExtractUrl('https://www.analytical-engines.example/')).toBe(false);
+    expect(isBlockedExtractUrl('mailto:ada@example.com')).toBe(true);
+    expect(isBlockedExtractUrl('file:///tmp/profile')).toBe(true);
   });
 });

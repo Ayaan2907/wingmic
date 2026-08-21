@@ -815,7 +815,7 @@ async function loadTopic(db: DB, userId: string, topicId: string) {
     sub: { slug: topic.slug ?? null } satisfies DetailSub,
     stats: [
       { key: 'people', value: String(myEntities.length) },
-      { key: 'commits', value: String(interactionIds.length) },
+      { key: 'commits', value: String(interactions.length) },
       {
         key: 'last touch',
         value: daysSince(mostRecent) == null ? '—' : `${daysSince(mostRecent)}d`,

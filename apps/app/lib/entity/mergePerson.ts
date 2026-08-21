@@ -9,6 +9,8 @@ export type EntityMergeMoves = {
   events: string[];
   topics: string[];
   acts: string[];
+  secondaryActs: string[];
+  attachments: string[];
   aliasAdded: string | null;
 };
 
@@ -59,6 +61,8 @@ export async function mergePersonEntities(
       events: [],
       topics: [],
       acts: [],
+      secondaryActs: [],
+      attachments: [],
       aliasAdded: null,
     };
 
@@ -70,7 +74,9 @@ export async function mergePersonEntities(
       where: eq(schema.entityFacts.entityId, sourceId),
     });
     for (const row of sourceFacts) {
-      const dup = targetFacts.some((f) => factValuesEqual(row.key, f.value, row.value));
+      const dup = targetFacts.some(
+        (f) => f.key === row.key && factValuesEqual(row.key, f.value, row.value),
+      );
       if (dup) continue;
       await writeDb
         .update(schema.entityFacts)
@@ -144,6 +150,28 @@ export async function mergePersonEntities(
       moves.acts.push(row.id);
     }
 
+    const sourceSecondaryActs = await writeDb.query.acts.findMany({
+      where: eq(schema.acts.secondaryEntityId, sourceId),
+    });
+    for (const row of sourceSecondaryActs) {
+      await writeDb
+        .update(schema.acts)
+        .set({ secondaryEntityId: targetId, updatedAt: new Date() })
+        .where(eq(schema.acts.id, row.id));
+      moves.secondaryActs.push(row.id);
+    }
+
+    const sourceAttachments = await writeDb.query.interactionAttachments.findMany({
+      where: eq(schema.interactionAttachments.entityId, sourceId),
+    });
+    for (const row of sourceAttachments) {
+      await writeDb
+        .update(schema.interactionAttachments)
+        .set({ entityId: targetId })
+        .where(eq(schema.interactionAttachments.id, row.id));
+      moves.attachments.push(row.id);
+    }
+
     const aliases = target.aliases ?? [];
     if (!aliases.includes(source.name)) {
       await writeDb
@@ -196,6 +224,8 @@ export async function undoPersonMerge(
       events: [] as string[],
       topics: [] as string[],
       acts: [] as string[],
+      secondaryActs: [] as string[],
+      attachments: [] as string[],
       aliasAdded: null as string | null,
       ...(JSON.parse(merge.moves ?? '{}') as Partial<EntityMergeMoves>),
     };
@@ -231,6 +261,18 @@ export async function undoPersonMerge(
         .update(schema.acts)
         .set({ targetEntityId: sourceId, updatedAt: new Date() })
         .where(eq(schema.acts.id, id));
+    }
+    for (const id of moves.secondaryActs) {
+      await writeDb
+        .update(schema.acts)
+        .set({ secondaryEntityId: sourceId, updatedAt: new Date() })
+        .where(eq(schema.acts.id, id));
+    }
+    for (const id of moves.attachments) {
+      await writeDb
+        .update(schema.interactionAttachments)
+        .set({ entityId: sourceId })
+        .where(eq(schema.interactionAttachments.id, id));
     }
 
     if (moves.aliasAdded) {

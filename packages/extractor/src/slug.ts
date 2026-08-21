@@ -18,9 +18,9 @@ export function personNameTokens(name: string): string[] {
   return name
     .toLowerCase()
     .normalize('NFKD')
-    .replace(/\p{M}/gu, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .split(/\s+/)
-    .map((t) => t.replace(/[^\p{L}\p{N}'-]/gu, ''))
+    .map((t) => t.replace(/[^\p{L}\p{N}\p{M}'-]/gu, ''))
     .filter(Boolean);
 }
 

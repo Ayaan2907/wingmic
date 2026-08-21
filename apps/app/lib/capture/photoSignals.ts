@@ -1,3 +1,5 @@
+import { canonicalizeLinkedin } from '@wingmic/extractor/linkedin';
+
 export type PhotoSignals = {
   personName: string | null;
   companyName: string | null;
@@ -36,12 +38,7 @@ function compactHttpUrl(raw: string | null | undefined): string | null {
 function linkedInProfileUrl(raw: string | null | undefined): string | null {
   const compact = compactHttpUrl(raw);
   if (!compact) return null;
-  const url = new URL(compact);
-  const host = url.hostname.toLowerCase();
-  if (host !== 'linkedin.com' && host !== 'www.linkedin.com') return null;
-  if (url.username || url.password) return null;
-  if (!/^\/in\/[^/]+\/?$/i.test(url.pathname)) return null;
-  return compact;
+  return canonicalizeLinkedin(compact);
 }
 
 export function normalizePhotoSignals(
