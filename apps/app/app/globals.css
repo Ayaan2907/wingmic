@@ -295,10 +295,9 @@ a:focus-visible {
   }
 }
 
-/* ── λ-shell: responsive app chrome ─────────────────────────────────────
-   One nav element, two layouts. Mobile = fixed bottom bar. ≥1120px = fixed
-   left rail. CSS (not conditional render) repositions it so the capture orb
-   inside it is never unmounted across a viewport crossing 1120px. */
+/* ── λ-shell: app chrome ────────────────────────────────────────────────
+   One nav element fixed as a bottom dock on every viewport. The capture orb
+   inside it never unmounts across route/viewport changes. */
 
 .app-nav {
   position: fixed;
@@ -352,29 +351,20 @@ a:focus-visible {
 
 @media (min-width: 1120px) {
   :root {
-    --thread-scroll-pad: 112px;
-    --chat-composer-bottom: 20px;
+    --thread-scroll-pad: calc(var(--chrome-bottom) + 42px);
     --chat-composer-side-pad: 20px;
   }
   .app-nav {
-    top: 0;
+    left: 50%;
     right: auto;
-    bottom: 0;
-    width: var(--rail-width);
-    height: 100dvh;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
-    padding: 24px 16px;
-    border-top: none;
-    border-right: 1px solid var(--border-soft);
+    transform: translateX(-50%);
+    width: min(860px, calc(100% - 24px));
+    border: 1px solid var(--border-soft);
+    border-bottom: none;
+    border-radius: 14px 14px 0 0;
+    padding-left: 8px;
+    padding-right: 8px;
   }
-  .app-content {
-    padding-bottom: 0;
-    padding-left: var(--rail-width);
-  }
-  /* desktop: rail persists, in-page back arrow is redundant (design.md §14.2) */
-  .app-backlink { display: none !important; }
 }
 
 @media (min-width: 768px) {
@@ -444,9 +434,6 @@ a:focus-visible {
   .chat-surface {
     min-height: 100dvh;
     height: 100dvh;
-  }
-  .capture-orb {
-    top: 0;
   }
 }
 
