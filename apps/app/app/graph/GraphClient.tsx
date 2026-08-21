@@ -276,7 +276,6 @@ export function GraphClient({ data }: { data: GraphData }) {
           className="graph-viewport"
           data-testid="graph-canvas"
           data-highlighted-id={selected?.id ?? ''}
-          style={{ minHeight: 400 }}
           onMouseMove={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
             pointerRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -354,7 +353,7 @@ export function GraphClient({ data }: { data: GraphData }) {
                 position: 'absolute',
                 left: 'clamp(10px, 4vw, 16px)',
                 right: 'clamp(10px, 4vw, 16px)',
-                bottom: 'calc(var(--dock-control-clearance, 72px) + 74px)',
+                bottom: 86,
                 zIndex: 3,
                 maxWidth: 360,
                 margin: '0 auto',

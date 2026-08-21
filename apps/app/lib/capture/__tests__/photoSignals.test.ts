@@ -58,6 +58,11 @@ describe('normalizePhotoSignals', () => {
         linkedin: 'https://www.linkedin.com/company/analytical-engines',
       }).linkedin,
     ).toBeNull();
+    expect(
+      normalizePhotoSignals({
+        linkedin: 'https://in.linkedin.com/in/ada-lovelace',
+      }).linkedin,
+    ).toBe('https://www.linkedin.com/in/ada-lovelace');
   });
 });
 

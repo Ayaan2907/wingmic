@@ -21,9 +21,9 @@ describe('harvestLinkedinFromTranscript', () => {
     );
   });
 
-  it('does not harvest /in/ paths from unrelated urls', () => {
+  it('does not harvest linkedin.com substrings from other hosts', () => {
     expect(
-      harvestLinkedinFromTranscript('notes at https://example.com/in/gracehopper'),
+      harvestLinkedinFromTranscript('notes at https://notlinkedin.com/in/evil'),
     ).toBeNull();
   });
 

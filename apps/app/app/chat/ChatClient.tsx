@@ -84,6 +84,7 @@ function ChatComposer() {
   }
 
   function onDrop(e: DragEvent) {
+    if (![...e.dataTransfer.types].includes('Files')) return;
     e.preventDefault();
     setDropping(false);
     void attachFiles(e.dataTransfer.files);

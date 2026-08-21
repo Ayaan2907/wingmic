@@ -106,6 +106,7 @@ describe('normalizeLinkedInUrl', () => {
     expect(normalizeLinkedInUrl('https://evillinkedin.com/in/ada')).toBeNull();
     expect(normalizeLinkedInUrl('ftp://linkedin.com/in/ada-lovelace')).toBeNull();
     expect(normalizeLinkedInUrl('javascript:linkedin.com/in/ada')).toBeNull();
+    expect(normalizeLinkedInUrl('https://user:secret@linkedin.com/in/ada-lovelace')).toBeNull();
     expect(normalizeLinkedInUrl('')).toBeNull();
   });
 });

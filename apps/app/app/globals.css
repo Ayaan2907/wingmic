@@ -37,7 +37,6 @@
   --orb-protrusion: 54px;
   --dock-bottom-offset: 10px;
   --chrome-bottom: calc(var(--nav-bar-height) + var(--orb-protrusion) + env(safe-area-inset-bottom, 0px) + var(--dock-bottom-offset));
-  --dock-control-clearance: calc(var(--nav-bar-height) + env(safe-area-inset-bottom, 0px) + var(--dock-bottom-offset) + 8px);
   --thread-scroll-pad: calc(var(--chrome-bottom) + 48px);
   --chat-composer-bottom: calc(var(--nav-bar-height) + env(safe-area-inset-bottom, 0px) + var(--dock-bottom-offset) + 12px);
   --chat-composer-side-pad: 16px;
@@ -437,6 +436,14 @@ a:focus-visible {
     min-height: 100dvh;
     height: 100dvh;
   }
+  .chat-composer-shell {
+    position: absolute;
+  }
+}
+
+.app-content:has(.chat-surface),
+.app-content:has(.graph-shell) {
+  padding-bottom: 0;
 }
 
 /* ── graph page: toolbar + bounded canvas viewport ─────────────────────── */

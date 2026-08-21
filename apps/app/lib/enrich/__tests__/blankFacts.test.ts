@@ -57,4 +57,22 @@ describe('insertBlankFacts', () => {
     expect(email?.value).toBe('ada@example.com');
     expect(facts.some((f) => f.key === 'url')).toBe(true);
   });
+
+  it('keeps only the first of duplicate keys in one call', async () => {
+    const wrote = await insertBlankFacts(
+      db as never,
+      'en_ada',
+      [
+        { key: 'role', value: 'mathematician', confidence: 70 },
+        { key: 'role', value: 'poet', confidence: 40 },
+      ],
+      'it_2',
+    );
+    expect(wrote).toEqual(['role']);
+    const roles = await db.query.entityFacts.findMany({
+      where: eq(schema.entityFacts.entityId, 'en_ada'),
+    });
+    expect(roles.filter((f) => f.key === 'role')).toHaveLength(1);
+    expect(roles.find((f) => f.key === 'role')?.value).toBe('mathematician');
+  });
 });

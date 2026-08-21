@@ -25,7 +25,12 @@ export async function insertBlankFacts(
     columns: { key: true },
   });
   const have = new Set(existing.map((r) => r.key));
-  const fresh = usable.filter((f) => !have.has(f.key));
+  const fresh: BlankFact[] = [];
+  for (const f of usable) {
+    if (have.has(f.key)) continue;
+    have.add(f.key);
+    fresh.push(f);
+  }
   if (fresh.length === 0) return [];
 
   await db.insert(schema.entityFacts).values(

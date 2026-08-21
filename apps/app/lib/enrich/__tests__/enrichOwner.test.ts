@@ -57,7 +57,7 @@ describe('enrichOwnerAfterLinkedin', () => {
       provider,
     });
 
-    expect(search).toHaveBeenCalled();
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({ intent: 'person' }));
     expect(extract).not.toHaveBeenCalled();
     const claims = await db.query.identityClaims.findMany({
       where: eq(schema.identityClaims.userId, userId),
