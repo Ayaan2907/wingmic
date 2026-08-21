@@ -37,10 +37,13 @@ function ChatComposer() {
     openEvent,
     setOpenEvent,
     pendingAttachment,
+    attachmentBusy,
+    attachmentError,
     photoBindChoices,
     attachFiles,
     clearAttachment,
     choosePhotoBind,
+    choosePhotoUnassigned,
   } = useCapture();
   const [text, setText] = useState('');
   const [dropping, setDropping] = useState(false);
@@ -65,7 +68,7 @@ function ChatComposer() {
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     const trimmed = text.trim();
-    if (!trimmed && !pendingAttachment) return;
+    if ((!trimmed && !pendingAttachment) || photoBindChoices || attachmentBusy) return;
     void submitText(trimmed);
     setText('');
   }
@@ -152,7 +155,37 @@ function ChatComposer() {
                 {choice.name}
               </button>
             ))}
+            <button
+              type="button"
+              aria-label="leave photo unassigned"
+              onClick={choosePhotoUnassigned}
+              style={{
+                padding: '4px 10px',
+                borderRadius: 999,
+                border: '1px solid var(--border-mid)',
+                background: 'transparent',
+                color: 'var(--text-70)',
+                cursor: 'pointer',
+                font: '700 11px Inter, system-ui, sans-serif',
+              }}
+            >
+              unassigned
+            </button>
           </div>
+        </div>
+      ) : null}
+      {attachmentError ? (
+        <div
+          role="alert"
+          className="mono"
+          style={{
+            marginBottom: 8,
+            color: 'var(--coral, #ff6b6b)',
+            fontSize: 11,
+            pointerEvents: 'auto',
+          }}
+        >
+          {attachmentError}
         </div>
       ) : null}
       {openTarget ? (
@@ -348,6 +381,7 @@ function ChatComposer() {
         <button
           type="submit"
           className="mono"
+          disabled={Boolean(photoBindChoices) || attachmentBusy}
           style={{
             padding: '6px 12px',
             borderRadius: 999,
@@ -356,7 +390,8 @@ function ChatComposer() {
             boxShadow: '2px 2px 0 #000',
             fontSize: 11,
             fontWeight: 700,
-            cursor: 'pointer',
+            cursor: photoBindChoices || attachmentBusy ? 'default' : 'pointer',
+            opacity: photoBindChoices || attachmentBusy ? 0.5 : 1,
           }}
         >
           commit →

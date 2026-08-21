@@ -25,6 +25,14 @@ const { mutateAsyncMock, deleteMutateMock, restoreMutateMock, recallFetchMock, c
     createDraftMutate: vi.fn(),
   }));
 
+const { compressImageMock } = vi.hoisted(() => ({
+  compressImageMock: vi.fn(),
+}));
+
+vi.mock('@/lib/chat/compressImage', () => ({
+  compressImageFile: compressImageMock,
+}));
+
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     capture: {
@@ -145,6 +153,7 @@ vi.mock('@/app/capture/_components/useAudioRecorder', () => {
 
 import ChatClient from '@/app/chat/ChatClient';
 import { RecordingOverlay } from '@/app/_components/RecordingOverlay';
+import { useCapture } from '@/app/_components/CaptureProvider';
 import { renderWithShell } from '@/test/renderWithShell';
 import * as React from 'react';
 
@@ -159,6 +168,21 @@ function renderChat(props: { userName: string | null; initialThread?: Parameters
       <ChatClient {...props} />
       <RecordingOverlay />
     </>,
+  );
+}
+
+function DuplicateSubmitHarness() {
+  const { submitText } = useCapture();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void submitText('met Ada Lovelace');
+        void submitText('met Ada Lovelace');
+      }}
+    >
+      submit twice
+    </button>
   );
 }
 
@@ -193,6 +217,12 @@ describe('ChatClient', () => {
       entities: [{ id: 'e1', name: 'Alice', score: 0.9, companies: [], events: [], topics: [], aliases: [], facts: [] }],
       durationMs: 12,
       mode: 'semantic',
+    });
+    compressImageMock.mockReset();
+    compressImageMock.mockResolvedValue({
+      jpegBase64: 'default-photo',
+      byteSize: 12,
+      qrText: null,
     });
     // fetch is replaced per test
     (globalThis as { fetch?: unknown }).fetch = vi.fn();
@@ -714,6 +744,247 @@ describe('ChatClient', () => {
     expect(screen.getByTestId('open-capture-chip').textContent).toMatch(/adding to priya mehta/i);
   });
 
+  it('keeps the newest attachment when an older compression finishes last', async () => {
+    let resolveFirst!: (value: unknown) => void;
+    let resolveSecond!: (value: unknown) => void;
+    compressImageMock
+      .mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveSecond = resolve; }));
+
+    renderChat({ userName: 'ada' });
+    const input = screen.getByTestId('composer-pin-input');
+    fireEvent.change(input, {
+      target: { files: [new File(['first'], 'first.jpg', { type: 'image/jpeg' })] },
+    });
+    fireEvent.change(input, {
+      target: { files: [new File(['second'], 'second.jpg', { type: 'image/jpeg' })] },
+    });
+
+    await act(async () => {
+      resolveSecond({ jpegBase64: 'second-photo', byteSize: 12, qrText: null });
+      await Promise.resolve();
+    });
+    expect(screen.getByAltText('attached photo').getAttribute('src')).toContain('second-photo');
+
+    await act(async () => {
+      resolveFirst({ jpegBase64: 'first-photo', byteSize: 12, qrText: null });
+      await Promise.resolve();
+    });
+    expect(screen.getByAltText('attached photo').getAttribute('src')).toContain('second-photo');
+  });
+
+  it('prevents duplicate composer submissions while commit is in flight', async () => {
+    let resolveCommit!: (value: unknown) => void;
+    mutateAsyncMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCommit = resolve;
+      }),
+    );
+    renderWithShell(<DuplicateSubmitHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'submit twice' }));
+    expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveCommit({
+        extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+        newEntities: 0,
+        matchedEntities: 0,
+        interactionId: 'ix-once',
+      });
+      await Promise.resolve();
+    });
+  });
+
+  it('keeps a replacement attachment while an earlier attachment commit is in flight', async () => {
+    let resolveCommit!: (value: unknown) => void;
+    mutateAsyncMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCommit = resolve;
+      }),
+    );
+    compressImageMock
+      .mockResolvedValueOnce({ jpegBase64: 'first-photo', byteSize: 12, qrText: null })
+      .mockResolvedValueOnce({ jpegBase64: 'second-photo', byteSize: 12, qrText: null });
+    renderChat({ userName: 'ada' });
+    const fileInput = screen.getByTestId('composer-pin-input');
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['first'], 'first.jpg', { type: 'image/jpeg' })] },
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('composer-attachment-preview').querySelector('img')?.getAttribute('src'),
+      ).toContain('first-photo'),
+    );
+    fireEvent.change(screen.getByLabelText('chat composer'), { target: { value: 'first memo' } });
+    fireEvent.submit(screen.getByTestId('chat-composer'));
+    expect(mutateAsyncMock.mock.calls[0]?.[0]).toMatchObject({
+      attachment: { jpegBase64: 'first-photo' },
+    });
+
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['second'], 'second.jpg', { type: 'image/jpeg' })] },
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('composer-attachment-preview').querySelector('img')?.getAttribute('src'),
+      ).toContain('second-photo'),
+    );
+    await act(async () => {
+      resolveCommit({
+        extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+        newEntities: 0,
+        matchedEntities: 0,
+        interactionId: 'ix-first-photo',
+      });
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByTestId('composer-attachment-preview').querySelector('img')?.getAttribute('src'),
+    ).toContain('second-photo');
+  });
+
+  it('does not submit while a replacement attachment is still compressing', async () => {
+    let resolveReplacement!: (value: unknown) => void;
+    compressImageMock
+      .mockResolvedValueOnce({ jpegBase64: 'first-photo', byteSize: 12, qrText: null })
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveReplacement = resolve;
+        }),
+      );
+    mutateAsyncMock.mockResolvedValue({
+      extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+      newEntities: 0,
+      matchedEntities: 0,
+      interactionId: 'ix-replacement',
+    });
+    renderChat({ userName: 'ada' });
+    const fileInput = screen.getByTestId('composer-pin-input');
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['first'], 'first.jpg', { type: 'image/jpeg' })] },
+    });
+    await waitFor(() => expect(screen.getByTestId('composer-attachment-preview')).toBeTruthy());
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['second'], 'second.jpg', { type: 'image/jpeg' })] },
+    });
+    fireEvent.change(screen.getByLabelText('chat composer'), { target: { value: 'replacement' } });
+    fireEvent.submit(screen.getByTestId('chat-composer'));
+    expect(mutateAsyncMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveReplacement({ jpegBase64: 'second-photo', byteSize: 12, qrText: null });
+      await Promise.resolve();
+    });
+    fireEvent.submit(screen.getByTestId('chat-composer'));
+    await waitFor(() => expect(mutateAsyncMock).toHaveBeenCalledTimes(1));
+    expect(mutateAsyncMock.mock.calls[0]?.[0]).toMatchObject({
+      attachment: { jpegBase64: 'second-photo' },
+    });
+  });
+
+  it('requires a person choice or explicit unassigned choice for a multi-person photo', async () => {
+    renderChat({
+      userName: 'ada',
+      initialThread: [
+        {
+          id: 'ix-people',
+          transcript: 'met Ada Lovelace and Grace Hopper',
+          capturedAt: '2026-08-20T21:14:00Z',
+          graphResult: {
+            extracted: {
+              persons: [
+                { name: 'Ada Lovelace', role: null, companyHint: null, topics: [] },
+                { name: 'Grace Hopper', role: null, companyHint: null, topics: [] },
+              ],
+              companies: [],
+              events: [],
+              topics: [],
+              actions: [],
+            },
+            newEntities: 2,
+            matchedEntities: 0,
+            interactionId: 'ix-people',
+            entityIds: ['en-ada', 'en-grace'],
+          },
+        },
+      ],
+    });
+    fireEvent.change(screen.getByTestId('composer-pin-input'), {
+      target: { files: [new File(['photo'], 'people.jpg', { type: 'image/jpeg' })] },
+    });
+    await waitFor(() => expect(screen.getByTestId('photo-bind-picker')).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('chat composer'), { target: { value: 'conference photo' } });
+    fireEvent.submit(screen.getByTestId('chat-composer'));
+    expect(mutateAsyncMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /leave photo unassigned/i }));
+    mutateAsyncMock.mockResolvedValue({
+      extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+      newEntities: 0,
+      matchedEntities: 0,
+      interactionId: 'ix-photo',
+    });
+    fireEvent.submit(screen.getByTestId('chat-composer'));
+    await waitFor(() => expect(mutateAsyncMock).toHaveBeenCalledTimes(1));
+    expect(mutateAsyncMock.mock.calls[0]?.[0]).not.toHaveProperty('targetEntityId');
+  });
+
+  it('shows attachment compression errors in the composer', async () => {
+    compressImageMock.mockRejectedValue(new Error('couldnt read that photo'));
+    renderChat({ userName: 'ada' });
+    fireEvent.change(screen.getByTestId('composer-pin-input'), {
+      target: { files: [new File(['bad'], 'bad.png', { type: 'image/png' })] },
+    });
+    expect((await screen.findByRole('alert')).textContent).toContain('couldnt read that photo');
+  });
+
+  it('restores the last event session past a newer ordinary memo', () => {
+    renderChat({
+      userName: 'ada',
+      initialThread: [
+        {
+          id: 'ix-event',
+          transcript: 'at Open Source Summit',
+          capturedAt: '2026-08-20T20:00:00Z',
+          graphResult: {
+            extracted: {
+              persons: [],
+              companies: [],
+              events: [{ name: 'Open Source Summit' }],
+              topics: [],
+              actions: [],
+            },
+            newEntities: 1,
+            matchedEntities: 0,
+            interactionId: 'ix-event',
+            eventIds: ['ev-summit'],
+          },
+        },
+        {
+          id: 'ix-ordinary',
+          transcript: 'remember the compiler notes',
+          capturedAt: '2026-08-20T21:00:00Z',
+          graphResult: {
+            extracted: {
+              persons: [],
+              companies: [],
+              events: [],
+              topics: ['compilers'],
+              actions: [],
+            },
+            newEntities: 0,
+            matchedEntities: 0,
+            interactionId: 'ix-ordinary',
+          },
+        },
+      ],
+    });
+    expect(screen.getByTestId('open-event-chip').textContent).toContain(
+      'open source summit · open',
+    );
+  });
+
   it('exposes pin and camera attach on the composer', () => {
     renderChat({ userName: 'ada' });
     expect(screen.getByTestId('composer-attach-pin')).toBeTruthy();
@@ -722,7 +993,7 @@ describe('ChatClient', () => {
 
   it('opens a live camera preview instead of a file picker', async () => {
     const stop = vi.fn();
-    const getUserMedia = vi.fn(async () => ({
+    const getUserMedia = vi.fn(async (_constraints?: MediaStreamConstraints) => ({
       getTracks: () => [{ stop }],
     }));
     Object.defineProperty(navigator, 'mediaDevices', {

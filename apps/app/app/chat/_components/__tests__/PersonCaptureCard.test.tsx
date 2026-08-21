@@ -27,6 +27,7 @@ describe('PersonCaptureCard', () => {
     );
     expect(screen.getByText('Acme')).toBeTruthy();
     expect(screen.getByText('rust')).toBeTruthy();
+    expect(screen.getByText('send the deck')).toBeTruthy();
     expect(screen.getByText('promised monday')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'add photo for Sara Chen' }));

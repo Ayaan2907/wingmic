@@ -26,15 +26,11 @@
     "./linkedin": {
       "types": "./dist/linkedin.d.ts",
       "import": "./dist/linkedin.js"
-    },
-    "./event-url": {
-      "types": "./dist/eventUrl.d.ts",
-      "import": "./dist/eventUrl.js"
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts src/schema.ts src/embeddings.ts src/slug.ts src/linkedin.ts src/eventUrl.ts --format esm --dts --clean --sourcemap",
-    "dev": "tsup src/index.ts src/schema.ts src/embeddings.ts src/slug.ts src/linkedin.ts src/eventUrl.ts --format esm --dts --watch",
+    "build": "tsup src/index.ts src/schema.ts src/embeddings.ts src/slug.ts src/linkedin.ts --format esm --dts --clean --sourcemap",
+    "dev": "tsup src/index.ts src/schema.ts src/embeddings.ts src/slug.ts src/linkedin.ts --format esm --dts --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

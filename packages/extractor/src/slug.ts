@@ -17,6 +17,8 @@ export function slugify(input: string): string {
 export function personNameTokens(name: string): string[] {
   return name
     .toLowerCase()
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
     .split(/\s+/)
     .map((t) => t.replace(/[^\p{L}\p{N}'-]/gu, ''))
     .filter(Boolean);

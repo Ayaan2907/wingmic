@@ -45,67 +45,78 @@ export async function enrichEventsAfterCommit(opts: {
     }
 
     if (provider) {
-      let parsed = {
-        url: null as string | null,
-        location: null as string | null,
-        dateRangeStart: null as Date | null,
-        dateRangeEnd: null as Date | null,
-        external: null as ReturnType<typeof parseEventFields>['external'],
-      };
+      try {
+        let parsed = {
+          url: null as string | null,
+          location: null as string | null,
+          dateRangeStart: null as Date | null,
+          dateRangeEnd: null as Date | null,
+          external: null as ReturnType<typeof parseEventFields>['external'],
+        };
+        let searchNeeded = true;
 
-      if (event.url && !isBlockedExtractUrl(event.url) && !datesSet) {
-        try {
-          const extracted = await provider.extract({ urls: [event.url], query: event.name });
-          parsed = parseEventFields([
-            { title: event.name, url: event.url, snippet: extracted[0]?.content ?? '' },
-          ]);
+        if (event.url && !isBlockedExtractUrl(event.url) && !datesSet) {
           parsed.url = event.url;
-        } catch {
-          parsed.url = event.url;
+          try {
+            const extracted = await provider.extract({ urls: [event.url], query: event.name });
+            if (extracted[0]?.content) {
+              parsed = parseEventFields([
+                { title: event.name, url: event.url, snippet: extracted[0].content },
+              ]);
+              parsed.url = event.url;
+              searchNeeded = false;
+            }
+          } catch {
+            // Fall through to search when extraction is unavailable.
+          }
         }
-      } else {
-        const year = /\b(20\d{2})\b/.exec(event.name)?.[1] ?? String(capturedAt.getUTCFullYear());
-        const query = buildWebSearchQuery({
-          intent: 'event',
-          event: event.name,
-          year,
-        });
-        if (query.q.trim()) {
-          const hits = await provider.search(query);
-          parsed = parseEventFields(hits);
-          if (parsed.url && !isBlockedExtractUrl(parsed.url)) {
-            try {
-              const extracted = await provider.extract({ urls: [parsed.url], query: event.name });
-              if (extracted[0]?.content) {
-                const fromExtract = parseEventFields([
-                  { title: event.name, url: parsed.url, snippet: extracted[0].content },
-                ]);
-                parsed = {
-                  url: parsed.url,
-                  location: parsed.location ?? fromExtract.location,
-                  dateRangeStart: parsed.dateRangeStart ?? fromExtract.dateRangeStart,
-                  dateRangeEnd: parsed.dateRangeEnd ?? fromExtract.dateRangeEnd,
-                  external: parsed.external ?? fromExtract.external,
-                };
+
+        if (searchNeeded) {
+          const year = /\b(20\d{2})\b/.exec(event.name)?.[1] ?? String(capturedAt.getUTCFullYear());
+          const query = buildWebSearchQuery({
+            intent: 'event',
+            event: event.name,
+            year,
+          });
+          if (query.q.trim()) {
+            const hits = await provider.search(query);
+            parsed = parseEventFields(hits);
+            if (parsed.url && !isBlockedExtractUrl(parsed.url)) {
+              try {
+                const extracted = await provider.extract({ urls: [parsed.url], query: event.name });
+                if (extracted[0]?.content) {
+                  const fromExtract = parseEventFields([
+                    { title: event.name, url: parsed.url, snippet: extracted[0].content },
+                  ]);
+                  parsed = {
+                    url: parsed.url,
+                    location: parsed.location ?? fromExtract.location,
+                    dateRangeStart: parsed.dateRangeStart ?? fromExtract.dateRangeStart,
+                    dateRangeEnd: parsed.dateRangeEnd ?? fromExtract.dateRangeEnd,
+                    external: parsed.external ?? fromExtract.external,
+                  };
+                }
+              } catch {
+                // search snippets are enough
               }
-            } catch {
-              // search snippets are enough
             }
           }
         }
-      }
 
-      if (!event.url && parsed.url) patch.url = parsed.url;
-      if (!event.location && !patch.location && parsed.location) patch.location = parsed.location;
-      if (event.dateRangeStart == null && !patch.dateRangeStart && parsed.dateRangeStart) {
-        patch.dateRangeStart = parsed.dateRangeStart;
-      }
-      if (event.dateRangeEnd == null && !patch.dateRangeEnd && parsed.dateRangeEnd) {
-        patch.dateRangeEnd = parsed.dateRangeEnd;
-      }
-      if (!event.externalSource && !event.externalId && parsed.external) {
-        patch.externalSource = parsed.external.source;
-        patch.externalId = parsed.external.id;
+        if (!event.url && !patch.url && parsed.url) patch.url = parsed.url;
+        if (!event.location && !patch.location && parsed.location) patch.location = parsed.location;
+        if (event.dateRangeStart == null && !patch.dateRangeStart && parsed.dateRangeStart) {
+          patch.dateRangeStart = parsed.dateRangeStart;
+        }
+        if (event.dateRangeEnd == null && !patch.dateRangeEnd && parsed.dateRangeEnd) {
+          patch.dateRangeEnd = parsed.dateRangeEnd;
+        }
+        if (!event.externalSource && !event.externalId && parsed.external) {
+          patch.externalSource = parsed.external.source;
+          patch.externalId = parsed.external.id;
+        }
+      } catch {
+        // Calendar data is still useful when the provider is unavailable.
       }
     }
 

@@ -17,7 +17,7 @@ vi.mock('../embeddings', () => ({
   cosine: vi.fn(() => 0),
 }));
 
-import { commit } from '../resolution';
+import { commit, matchLocalPerson } from '../resolution';
 
 const migrationsFolder = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -27,6 +27,74 @@ const dbPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   `wingmic-resolution-test-${randomUUID()}.db`,
 );
+
+describe('matchLocalPerson()', () => {
+  const entities = [
+    {
+      id: 'duplicate_a',
+      name: 'Jordan Lee',
+      aliases: [],
+      importSource: 'voice-capture',
+      embedding: null,
+    },
+    {
+      id: 'duplicate_b',
+      name: 'Jordan Lee',
+      aliases: [],
+      importSource: 'voice-capture',
+      embedding: null,
+    },
+  ] as unknown as schema.Entity[];
+
+  it.each([
+    {
+      label: 'email',
+      email: 'jordan@example.com',
+      linkedin: null,
+      emails: new Map([
+        ['duplicate_a', ['jordan@example.com']],
+        ['duplicate_b', ['jordan@example.com']],
+      ]),
+      linkedins: new Map<string, string[]>(),
+    },
+    {
+      label: 'LinkedIn URL',
+      email: null,
+      linkedin: 'https://linkedin.com/in/jordan-lee',
+      emails: new Map<string, string[]>(),
+      linkedins: new Map([
+        ['duplicate_a', ['https://www.linkedin.com/in/jordan-lee']],
+        ['duplicate_b', ['https://www.linkedin.com/in/jordan-lee']],
+      ]),
+    },
+  ])('does not select arbitrarily when a $label matches multiple people', ({
+    email,
+    linkedin,
+    emails,
+    linkedins,
+  }) => {
+    const match = matchLocalPerson(
+      {
+        name: 'Jordan Lee',
+        aliases: [],
+        role: null,
+        companyHint: null,
+        topics: [],
+        notes: null,
+        email,
+        linkedin,
+      },
+      entities,
+      [],
+      new Map(),
+      emails,
+      linkedins,
+      new Map(),
+    );
+
+    expect(match).toBeNull();
+  });
+});
 
 describe('commit() sourceInteractionId', () => {
   let db: ReturnType<typeof drizzle<typeof schema>>;
@@ -783,6 +851,56 @@ describe('commit() sourceInteractionId', () => {
       ),
     });
     expect(edge).toBeTruthy();
+    const topicEdges = await db.query.entityTopics.findMany({
+      where: eq(schema.entityTopics.sourceInteractionId, result.interactionId),
+    });
+    const topicRows = await db.query.topics.findMany();
+    const topicNames = topicRows
+      .filter((topic) => topicEdges.some((edge) => edge.topicId === topic.id))
+      .map((topic) => topic.name);
+    expect(topicNames).not.toContain('https');
+    expect(topicNames).not.toContain('luma');
+  });
+
+  it('keeps distinct Google Calendar event ids as separate events', async () => {
+    const first = await commit(
+      {
+        persons: [],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId,
+        transcript: 'https://calendar.google.com/calendar/event?eid=ZXZlbnQtMQ',
+        capturedAt: new Date('2026-08-20T12:00:00Z'),
+      },
+    );
+    const second = await commit(
+      {
+        persons: [],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId,
+        transcript: 'https://calendar.google.com/calendar/event?eid=ZXZlbnQtMg',
+        capturedAt: new Date('2026-08-20T13:00:00Z'),
+      },
+    );
+
+    expect(second.eventIds[0]).not.toBe(first.eventIds[0]);
+    const calendarEvents = await db.query.events.findMany({
+      where: eq(schema.events.externalSource, 'web'),
+    });
+    expect(calendarEvents.map((event) => event.externalId)).toEqual(
+      expect.arrayContaining(['gcal:ZXZlbnQtMQ', 'gcal:ZXZlbnQtMg']),
+    );
   });
 
   it('inherits preferredEventId when the follow-up names no event', async () => {

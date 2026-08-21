@@ -22,6 +22,7 @@ import { useRouter } from 'next/navigation';
 import { signOut } from '@/lib/auth-client';
 import { trpc } from '@/lib/trpc/client';
 import { accent } from '@/app/chat/_components/tokens';
+import { parseCalendarIcsUrl } from '@/lib/enrich/parseIcs';
 
 type RetentionMode = '24h' | '7d' | 'forever' | 'never';
 
@@ -83,9 +84,13 @@ export default function SettingsClient({
   initialSettings: SettingsInitialData;
 }) {
   const { data } = trpc.settings.get.useQuery(undefined, { initialData: initialSettings });
-  const update = trpc.settings.update.useMutation();
+  const utils = trpc.useUtils();
+  const update = trpc.settings.update.useMutation({
+    onSuccess: () => utils.settings.get.invalidate(),
+  });
   const router = useRouter();
   const [signingOut, setSigningOut] = React.useState(false);
+  const [calendarError, setCalendarError] = React.useState<string | null>(null);
 
   // Optimistic local mirror — seeded from server prefetch + query cache.
   const [local, setLocal] = React.useState<{
@@ -319,7 +324,19 @@ export default function SettingsClient({
                   placeholder="https://calendar.google.com/calendar/ical/…/public/basic.ics"
                   autoComplete="off"
                   onChange={(e) => setLocal((s) => (s ? { ...s, calendarIcsUrl: e.target.value } : s))}
-                  onBlur={(e) => update.mutate({ calendarIcsUrl: e.target.value.trim() || null })}
+                  onBlur={(e) => {
+                    const value = e.target.value.trim();
+                    if (value && !parseCalendarIcsUrl(value)) {
+                      setLocal((s) => ({
+                        ...s,
+                        calendarIcsUrl: data.calendarIcsUrl ?? '',
+                      }));
+                      setCalendarError('paste a public google calendar ics url');
+                      return;
+                    }
+                    setCalendarError(null);
+                    update.mutate({ calendarIcsUrl: value || null });
+                  }}
                 />
                 <button
                   type="button"
@@ -353,6 +370,15 @@ export default function SettingsClient({
               >
                 we only fetch publicly available events from your calendar.
               </p>
+              {calendarError ? (
+                <p
+                  role="alert"
+                  className="mono"
+                  style={{ fontSize: 11, color: '#ff8b8b', margin: 0, lineHeight: 1.5 }}
+                >
+                  {calendarError}
+                </p>
+              ) : null}
             </div>
           </div>
         </Section>

@@ -39,6 +39,28 @@ describe('harvestEventFromTranscript', () => {
     });
   });
 
+  it('harvests bare event urls and strips trailing punctuation', () => {
+    expect(harvestEventFromTranscript('tickets at lu.ma/abc123.')).toMatchObject({
+      source: 'luma',
+      id: 'abc123',
+      url: 'https://lu.ma/abc123',
+    });
+    expect(harvestEventFromTranscript('join partiful.com/e/xyz),')).toMatchObject({
+      source: 'partiful',
+      id: 'xyz',
+      url: 'https://partiful.com/e/xyz',
+    });
+    expect(
+      harvestEventFromTranscript(
+        'calendar.google.com/calendar/event?eid=YWJjMTIz;',
+      ),
+    ).toMatchObject({
+      source: 'web',
+      id: 'gcal:YWJjMTIz',
+      url: 'https://calendar.google.com/calendar/event?eid=YWJjMTIz',
+    });
+  });
+
   it('returns null when no event url is present', () => {
     expect(harvestEventFromTranscript('met grace at the navy booth')).toBeNull();
   });
@@ -77,6 +99,32 @@ describe('applyHarvestedEvent', () => {
       name: 'ETH Denver',
       url: 'https://lu.ma/ethdenver',
     });
+  });
+
+  it('removes event url debris from per-person topics', () => {
+    const next = applyHarvestedEvent(
+      {
+        persons: [
+          {
+            name: 'Ada Lovelace',
+            aliases: [],
+            role: null,
+            companyHint: null,
+            topics: ['https', 'luma', 'ethdenver', 'analytical engines'],
+            notes: null,
+            email: null,
+            linkedin: null,
+          },
+        ],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      'https://lu.ma/ethdenver',
+    );
+
+    expect(next.persons[0]?.topics).toEqual(['analytical engines']);
   });
 });
 

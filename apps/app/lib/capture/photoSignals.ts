@@ -33,15 +33,25 @@ function compactHttpUrl(raw: string | null | undefined): string | null {
   }
 }
 
+function linkedInProfileUrl(raw: string | null | undefined): string | null {
+  const compact = compactHttpUrl(raw);
+  if (!compact) return null;
+  const url = new URL(compact);
+  const host = url.hostname.toLowerCase();
+  if (host !== 'linkedin.com' && host !== 'www.linkedin.com') return null;
+  if (url.username || url.password) return null;
+  if (!/^\/in\/[^/]+\/?$/i.test(url.pathname)) return null;
+  return compact;
+}
+
 export function normalizePhotoSignals(
   raw: Partial<PhotoSignals> | null | undefined,
 ): PhotoSignals {
-  const linkedin = compactHttpUrl(raw?.linkedin);
   return {
     personName: compactName(raw?.personName),
     companyName: compactName(raw?.companyName),
     eventName: compactName(raw?.eventName),
-    linkedin: linkedin && /linkedin\.com\/in\//i.test(linkedin) ? linkedin : null,
+    linkedin: linkedInProfileUrl(raw?.linkedin),
     eventUrl: compactHttpUrl(raw?.eventUrl),
   };
 }
@@ -53,10 +63,13 @@ export function mergePhotoSignals(
   const normalized = normalizePhotoSignals(signals);
   const bits = [transcript.trim()];
   const seen = transcript.toLowerCase();
+  const appended = new Set<string>();
   const push = (value: string | null) => {
     if (!value) return;
-    if (seen.includes(value.toLowerCase())) return;
+    const key = value.toLowerCase();
+    if (seen.includes(key) || appended.has(key)) return;
     bits.push(value);
+    appended.add(key);
   };
   push(normalized.personName);
   push(normalized.companyName);

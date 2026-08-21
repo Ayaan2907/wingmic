@@ -21,6 +21,20 @@ describe('harvestLinkedinFromTranscript', () => {
     );
   });
 
+  it('does not harvest /in/ paths from unrelated urls', () => {
+    expect(
+      harvestLinkedinFromTranscript('notes at https://example.com/in/gracehopper'),
+    ).toBeNull();
+  });
+
+  it('returns the profile that appears earliest in the transcript', () => {
+    expect(
+      harvestLinkedinFromTranscript(
+        '/in/gracehopper then https://www.linkedin.com/in/ada-lovelace',
+      ),
+    ).toBe('https://www.linkedin.com/in/gracehopper');
+  });
+
   it('returns null when no profile URL is present', () => {
     expect(harvestLinkedinFromTranscript('met grace hopper at the navy booth')).toBeNull();
   });

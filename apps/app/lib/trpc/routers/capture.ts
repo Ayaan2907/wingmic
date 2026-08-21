@@ -24,23 +24,55 @@ export type CaptureAttachment = {
   jpegBase64: string;
 };
 
+type ValidatedCaptureAttachment = {
+  jpegBase64: string;
+  byteSize: number;
+};
+
+function validateCaptureAttachment(
+  jpegBase64: string | undefined,
+): ValidatedCaptureAttachment | undefined {
+  if (!jpegBase64) return undefined;
+  const canonicalBase64 =
+    /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+  if (!canonicalBase64.test(jpegBase64)) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'photo couldnt be read' });
+  }
+
+  const bytes = Buffer.from(jpegBase64, 'base64');
+  if (bytes.toString('base64') !== jpegBase64) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'photo couldnt be read' });
+  }
+  if (bytes.byteLength > MAX_ATTACHMENT_BYTES) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'photo is too large — try a closer crop' });
+  }
+  const isJpeg =
+    bytes.byteLength >= 32 &&
+    bytes[0] === 0xff &&
+    bytes[1] === 0xd8 &&
+    bytes[2] === 0xff &&
+    bytes[bytes.byteLength - 2] === 0xff &&
+    bytes[bytes.byteLength - 1] === 0xd9;
+  if (!isJpeg) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'photo couldnt be read' });
+  }
+
+  return { jpegBase64, byteSize: bytes.byteLength };
+}
+
 async function persistCaptureAttachment(args: {
   db: DB;
   interactionId: string;
   entityId: string | null;
   eventId: string | null;
-  jpegBase64: string | undefined;
+  attachment: ValidatedCaptureAttachment | undefined;
 }): Promise<CaptureAttachment[]> {
-  if (!args.jpegBase64) return [];
-  let bytes: Buffer;
-  try {
-    bytes = Buffer.from(args.jpegBase64, 'base64');
-  } catch {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: 'photo couldnt be read' });
-  }
-  if (bytes.byteLength < 32 || bytes.byteLength > MAX_ATTACHMENT_BYTES) {
-    throw new TRPCError({ code: 'BAD_REQUEST', message: 'photo is too large — try a closer crop' });
-  }
+  const existing = await args.db.query.interactionAttachments.findMany({
+    where: eq(schema.interactionAttachments.interactionId, args.interactionId),
+    columns: { id: true, entityId: true, jpegBase64: true },
+  });
+  if (existing.length > 0 || !args.attachment) return existing;
+
   const inserted = await args.db
     .insert(schema.interactionAttachments)
     .values({
@@ -48,8 +80,8 @@ async function persistCaptureAttachment(args: {
       entityId: args.entityId,
       eventId: args.eventId,
       mimeType: 'image/jpeg',
-      jpegBase64: args.jpegBase64,
-      byteSize: bytes.byteLength,
+      jpegBase64: args.attachment.jpegBase64,
+      byteSize: args.attachment.byteSize,
     })
     .returning({
       id: schema.interactionAttachments.id,
@@ -96,6 +128,8 @@ export const captureRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        const attachment = validateCaptureAttachment(input.attachment?.jpegBase64);
+
         // Idempotent retry: same clientCaptureId → return existing interaction.
         if (input.clientCaptureId) {
           const existing = await ctx.db.query.interactions.findFirst({
@@ -106,7 +140,7 @@ export const captureRouter = router({
             columns: { id: true },
           });
           if (existing) {
-            const [factLinks, topicLinks, attachmentRows] = await Promise.all([
+            const [factLinks, topicLinks] = await Promise.all([
               ctx.db.query.entityFacts.findMany({
                 where: eq(schema.entityFacts.sourceInteractionId, existing.id),
                 columns: { entityId: true },
@@ -115,10 +149,6 @@ export const captureRouter = router({
                 where: eq(schema.entityTopics.sourceInteractionId, existing.id),
                 columns: { entityId: true },
               }),
-              ctx.db.query.interactionAttachments.findMany({
-                where: eq(schema.interactionAttachments.interactionId, existing.id),
-                columns: { id: true, entityId: true, jpegBase64: true },
-              }),
             ]);
             const entityIds = [
               ...new Set([
@@ -126,6 +156,13 @@ export const captureRouter = router({
                 ...topicLinks.map((t) => t.entityId),
               ]),
             ];
+            const attachmentRows = await persistCaptureAttachment({
+              db: ctx.db,
+              interactionId: existing.id,
+              entityId: entityIds.length === 1 ? entityIds[0]! : null,
+              eventId: null,
+              attachment,
+            });
             return {
               extracted: {
                 persons: [],
@@ -195,8 +232,8 @@ export const captureRouter = router({
         }
 
         let transcript = input.transcript;
-        if (input.attachment?.jpegBase64) {
-          const signals = await readPhotoSignals(input.attachment.jpegBase64);
+        if (attachment) {
+          const signals = await readPhotoSignals(attachment.jpegBase64);
           transcript = mergePhotoSignals(transcript, signals);
         }
 
@@ -281,6 +318,18 @@ export const captureRouter = router({
           threadRootId,
           preferredEntityId: preferredEntity?.id,
           preferredEventId,
+        });
+
+        const attachmentEntityId =
+          preferredEntity?.id ?? (result.entityIds.length === 1 ? result.entityIds[0]! : null);
+        const attachmentEventId =
+          preferredEventId ?? (result.eventIds.length === 1 ? result.eventIds[0]! : null);
+        const attachments = await persistCaptureAttachment({
+          db: ctx.db,
+          interactionId: result.interactionId,
+          entityId: attachmentEntityId,
+          eventId: attachmentEventId,
+          attachment,
         });
 
         // Acts insert is best-effort after commit() — graph already persisted.
@@ -422,18 +471,6 @@ export const captureRouter = router({
             ]);
           });
         }
-
-        const attachmentEntityId =
-          preferredEntity?.id ?? (result.entityIds.length === 1 ? result.entityIds[0]! : null);
-        const attachmentEventId =
-          preferredEventId ?? (result.eventIds.length === 1 ? result.eventIds[0]! : null);
-        const attachments = await persistCaptureAttachment({
-          db: ctx.db,
-          interactionId: result.interactionId,
-          entityId: attachmentEntityId,
-          eventId: attachmentEventId,
-          jpegBase64: input.attachment?.jpegBase64,
-        });
 
         return { extracted, ...result, attachments };
       } catch (err) {

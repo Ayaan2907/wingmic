@@ -42,7 +42,7 @@ export function canonicalizeLinkedin(raw: string): string | null {
 const LINKEDIN_URL_PATTERNS: RegExp[] = [
   /https?:\/\/(?:[\w-]+\.)?linkedin\.com\/in\/[A-Za-z0-9_-]+/gi,
   /(?:www\.)?linkedin\.com\/in\/[A-Za-z0-9_-]+/gi,
-  /(?:^|[\s/])in\/[A-Za-z0-9_-]+/gi,
+  /(?<![\w./:-])\/?in\/[A-Za-z0-9_-]+/gi,
 ];
 
 const URL_DEBRIS = new Set([
@@ -58,13 +58,20 @@ const URL_DEBRIS = new Set([
 
 /** First canonical /in/{handle} URL spoken or pasted in a memo. */
 export function harvestLinkedinFromTranscript(transcript: string): string | null {
+  const matches: Array<{ index: number; raw: string }> = [];
   for (const re of LINKEDIN_URL_PATTERNS) {
     re.lastIndex = 0;
     for (const match of transcript.matchAll(re)) {
-      const raw = match[0].trim().replace(/^[\s/]+/, '');
-      const canon = canonicalizeLinkedin(raw);
-      if (canon) return canon;
+      matches.push({
+        index: match.index,
+        raw: match[0].trim().replace(/^[\s/]+/, ''),
+      });
     }
+  }
+  matches.sort((a, b) => a.index - b.index);
+  for (const match of matches) {
+    const canon = canonicalizeLinkedin(match.raw);
+    if (canon) return canon;
   }
   return null;
 }

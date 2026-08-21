@@ -24,9 +24,12 @@ export async function readPhotoSignals(jpegBase64: string): Promise<PhotoSignals
   if (!env.OPENROUTER_API_KEY || jpegBase64.length < 32) return EMPTY;
   const openrouter = createOpenRouter({ apiKey: env.OPENROUTER_API_KEY });
   const model = openrouter(env.EXTRACTION_MODEL);
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const vision = generateObject({
       model,
+      abortSignal: controller.signal,
       schema: PhotoSignalsSchema,
       messages: [
         {
@@ -55,11 +58,16 @@ export async function readPhotoSignals(jpegBase64: string): Promise<PhotoSignals
     const { object } = await Promise.race([
       vision,
       new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('vision timeout')), VISION_TIMEOUT_MS);
+        timeout = setTimeout(() => {
+          controller.abort();
+          reject(new Error('vision timeout'));
+        }, VISION_TIMEOUT_MS);
       }),
     ]);
     return normalizePhotoSignals(object);
   } catch {
     return EMPTY;
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }

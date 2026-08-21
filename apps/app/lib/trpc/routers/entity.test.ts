@@ -215,8 +215,6 @@ describe('entity.detail', () => {
     expect(res.related.some((r) => r.id === 'en_marcus')).toBe(true);
     expect(res.related.every((r) => r.id !== 'en_sarah')).toBe(true);
     expect(res.related.every((r) => r.id !== 'en_priya')).toBe(true);
-    expect(res.related.some((r) => r.kind === 'company' && r.id === 'co_acme')).toBe(true);
-    expect(res.related.some((r) => r.kind === 'event' && r.id === 'ev_dc')).toBe(true);
     expect(res.topics.map((t) => t.name)).toContain('rust');
     expect((res as { publicProfile?: { linkedin: string | null } }).publicProfile).toEqual({
       linkedin: null,
@@ -313,6 +311,34 @@ describe('entity.detail', () => {
   it('includes per-capture topic chips on person detail', async () => {
     const res = await caller().detail({ kind: 'person', id: 'en_sarah' });
     expect(res.captures.some((c) => c.topics?.includes('rust'))).toBe(true);
+  });
+
+  it('counts only owned, live interactions in detail commit stats', async () => {
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO interaction (id, user_id, transcript, captured_at, created_at, status) VALUES (?, ?, ?, ?, ?, 'committed')`,
+      args: ['it_other_photo', otherUserId, 'other user photo', now, now],
+    });
+    await client.execute({
+      sql: `INSERT INTO interaction (id, user_id, transcript, captured_at, created_at, status, deleted_at) VALUES (?, ?, ?, ?, ?, 'committed', ?)`,
+      args: ['it_deleted_photo', userId, 'deleted photo', now, now, now],
+    });
+    for (const interactionId of ['it_other_photo', 'it_deleted_photo']) {
+      await client.execute({
+        sql: `INSERT INTO interaction_attachment (id, interaction_id, entity_id, event_id, mime_type, jpeg_base64, byte_size, created_at) VALUES (?, ?, 'en_sarah', 'ev_dc', 'image/jpeg', 'jpeg', 4, ?)`,
+        args: [`att_${interactionId}`, interactionId, now],
+      });
+    }
+
+    const [person, company, event] = await Promise.all([
+      caller().detail({ kind: 'person', id: 'en_sarah' }),
+      caller().detail({ kind: 'company', id: 'co_acme' }),
+      caller().detail({ kind: 'event', id: 'ev_dc' }),
+    ]);
+
+    expect(person.stats.find((stat) => stat.key === 'commits')?.value).toBe('2');
+    expect(company.stats.find((stat) => stat.key === 'commits')?.value).toBe('3');
+    expect(event.stats.find((stat) => stat.key === 'commits')?.value).toBe('3');
   });
 
   it('respects soft-deleted entities (deletedAt)', async () => {

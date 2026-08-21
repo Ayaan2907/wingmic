@@ -63,6 +63,12 @@ export type OpenEventSession = {
 
 export type PendingAttachment = CompressedImage;
 
+type CommitContext = {
+  attachment: PendingAttachment | null;
+  target: OpenCaptureTarget | null;
+  event: OpenEventSession | null;
+};
+
 function lastCommittedPeople(messages: ThreadMessage[]): OpenCaptureTarget[] {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
@@ -85,7 +91,6 @@ function lastCommittedEvent(messages: ThreadMessage[]): OpenEventSession | null 
     if (eventIds?.length === 1 && extracted.events[0]?.name) {
       return { eventId: eventIds[0]!, name: extracted.events[0].name };
     }
-    return null;
   }
   return null;
 }
@@ -104,10 +109,13 @@ export interface CaptureContextValue {
   openEvent: OpenEventSession | null;
   setOpenEvent: (event: OpenEventSession | null) => void;
   pendingAttachment: PendingAttachment | null;
+  attachmentBusy: boolean;
+  attachmentError: string | null;
   photoBindChoices: OpenCaptureTarget[] | null;
   attachFiles: (files: FileList | File[] | null) => Promise<void>;
   clearAttachment: () => void;
   choosePhotoBind: (target: OpenCaptureTarget) => void;
+  choosePhotoUnassigned: () => void;
   beginCapture: () => void | Promise<void>;
   retryBubble: (id: string) => void | Promise<void>;
   discardBubble: (id: string) => void;
@@ -185,10 +193,13 @@ const DEFAULT_VALUE: CaptureContextValue = {
   openEvent: null,
   setOpenEvent: () => {},
   pendingAttachment: null,
+  attachmentBusy: false,
+  attachmentError: null,
   photoBindChoices: null,
   attachFiles: async () => {},
   clearAttachment: () => {},
   choosePhotoBind: () => {},
+  choosePhotoUnassigned: () => {},
   beginCapture: () => {},
   retryBubble: () => {},
   discardBubble: () => {},
@@ -225,10 +236,15 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const [openTarget, setOpenTarget] = useState<OpenCaptureTarget | null>(null);
   const [openEvent, setOpenEvent] = useState<OpenEventSession | null>(null);
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [photoBindChoices, setPhotoBindChoices] = useState<OpenCaptureTarget[] | null>(null);
   const openTargetRef = useRef<OpenCaptureTarget | null>(null);
   const openEventRef = useRef<OpenEventSession | null>(null);
   const pendingAttachmentRef = useRef<PendingAttachment | null>(null);
+  const attachmentGenerationRef = useRef(0);
+  const attachmentBusyRef = useRef(false);
+  const textSubmissionRef = useRef(false);
   const messagesRef = useRef<ThreadMessage[]>([]);
   useEffect(() => {
     openTargetRef.current = openTarget;
@@ -265,13 +281,12 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...p } : m)));
   }, []);
 
-  function followUpCommitFields(): {
+  function followUpCommitFields(context: CommitContext): {
     parentInteractionId?: string;
     targetEntityId?: string;
     targetEventId?: string;
   } {
-    const target = openTargetRef.current;
-    const event = openEventRef.current;
+    const { target, event } = context;
     return {
       ...(target
         ? {
@@ -283,48 +298,81 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     };
   }
 
-  function attachmentCommitFields(): { attachment?: { jpegBase64: string } } {
-    const pending = pendingAttachmentRef.current;
+  function attachmentCommitFields(context: CommitContext): { attachment?: { jpegBase64: string } } {
+    const pending = context.attachment;
     if (!pending) return {};
     return { attachment: { jpegBase64: pending.jpegBase64 } };
   }
 
-  function transcriptWithQr(transcript: string): string {
-    const qr = pendingAttachmentRef.current?.qrText?.trim();
+  function transcriptWithQr(transcript: string, context: CommitContext): string {
+    const qr = context.attachment?.qrText?.trim();
     if (!qr) return transcript;
     if (transcript.includes(qr)) return transcript;
     return `${transcript} ${qr}`.trim();
   }
 
-  function captureCommitInput(transcript: string, clientCaptureId: string) {
+  function currentCommitContext(): CommitContext {
     return {
-      transcript: transcriptWithQr(transcript),
-      clientCaptureId,
-      ...followUpCommitFields(),
-      ...attachmentCommitFields(),
+      attachment: pendingAttachmentRef.current,
+      target: openTargetRef.current,
+      event: openEventRef.current,
     };
   }
 
-  function clearPendingAttachment() {
+  function captureCommitInput(
+    transcript: string,
+    clientCaptureId: string,
+    context: CommitContext,
+  ) {
+    return {
+      transcript: transcriptWithQr(transcript, context),
+      clientCaptureId,
+      ...followUpCommitFields(context),
+      ...attachmentCommitFields(context),
+    };
+  }
+
+  function clearPendingAttachment(expected?: PendingAttachment | null) {
+    if (expected && pendingAttachmentRef.current !== expected) return;
+    attachmentGenerationRef.current += 1;
+    attachmentBusyRef.current = false;
     pendingAttachmentRef.current = null;
     setPendingAttachment(null);
+    setAttachmentBusy(false);
+    setAttachmentError(null);
     setPhotoBindChoices(null);
   }
 
   const attachFiles = useCallback(async (files: FileList | File[] | null) => {
     const file = files && files[0];
     if (!file) return;
-    const compressed = await compressImageFile(file);
-    pendingAttachmentRef.current = compressed;
-    setPendingAttachment(compressed);
-    if (!openTargetRef.current) {
-      const people = lastCommittedPeople(messagesRef.current);
-      if (people.length === 1) {
-        setOpenTarget(people[0]!);
-        setPhotoBindChoices(null);
-      } else if (people.length > 1) {
-        setPhotoBindChoices(people);
+    const generation = attachmentGenerationRef.current + 1;
+    attachmentGenerationRef.current = generation;
+    attachmentBusyRef.current = true;
+    setAttachmentBusy(true);
+    setAttachmentError(null);
+    try {
+      const compressed = await compressImageFile(file);
+      if (attachmentGenerationRef.current !== generation) return;
+      attachmentBusyRef.current = false;
+      setAttachmentBusy(false);
+      pendingAttachmentRef.current = compressed;
+      setPendingAttachment(compressed);
+      if (!openTargetRef.current) {
+        const people = lastCommittedPeople(messagesRef.current);
+        if (people.length === 1) {
+          openTargetRef.current = people[0]!;
+          setOpenTarget(people[0]!);
+          setPhotoBindChoices(null);
+        } else if (people.length > 1) {
+          setPhotoBindChoices(people);
+        }
       }
+    } catch (err) {
+      if (attachmentGenerationRef.current !== generation) return;
+      attachmentBusyRef.current = false;
+      setAttachmentBusy(false);
+      setAttachmentError(err instanceof Error ? err.message : 'couldnt attach that photo');
     }
   }, []);
 
@@ -333,7 +381,14 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const choosePhotoBind = useCallback((target: OpenCaptureTarget) => {
+    openTargetRef.current = target;
     setOpenTarget(target);
+    setPhotoBindChoices(null);
+  }, []);
+
+  const choosePhotoUnassigned = useCallback(() => {
+    openTargetRef.current = null;
+    setOpenTarget(null);
     setPhotoBindChoices(null);
   }, []);
 
@@ -415,6 +470,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const beginCapture = useCallback(async () => {
+    if (photoBindChoices || attachmentBusyRef.current) return;
     const status = recorderRef.current.status;
     if (status === 'encoding' || status === 'ready') {
       pendingBeginRef.current = true;
@@ -440,10 +496,11 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       },
     ]);
     await recorderRef.current.start();
-  }, []);
+  }, [photoBindChoices]);
 
   const runCapturePipeline = useCallback(
     async (id: string, blob: Blob, recordingDuration: number) => {
+      const commitContext = currentCommitContext();
       const controller = new AbortController();
       pipelineControllersRef.current.set(id, controller);
       const signal = controller.signal;
@@ -524,7 +581,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       const c0 = performance.now();
       try {
         const result = await commitMutation.mutateAsync(
-          captureCommitInput(transcript, id),
+          captureCommitInput(transcript, id, commitContext),
           { signal } as unknown as Parameters<typeof commitMutation.mutateAsync>[1],
         );
         if (signal.aborted) {
@@ -535,11 +592,11 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           status: 'committed',
           commitMs: Math.round(performance.now() - c0),
           graphResult: result as GraphResult,
-          previewJpegBase64: pendingAttachmentRef.current?.jpegBase64 ?? null,
+          previewJpegBase64: commitContext.attachment?.jpegBase64 ?? null,
         });
         advanceOpenTarget(result as GraphResult);
         advanceOpenEvent(result as GraphResult);
-        clearPendingAttachment();
+        clearPendingAttachment(commitContext.attachment);
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
           cleanupController();
@@ -724,7 +781,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const submitPaste = useCallback(
     async (id: string) => {
       const text = pasteDraft.trim();
-      if (!text) return;
+      if (!text || photoBindChoices || attachmentBusyRef.current) return;
+      const commitContext = currentCommitContext();
       setPasteOpenForId(null);
       setPasteDraft('');
       patch(id, {
@@ -736,16 +794,16 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       });
       const c0 = performance.now();
       try {
-        const result = await commitMutation.mutateAsync(captureCommitInput(text, id));
+        const result = await commitMutation.mutateAsync(captureCommitInput(text, id, commitContext));
         patch(id, {
           status: 'committed',
           commitMs: Math.round(performance.now() - c0),
           graphResult: result as GraphResult,
-          previewJpegBase64: pendingAttachmentRef.current?.jpegBase64 ?? null,
+          previewJpegBase64: commitContext.attachment?.jpegBase64 ?? null,
         });
         advanceOpenTarget(result as GraphResult);
         advanceOpenEvent(result as GraphResult);
-        clearPendingAttachment();
+        clearPendingAttachment(commitContext.attachment);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'commit failed.';
         patch(id, {
@@ -755,7 +813,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         });
       }
     },
-    [pasteDraft, patch, commitMutation],
+    [pasteDraft, photoBindChoices, patch, commitMutation],
   );
 
   const retryBubble = useCallback(
@@ -779,21 +837,22 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       if (msg.transcript) {
+        const commitContext = currentCommitContext();
         patch(id, { status: 'linking', error: null });
         const c0 = performance.now();
         try {
           const result = await commitMutation.mutateAsync(
-            captureCommitInput(msg.transcript, id),
+            captureCommitInput(msg.transcript, id, commitContext),
           );
           patch(id, {
             status: 'committed',
             commitMs: Math.round(performance.now() - c0),
             graphResult: result as GraphResult,
-            previewJpegBase64: pendingAttachmentRef.current?.jpegBase64 ?? null,
+            previewJpegBase64: commitContext.attachment?.jpegBase64 ?? null,
           });
           advanceOpenTarget(result as GraphResult);
           advanceOpenEvent(result as GraphResult);
-          clearPendingAttachment();
+          clearPendingAttachment(commitContext.attachment);
         } catch (err) {
           const message = err instanceof Error ? err.message : 'commit failed.';
           patch(id, {
@@ -811,7 +870,16 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     async (text: string) => {
       const trimmed = text.trim();
       const pending = pendingAttachmentRef.current;
-      if (!trimmed && !pending) return;
+      if (
+        (!trimmed && !pending) ||
+        photoBindChoices ||
+        attachmentBusyRef.current ||
+        textSubmissionRef.current
+      ) {
+        return;
+      }
+      textSubmissionRef.current = true;
+      const commitContext = currentCommitContext();
       const spoken = trimmed || (pending?.qrText?.trim() ? '' : 'attached a photo');
       const intent = spoken && !pending ? classifyIntent(spoken) : 'memo';
       const id = uid();
@@ -836,6 +904,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           },
         ]);
         await runAskPipeline(id, spoken);
+        textSubmissionRef.current = false;
         return;
       }
       const transcript = spoken || 'attached a photo';
@@ -860,36 +929,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       ]);
       const c0 = performance.now();
       try {
-        const result = await commitMutation.mutateAsync(captureCommitInput(transcript, id));
-        patch(id, {
-          status: 'committed',
-          commitMs: Math.round(performance.now() - c0),
-          graphResult: result as GraphResult,
-        });
-        advanceOpenTarget(result as GraphResult);
-        advanceOpenEvent(result as GraphResult);
-        clearPendingAttachment();
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'commit failed.';
-        patch(id, {
-          status: 'failed',
-          commitMs: Math.round(performance.now() - c0),
-          error: { code: 'commit_failed', message },
-        });
-      }
-    },
-    [commitMutation, patch, runAskPipeline],
-  );
-
-  const saveAskAsMemo = useCallback(
-    async (id: string) => {
-      const msg = messages.find((m) => m.id === id);
-      if (!msg?.transcript) return;
-      patch(id, { status: 'linking', intent: 'memo', error: null, ask: null });
-      const c0 = performance.now();
-      try {
         const result = await commitMutation.mutateAsync(
-          captureCommitInput(msg.transcript, id),
+          captureCommitInput(transcript, id, commitContext),
         );
         patch(id, {
           status: 'committed',
@@ -898,7 +939,40 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         });
         advanceOpenTarget(result as GraphResult);
         advanceOpenEvent(result as GraphResult);
-        clearPendingAttachment();
+        clearPendingAttachment(commitContext.attachment);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'commit failed.';
+        patch(id, {
+          status: 'failed',
+          commitMs: Math.round(performance.now() - c0),
+          error: { code: 'commit_failed', message },
+        });
+      } finally {
+        textSubmissionRef.current = false;
+      }
+    },
+    [commitMutation, patch, photoBindChoices, runAskPipeline],
+  );
+
+  const saveAskAsMemo = useCallback(
+    async (id: string) => {
+      const msg = messages.find((m) => m.id === id);
+      if (!msg?.transcript) return;
+      patch(id, { status: 'linking', intent: 'memo', error: null, ask: null });
+      const commitContext = currentCommitContext();
+      const c0 = performance.now();
+      try {
+        const result = await commitMutation.mutateAsync(
+          captureCommitInput(msg.transcript, id, commitContext),
+        );
+        patch(id, {
+          status: 'committed',
+          commitMs: Math.round(performance.now() - c0),
+          graphResult: result as GraphResult,
+        });
+        advanceOpenTarget(result as GraphResult);
+        advanceOpenEvent(result as GraphResult);
+        clearPendingAttachment(commitContext.attachment);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'commit failed.';
         patch(id, {
@@ -1019,10 +1093,13 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       openEvent,
       setOpenEvent,
       pendingAttachment,
+      attachmentBusy,
+      attachmentError,
       photoBindChoices,
       attachFiles,
       clearAttachment,
       choosePhotoBind,
+      choosePhotoUnassigned,
       beginCapture,
       retryBubble,
       discardBubble,
@@ -1045,10 +1122,13 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       openTarget,
       openEvent,
       pendingAttachment,
+      attachmentBusy,
+      attachmentError,
       photoBindChoices,
       attachFiles,
       clearAttachment,
       choosePhotoBind,
+      choosePhotoUnassigned,
       beginCapture,
       retryBubble,
       discardBubble,

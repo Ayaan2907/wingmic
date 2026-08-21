@@ -42,6 +42,11 @@ describe('normalizePersonName', () => {
     expect(personNameEquals('Sarah Chen', 'sarah chen')).toBe(true);
   });
 
+  it('normalizes diacritics for exact matching', () => {
+    expect(normalizePersonName('José Muñoz')).toBe('jose munoz');
+    expect(personNameEquals('José Muñoz', 'Jose Munoz')).toBe(true);
+  });
+
   it('does not treat partial names as equal', () => {
     expect(personNameEquals('Jordan', 'Jordan Lee')).toBe(false);
     expect(entityMatchesPersonName('Jordan', { name: 'Jordan Lee', aliases: [] })).toBe(false);

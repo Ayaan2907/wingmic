@@ -161,6 +161,11 @@ export function PersonCaptureCard({
             ) : null}
           </div>
         )}
+        {action?.body ? (
+          <div style={{ fontSize: 12.5, color: 'var(--text-70)', lineHeight: 1.4 }}>
+            {action.body}
+          </div>
+        ) : null}
       </div>
     </div>
   );

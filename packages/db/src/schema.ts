@@ -283,6 +283,7 @@ export const interactionAttachments = sqliteTable(
   (t) => [
     index('attachment_interaction_idx').on(t.interactionId),
     index('attachment_entity_idx').on(t.entityId),
+    index('attachment_event_idx').on(t.eventId),
   ],
 );
 

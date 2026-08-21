@@ -29,7 +29,7 @@ const EVENT_URL_DEBRIS = new Set([
 ]);
 
 function canonicalHttpUrl(raw: string): string | null {
-  const trimmed = raw.trim().replace(/[),.;]+$/, '');
+  const trimmed = raw.trim().replace(/[\])},.;!?]+$/, '');
   if (!trimmed) return null;
   const withProto = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   try {
@@ -51,8 +51,9 @@ export function parseEventExternal(
   raw: string,
 ): { source: EventExternalSource; id: string } | null {
   const trimmed = raw.trim();
+  const canonical = canonicalHttpUrl(trimmed);
   try {
-    const url = new URL(trimmed);
+    const url = new URL(canonical ?? trimmed);
     const host = url.hostname.replace(/^www\./, '').toLowerCase();
     if (host === 'lu.ma' || host === 'luma.com') {
       const id = url.pathname.replace(/^\//, '').split('/')[0];
@@ -106,7 +107,10 @@ function urlForParsed(
 
 /** First Luma / Partiful / Google Calendar event URL spoken or pasted. */
 export function harvestEventFromTranscript(transcript: string): HarvestedEvent | null {
-  const matches = transcript.match(/https?:\/\/[^\s)]+/gi) ?? [];
+  const matches =
+    transcript.match(
+      /(?:https?:\/\/)?(?:www\.)?(?:lu\.ma|luma\.com|partiful\.com|calendar\.google\.com)\/[^\s<>"']+/gi,
+    ) ?? [];
   for (const raw of matches) {
     const parsed = parseEventExternal(raw);
     if (!parsed) continue;
@@ -157,9 +161,14 @@ export function applyHarvestedEvent(
   const harvested = harvestEventFromTranscript(transcript);
   if (!harvested) return extracted;
   const topics = extracted.topics.filter((t) => !isEventUrlDebrisTopic(t, harvested));
+  const persons = extracted.persons.map((person) => ({
+    ...person,
+    topics: person.topics.filter((topic) => !isEventUrlDebrisTopic(topic, harvested)),
+  }));
   if (extracted.events.length === 0) {
     return {
       ...extracted,
+      persons,
       topics,
       events: [
         {
@@ -175,5 +184,5 @@ export function applyHarvestedEvent(
     ...event,
     url: event.url || (i === 0 ? harvested.url : event.url),
   }));
-  return { ...extracted, topics, events };
+  return { ...extracted, persons, topics, events };
 }

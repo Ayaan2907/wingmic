@@ -10,10 +10,50 @@ function unfoldIcs(raw: string): string {
   return raw.replace(/\r\n/g, '\n').replace(/\n[ \t]/g, '');
 }
 
-function icsDate(value: string | undefined): Date | null {
-  if (!value) return null;
-  const compact = value.trim();
-  const m = compact.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?/);
+type IcsField = {
+  value: string;
+  params: Map<string, string>;
+};
+
+function zonedUtcDate(parts: number[], timeZone: string): Date | null {
+  const [year, month, day, hour, minute, second] = parts;
+  const localAsUtc = Date.UTC(year!, month!, day!, hour!, minute!, second!);
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    });
+    let result = localAsUtc;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const formatted = Object.fromEntries(
+        formatter.formatToParts(new Date(result)).map((part) => [part.type, part.value]),
+      );
+      const displayedAsUtc = Date.UTC(
+        Number(formatted.year),
+        Number(formatted.month) - 1,
+        Number(formatted.day),
+        Number(formatted.hour),
+        Number(formatted.minute),
+        Number(formatted.second),
+      );
+      result += localAsUtc - displayedAsUtc;
+    }
+    return new Date(result);
+  } catch {
+    return null;
+  }
+}
+
+function icsDate(fieldValue: IcsField | null, inclusiveDateEnd = false): Date | null {
+  if (!fieldValue) return null;
+  const compact = fieldValue.value.trim();
+  const m = compact.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?$/);
   if (!m) return null;
   const year = Number(m[1]);
   const month = Number(m[2]) - 1;
@@ -21,17 +61,36 @@ function icsDate(value: string | undefined): Date | null {
   const hour = m[4] ? Number(m[4]) : 0;
   const minute = m[5] ? Number(m[5]) : 0;
   const second = m[6] ? Number(m[6]) : 0;
-  if (m[7] === 'Z' || m[4]) {
-    return new Date(Date.UTC(year, month, day, hour, minute, second));
+  let date: Date | null;
+  const timeZone = fieldValue.params.get('TZID')?.replace(/^"|"$/g, '');
+  if (m[7] === 'Z' || !timeZone) {
+    date = new Date(Date.UTC(year, month, day, hour, minute, second));
+  } else {
+    date = zonedUtcDate([year, month, day, hour, minute, second], timeZone);
   }
-  return new Date(Date.UTC(year, month, day));
+  if (date && inclusiveDateEnd && fieldValue.params.get('VALUE')?.toUpperCase() === 'DATE') {
+    date = new Date(date.getTime() - 24 * 60 * 60 * 1000);
+  }
+  return date;
+}
+
+function parsedField(block: string, key: string): IcsField | null {
+  const re = new RegExp(`^${key}((?:;[^:]*)?):(.+)$`, 'im');
+  const match = block.match(re);
+  const value = match?.[2]?.trim();
+  if (!value) return null;
+  const params = new Map<string, string>();
+  for (const entry of (match?.[1] ?? '').split(';').filter(Boolean)) {
+    const separator = entry.indexOf('=');
+    if (separator > 0) {
+      params.set(entry.slice(0, separator).toUpperCase(), entry.slice(separator + 1));
+    }
+  }
+  return { value, params };
 }
 
 function field(block: string, key: string): string | null {
-  const re = new RegExp(`^${key}(?:;[^:]*)?:(.+)$`, 'im');
-  const match = block.match(re);
-  const value = match?.[1]?.trim();
-  return value || null;
+  return parsedField(block, key)?.value ?? null;
 }
 
 export function parseIcsEvents(raw: string): ParsedIcsEvent[] {
@@ -46,35 +105,42 @@ export function parseIcsEvents(raw: string): ParsedIcsEvent[] {
       summary,
       location: field(block, 'LOCATION'),
       url: field(block, 'URL'),
-      dateRangeStart: icsDate(field(block, 'DTSTART') ?? undefined),
-      dateRangeEnd: icsDate(field(block, 'DTEND') ?? undefined),
+      dateRangeStart: icsDate(parsedField(block, 'DTSTART')),
+      dateRangeEnd: icsDate(parsedField(block, 'DTEND'), true),
     });
   }
   return events;
 }
 
 function tokens(value: string): string[] {
-  return value
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((t) => t.length >= 3);
+  return (
+    value
+      .normalize('NFKC')
+      .toLocaleLowerCase()
+      .match(/[\p{L}\p{N}]+/gu) ?? []
+  );
 }
 
-export function matchIcsEvent(
-  name: string,
-  events: ParsedIcsEvent[],
-): ParsedIcsEvent | null {
-  const want = new Set(tokens(name));
+export function matchIcsEvent(name: string, events: ParsedIcsEvent[]): ParsedIcsEvent | null {
+  const wantTokens = tokens(name);
+  const want = new Set(wantTokens);
   if (want.size === 0) return null;
   let best: { event: ParsedIcsEvent; score: number } | null = null;
+  let tied = false;
   for (const event of events) {
-    const have = tokens(event.summary);
-    const overlap = have.filter((t) => want.has(t)).length;
-    if (overlap === 0) continue;
-    const score = overlap / Math.max(want.size, have.length);
-    if (!best || score > best.score) best = { event, score };
+    const have = new Set(tokens(event.summary));
+    const exact = have.size === want.size && [...have].every((token) => want.has(token));
+    const overlap = [...have].filter((token) => want.has(token)).length;
+    if (!exact && overlap < 2) continue;
+    const score = exact ? 1 : overlap / Math.max(want.size, have.size);
+    if (!best || score > best.score) {
+      best = { event, score };
+      tied = false;
+    } else if (score === best.score) {
+      tied = true;
+    }
   }
-  return best && best.score >= 0.4 ? best.event : null;
+  return best && !tied && best.score >= 0.4 ? best.event : null;
 }
 
 const ICS_FETCH_MS = 8_000;
@@ -92,8 +158,29 @@ export async function fetchCalendarIcs(url: string): Promise<string | null> {
       headers: { accept: 'text/calendar, text/plain' },
     });
     if (!res.ok) return null;
-    const buf = await res.arrayBuffer();
-    if (buf.byteLength < 16 || buf.byteLength > ICS_MAX_BYTES) return null;
+    const declaredLength = res.headers.get('content-length');
+    if (declaredLength && Number(declaredLength) > ICS_MAX_BYTES) return null;
+    if (!res.body) return null;
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let byteLength = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      byteLength += value.byteLength;
+      if (byteLength > ICS_MAX_BYTES) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+    if (byteLength < 16) return null;
+    const buf = new Uint8Array(byteLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      buf.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
     const text = new TextDecoder('utf-8', { fatal: false }).decode(buf);
     if (!/BEGIN:VCALENDAR/i.test(text)) return null;
     return text;

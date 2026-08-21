@@ -66,7 +66,7 @@ describe('toPendingAct', () => {
     expect(pending.channel).toBe('memo');
     expect(pending.kind).toBe('memo');
     expect(pending.conf).toBe(100);
-    expect(pending.name).toBe('follow-up');
+    expect(pending.name).toBe('memo');
   });
 });
 

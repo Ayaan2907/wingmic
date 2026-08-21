@@ -13,7 +13,10 @@ export function CameraCapture({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const cancelledRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+  const [encoding, setEncoding] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +49,7 @@ export function CameraCapture({
     void start();
     return () => {
       cancelled = true;
+      cancelledRef.current = true;
       stopStream(streamRef.current);
       streamRef.current = null;
       if (video) video.srcObject = null;
@@ -54,15 +58,24 @@ export function CameraCapture({
 
   async function snap() {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !ready || encoding) return;
+    setEncoding(true);
     try {
       const file = await snapshotVideoToJpeg(video);
+      if (cancelledRef.current) return;
       stopStream(streamRef.current);
       streamRef.current = null;
       onCapture(file);
     } catch {
-      setError('couldnt take that photo');
+      if (!cancelledRef.current) setError('couldnt take that photo');
+    } finally {
+      if (!cancelledRef.current) setEncoding(false);
     }
+  }
+
+  function cancel() {
+    cancelledRef.current = true;
+    onCancel();
   }
 
   return (
@@ -81,9 +94,11 @@ export function CameraCapture({
     >
       <video
         ref={videoRef}
+        data-testid="camera-video"
         autoPlay
         muted
         playsInline
+        onCanPlay={() => setReady(true)}
         style={{
           flex: 1,
           width: '100%',
@@ -121,7 +136,7 @@ export function CameraCapture({
       >
         <button
           type="button"
-          onClick={onCancel}
+          onClick={cancel}
           className="mono"
           style={{
             background: 'transparent',
@@ -139,7 +154,7 @@ export function CameraCapture({
           type="button"
           aria-label="snap"
           onClick={() => void snap()}
-          disabled={Boolean(error)}
+          disabled={Boolean(error) || !ready || encoding}
           style={{
             width: 64,
             height: 64,
@@ -147,8 +162,8 @@ export function CameraCapture({
             border: `3px solid ${accent}`,
             background: accent,
             boxShadow: '4px 4px 0 #000',
-            cursor: error ? 'default' : 'pointer',
-            opacity: error ? 0.4 : 1,
+            cursor: error || !ready || encoding ? 'default' : 'pointer',
+            opacity: error || !ready || encoding ? 0.4 : 1,
           }}
         />
         <span style={{ width: 64 }} />

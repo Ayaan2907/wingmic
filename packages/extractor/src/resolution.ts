@@ -109,6 +109,7 @@ export async function commit(
   }
 
   const harvestedEvents = applyHarvestedEvent(extracted, transcript);
+  extracted.persons = harvestedEvents.persons;
   extracted.events = harvestedEvents.events;
   extracted.topics = harvestedEvents.topics;
 
@@ -471,7 +472,7 @@ async function upsertEvent(
   e: EventCandidate,
   _capturedAt: Date,
 ): Promise<string> {
-  const slug = slugify(e.name);
+  let slug = slugify(e.name);
   const dateGuess =
     e.dateHint && /^\d{4}-\d{2}-\d{2}/.test(e.dateHint) ? new Date(e.dateHint) : null;
   const harvested = e.url ? parseEventExternal(e.url) : null;
@@ -501,7 +502,13 @@ async function upsertEvent(
   const existing = await db.query.events.findFirst({
     where: eq(schema.events.slug, slug),
   });
-  if (existing) {
+  const externalCollision =
+    existing &&
+    harvested &&
+    existing.externalSource !== null &&
+    existing.externalId !== null &&
+    (existing.externalSource !== harvested.source || existing.externalId !== harvested.id);
+  if (existing && !externalCollision) {
     const patch: Partial<typeof schema.events.$inferInsert> = {
       observedCount: existing.observedCount + 1,
       promotedAt:
@@ -517,6 +524,12 @@ async function upsertEvent(
     }
     await db.update(schema.events).set(patch).where(eq(schema.events.id, existing.id));
     return existing.id;
+  }
+  if (externalCollision) {
+    const encodedId = Array.from(new TextEncoder().encode(harvested.id), (byte) =>
+      byte.toString(16).padStart(2, '0'),
+    ).join('');
+    slug = `${slug.slice(0, 40)}-${harvested.source}-${encodedId}`;
   }
   const inserted = await db
     .insert(schema.events)
@@ -786,6 +799,7 @@ function resolvePerson(
   if (userEntities.length === 0) return null;
 
   let best: ResolvedMatch | null = null;
+  let bestIsTied = false;
   for (const entity of userEntities) {
     const nameScore = nameSimilarity(cand.name, entity.name);
     const aliasScore = (entity.aliases ?? []).reduce(
@@ -821,7 +835,10 @@ function resolvePerson(
       0.5 * nameMax + 0.2 * embeddingScore + 0.15 * companyBoost + 0.3 * emailBoost + importBoost;
     if (!best || score > best.score) {
       best = { entityId: entity.id, score };
+      bestIsTied = false;
+    } else if (score === best.score) {
+      bestIsTied = true;
     }
   }
-  return best;
+  return bestIsTied ? null : best;
 }

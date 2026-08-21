@@ -256,32 +256,16 @@ async function loadPerson(
 
   // Stats
   const edgesCount = ec.length + ee.length + et.length;
-  const commits = uniqueInteractionIds.length;
+  const commits = interactions.length;
   const mostRecent = interactions[0] ? toDate(interactions[0].capturedAt) : null;
   const since = daysSince(mostRecent);
 
-  const relatedPeople = await findRelatedPeople(db, userId, entityId, {
+  const related = await findRelatedPeople(db, userId, entityId, {
     companyIds,
     eventIds,
     companyById,
     eventById,
   });
-
-  const related: Related[] = [
-    ...companies.map((c: any) => ({
-      kind: 'company' as const,
-      id: c.id as string,
-      name: c.name as string,
-      role: 'works at',
-    })),
-    ...events.map((e: any) => ({
-      kind: 'event' as const,
-      id: e.id as string,
-      name: e.name as string,
-      role: eventPublicRole(e),
-    })),
-    ...relatedPeople,
-  ].slice(0, 8);
 
   const possibleMatches = await findPossibleMatches(db, userId, entityId, entity.name);
   const publicProfile = publicProfileFromFacts(facts);
@@ -482,7 +466,7 @@ async function loadCompany(db: DB, userId: string, companyId: string) {
     } satisfies DetailSub,
     stats: [
       { key: 'you know', value: String(youKnow) },
-      { key: 'commits', value: String(uniqueInteractionIds.length) },
+      { key: 'commits', value: String(interactions.length) },
       { key: 'last touch', value: daysSince(mostRecent) == null ? '—' : `${daysSince(mostRecent)}d` },
     ] satisfies DetailStats,
     captures,
@@ -612,7 +596,7 @@ async function loadEvent(db: DB, userId: string, eventId: string) {
     } satisfies DetailSub,
     stats: [
       { key: 'people met', value: String(myEntities.length) },
-      { key: 'commits', value: String(uniqueInteractionIds.length) },
+      { key: 'commits', value: String(interactions.length) },
       { key: 'topics', value: String(topics.length) },
     ] satisfies DetailStats,
     captures,
@@ -875,19 +859,6 @@ function publicProfileFromFacts(
     url = null;
   }
   return { linkedin, url, sourceUrl };
-}
-
-function eventPublicRole(e: {
-  dateRangeStart?: Date | number | null;
-  location?: string | null;
-  url?: string | null;
-}): string {
-  const bits: string[] = [];
-  const start = toDate(e.dateRangeStart ?? null);
-  if (start) bits.push(start.toISOString().slice(0, 10));
-  if (e.location?.trim()) bits.push(e.location.trim());
-  if (e.url?.trim()) bits.push('public page');
-  return bits.join(' · ') || 'attended';
 }
 
 async function findPossibleMatches(

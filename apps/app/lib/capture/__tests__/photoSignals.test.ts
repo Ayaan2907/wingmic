@@ -46,6 +46,19 @@ describe('normalizePhotoSignals', () => {
       eventUrl: null,
     });
   });
+
+  it('only accepts LinkedIn profile urls on the LinkedIn host and /in/ path', () => {
+    expect(
+      normalizePhotoSignals({
+        linkedin: 'https://example.com/linkedin.com/in/ada-lovelace',
+      }).linkedin,
+    ).toBeNull();
+    expect(
+      normalizePhotoSignals({
+        linkedin: 'https://www.linkedin.com/company/analytical-engines',
+      }).linkedin,
+    ).toBeNull();
+  });
 });
 
 describe('mergePhotoSignals', () => {
@@ -87,5 +100,17 @@ describe('mergePhotoSignals', () => {
         eventUrl: 'https://lu.ma/ethdenver',
       }),
     ).toBe('https://lu.ma/ethdenver her luma');
+  });
+
+  it('does not duplicate values appended by an earlier photo signal', () => {
+    expect(
+      mergePhotoSignals('attached a photo', {
+        personName: 'Ada Lovelace',
+        companyName: 'Ada Lovelace',
+        eventName: null,
+        linkedin: null,
+        eventUrl: null,
+      }),
+    ).toBe('attached a photo Ada Lovelace');
   });
 });
