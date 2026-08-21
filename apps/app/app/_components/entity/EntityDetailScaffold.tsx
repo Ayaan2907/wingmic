@@ -1,6 +1,6 @@
 'use client';
 
-// EntityDetailScaffold — shared layout for /person/[id], /company/[id], /event/[id].
+// EntityDetailScaffold — shared layout for /person/[id], /company/[id], /event/[id], /topic/[id].
 //
 // Source of truth:
 //   - design/v2/proto-screens-b.jsx ScreenPerson / ScreenCompany (lines 192-350)
@@ -17,7 +17,7 @@ import Link from 'next/link';
 import { PersonAvatar, CompanyTile, EventDiamond } from './EntityAvatar';
 import { accent, third, blue, violet } from '@/app/chat/_components/tokens';
 
-export type EntityKind = 'person' | 'company' | 'event';
+export type EntityKind = 'person' | 'company' | 'event' | 'topic';
 
 export interface EntityCapture {
   interactionId: string;
@@ -264,7 +264,7 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
           )}
         </Section>
 
-        {topics && topics.length > 0 && (
+        {topics && topics.length > 0 && kind !== 'topic' && (
           <Section title="topics" testid="entity-topics-list">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {topics.map((t) => (
@@ -391,7 +391,14 @@ function Hero({
   name: string;
   sub: React.ReactNode;
 }) {
-  const eyebrowColor = kind === 'person' ? accent : kind === 'company' ? blue : 'var(--text-55)';
+  const eyebrowColor =
+    kind === 'person'
+      ? accent
+      : kind === 'company'
+        ? blue
+        : kind === 'topic'
+          ? violet
+          : 'var(--text-55)';
   return (
     <div
       style={{
