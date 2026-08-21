@@ -120,6 +120,7 @@ describe('AppShell', () => {
     const nudge = screen.getByTestId('calendar-settings-nudge');
     expect(nudge.getAttribute('href')).toBe('/settings#calendars');
     expect(nudge.textContent).toMatch(/settings/i);
+    expect(nudge.closest('.app-content')).toBeTruthy();
   });
 
   it('hides the calendar settings nudge once a public ics url is saved', async () => {

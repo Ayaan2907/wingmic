@@ -52,8 +52,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {showCalendarNudge ? <CalendarSettingsNudge /> : null}
-      <div className="app-content">{children}</div>
+      <div className="app-content">
+        {showCalendarNudge ? <CalendarSettingsNudge /> : null}
+        {children}
+      </div>
       {locked ? (
         <LockedBar onStop={() => recorder.stop()} onDiscard={() => recorder.discard()} duration={recorder.duration} />
       ) : (
