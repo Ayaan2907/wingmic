@@ -49,7 +49,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const active = activeFor(pathname);
   const locked = recorder.status === 'locked';
-  const showCalendarNudge = settings.data !== undefined && !settings.data.calendarIcsUrl;
+  const showCalendarNudge =
+    !pathname.startsWith('/settings') &&
+    settings.data !== undefined &&
+    !settings.data.calendarIcsUrl;
 
   return (
     <>
