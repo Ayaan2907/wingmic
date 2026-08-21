@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  applyGraphSpacing,
   configureGraphForces,
+  graphChargeStrength,
   graphLinkDistance,
-  GRAPH_CHARGE_STRENGTH,
-  GRAPH_COLLIDE_RADIUS,
   GRAPH_LINK_STRENGTH,
+  SPACING_SCALE,
 } from '../graph-force';
 
 describe('graphLinkDistance', () => {
@@ -14,39 +15,79 @@ describe('graphLinkDistance', () => {
     );
   });
 
-  it('scales distance with spacing preset', () => {
-    expect(graphLinkDistance({ rel: 'works_at' }, 'wide')).toBeGreaterThan(
-      graphLinkDistance({ rel: 'works_at' }, 'compact'),
+  it('scales distance dramatically across spacing presets', () => {
+    const compact = graphLinkDistance({ rel: 'works_at' }, 'compact');
+    const normal = graphLinkDistance({ rel: 'works_at' }, 'normal');
+    const wide = graphLinkDistance({ rel: 'works_at' }, 'wide');
+    expect(compact).toBeLessThan(normal);
+    expect(normal).toBeLessThan(wide);
+    expect(wide / compact).toBeGreaterThan(2);
+  });
+});
+
+describe('graphChargeStrength', () => {
+  it('repels more on wide than compact', () => {
+    expect(Math.abs(graphChargeStrength('wide'))).toBeGreaterThan(
+      Math.abs(graphChargeStrength('compact')),
     );
+    expect(SPACING_SCALE.wide.distance).toBeGreaterThan(SPACING_SCALE.compact.distance);
   });
 });
 
 describe('configureGraphForces', () => {
-  it('sets charge, link distance, center, and collide on the graph ref', () => {
+  it('sets charge and link distance for the spacing preset', () => {
     const charge = { strength: vi.fn() };
     const center = { strength: vi.fn() };
     const link = { distance: vi.fn(), strength: vi.fn() };
-    const collide = { radius: vi.fn(), strength: vi.fn(), iterations: vi.fn() };
     const fg = {
       d3Force: (name: string) => {
         if (name === 'charge') return charge;
         if (name === 'center') return center;
         if (name === 'link') return link;
-        if (name === 'collide') return collide;
         return undefined;
       },
     };
 
-    configureGraphForces(fg as Parameters<typeof configureGraphForces>[0], 'normal');
+    expect(configureGraphForces(fg as Parameters<typeof configureGraphForces>[0], 'wide')).toBe(
+      true,
+    );
 
-    expect(charge.strength).toHaveBeenCalledWith(GRAPH_CHARGE_STRENGTH);
+    expect(charge.strength).toHaveBeenCalledWith(graphChargeStrength('wide'));
     expect(center.strength).toHaveBeenCalled();
     expect(link.distance).toHaveBeenCalled();
     expect(link.strength).toHaveBeenCalledWith(GRAPH_LINK_STRENGTH);
-    expect(collide.radius).toHaveBeenCalled();
-    expect(collide.strength).toHaveBeenCalledWith(0.9);
-    expect(collide.iterations).toHaveBeenCalledWith(3);
-    const radiusFn = collide.radius.mock.calls[0]![0] as () => number;
-    expect(radiusFn()).toBe(GRAPH_COLLIDE_RADIUS);
+
+    const distanceFn = link.distance.mock.calls[0]![0] as (l: {
+      rel: 'works_at';
+    }) => number;
+    expect(distanceFn({ rel: 'works_at' })).toBe(graphLinkDistance({ rel: 'works_at' }, 'wide'));
+  });
+
+  it('returns false when the graph ref is not ready', () => {
+    expect(configureGraphForces(undefined, 'normal')).toBe(false);
+  });
+});
+
+describe('applyGraphSpacing', () => {
+  it('configures forces then reheats the simulation', () => {
+    const charge = { strength: vi.fn() };
+    const center = { strength: vi.fn() };
+    const link = { distance: vi.fn(), strength: vi.fn() };
+    const reheat = vi.fn();
+    const fg = {
+      d3Force: (name: string) => {
+        if (name === 'charge') return charge;
+        if (name === 'center') return center;
+        if (name === 'link') return link;
+        return undefined;
+      },
+      d3ReheatSimulation: reheat,
+    };
+
+    expect(applyGraphSpacing(fg as unknown as Parameters<typeof applyGraphSpacing>[0], 'compact')).toBe(
+      true,
+    );
+    expect(charge.strength).toHaveBeenCalledWith(graphChargeStrength('compact'));
+    expect(reheat).toHaveBeenCalledOnce();
   });
 });

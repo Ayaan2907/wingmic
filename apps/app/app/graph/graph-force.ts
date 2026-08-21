@@ -3,23 +3,25 @@ import { NODE_PAINT_RADIUS } from './graph-style';
 import type { GraphLink } from './graph-types';
 
 /** d3-force tuning for readable, iterable entity graphs at product scale. */
-export const GRAPH_WARMUP_TICKS = 120;
-export const GRAPH_COOLDOWN_TICKS = 0;
-export const GRAPH_VELOCITY_DECAY = 0.32;
-export const GRAPH_CHARGE_STRENGTH = -260;
+export const GRAPH_WARMUP_TICKS = 80;
+/** Must be > 0 — with 0, reheat stops before any tick (spacing presets do nothing). */
+export const GRAPH_COOLDOWN_TICKS = 400;
+export const GRAPH_VELOCITY_DECAY = 0.3;
+export const GRAPH_CHARGE_STRENGTH = -220;
 export const GRAPH_COLLIDE_RADIUS = NODE_PAINT_RADIUS + 16;
-export const GRAPH_CENTER_STRENGTH = 0.12;
-export const GRAPH_LINK_STRENGTH = 0.62;
+export const GRAPH_CENTER_STRENGTH = 0.14;
+export const GRAPH_LINK_STRENGTH = 0.55;
 
 export type GraphSpacingPreset = 'compact' | 'normal' | 'wide';
 
-const SPACING_SCALE: Record<
+/** Dramatic scale so tight ↔ wide is obvious on canvas. */
+export const SPACING_SCALE: Record<
   GraphSpacingPreset,
-  { charge: number; distance: number; collide: number }
+  { charge: number; distance: number }
 > = {
-  compact: { charge: 0.82, distance: 0.88, collide: 0.92 },
-  normal: { charge: 1, distance: 1, collide: 1 },
-  wide: { charge: 1.28, distance: 1.22, collide: 1.08 },
+  compact: { charge: 0.45, distance: 0.5 },
+  normal: { charge: 1, distance: 1 },
+  wide: { charge: 2.1, distance: 1.85 },
 };
 
 export function graphLinkDistance(
@@ -47,6 +49,10 @@ export function graphLinkDistance(
   return Math.round(base * scale);
 }
 
+export function graphChargeStrength(spacing: GraphSpacingPreset = 'normal'): number {
+  return GRAPH_CHARGE_STRENGTH * SPACING_SCALE[spacing].charge;
+}
+
 type ForceGraphWithD3 = ForceGraphMethods & {
   d3Force?: (name: string) => {
     strength?: (n: number) => void;
@@ -61,20 +67,27 @@ type ForceGraphWithD3 = ForceGraphMethods & {
 export function configureGraphForces(
   fg: ForceGraphWithD3 | undefined,
   spacing: GraphSpacingPreset = 'normal',
-): void {
-  if (!fg?.d3Force) return;
+): boolean {
+  if (!fg?.d3Force) return false;
 
-  const scale = SPACING_SCALE[spacing];
-
-  fg.d3Force('charge')?.strength?.(GRAPH_CHARGE_STRENGTH * scale.charge);
+  fg.d3Force('charge')?.strength?.(graphChargeStrength(spacing));
   fg.d3Force('center')?.strength?.(GRAPH_CENTER_STRENGTH);
 
   const link = fg.d3Force('link');
-  link?.distance?.((l: GraphLink) => graphLinkDistance(l, spacing));
-  link?.strength?.(GRAPH_LINK_STRENGTH);
+  if (!link?.distance || !link?.strength) return false;
+  link.distance((l: GraphLink) => graphLinkDistance(l, spacing));
+  link.strength(GRAPH_LINK_STRENGTH);
 
-  const collide = fg.d3Force('collide');
-  collide?.radius?.(() => GRAPH_COLLIDE_RADIUS * scale.collide);
-  collide?.strength?.(0.9);
-  collide?.iterations?.(3);
+  // collide is not registered by default in force-graph — charge + distance drive spacing.
+  return true;
+}
+
+/** Reconfigure forces and reheat so spacing presets animate immediately. */
+export function applyGraphSpacing(
+  fg: ForceGraphWithD3 | undefined,
+  spacing: GraphSpacingPreset,
+): boolean {
+  if (!configureGraphForces(fg, spacing)) return false;
+  fg?.d3ReheatSimulation?.();
+  return true;
 }
