@@ -110,6 +110,7 @@ export function GraphClient({ data }: { data: GraphData }) {
         return { rel: l.rel, label: nodeById.get(otherId)?.label ?? otherId };
       });
   }, [selected, data.links, nodeById]);
+  const selectedHref = selected ? `/${selected.kind}/${selected.id}` : null;
 
   const fitGraphToCanvas = useCallback(() => {
     if (filtered.nodes.length === 0) return;
@@ -205,7 +206,7 @@ export function GraphClient({ data }: { data: GraphData }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '32px 20px',
+          padding: 'clamp(24px, 7vw, 36px) clamp(14px, 5vw, 20px)',
           background: 'var(--bg-page)',
           color: 'var(--ink)',
           textAlign: 'center',
@@ -254,6 +255,7 @@ export function GraphClient({ data }: { data: GraphData }) {
                     letterSpacing: 1,
                     textTransform: 'uppercase',
                     padding: '5px 11px',
+                    minHeight: 32,
                     borderRadius: 999,
                     border: `1px solid ${on ? KIND_COLOR[kind] : 'var(--border-soft)'}`,
                     background: on ? `${KIND_COLOR[kind]}22` : 'transparent',
@@ -274,6 +276,7 @@ export function GraphClient({ data }: { data: GraphData }) {
           className="graph-viewport"
           data-testid="graph-canvas"
           data-highlighted-id={selected?.id ?? ''}
+          style={{ minHeight: 400 }}
           onMouseMove={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
             pointerRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -349,13 +352,13 @@ export function GraphClient({ data }: { data: GraphData }) {
               className="graph-mobile-card"
               style={{
                 position: 'absolute',
-                left: 16,
-                right: 16,
-                bottom: 16,
+                left: 'clamp(10px, 4vw, 16px)',
+                right: 'clamp(10px, 4vw, 16px)',
+                bottom: 'clamp(10px, 4vw, 16px)',
                 zIndex: 3,
                 maxWidth: 360,
                 margin: '0 auto',
-                padding: 16,
+                padding: 14,
                 borderRadius: 14,
                 background: 'var(--bg-elev, #111)',
                 border: '1px solid var(--border-soft)',
@@ -396,8 +399,11 @@ export function GraphClient({ data }: { data: GraphData }) {
                 {selected.label}
               </div>
               <a
-                href={'/' + selected.kind + '/' + selected.id}
+                href={selectedHref ?? '#'}
                 style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  minHeight: 32,
                   color: accent,
                   fontSize: 14,
                   textDecoration: 'none',
@@ -413,7 +419,10 @@ export function GraphClient({ data }: { data: GraphData }) {
 
       <aside
         className="desktop-pane detail-rail"
-        style={{ padding: '20px 18px', background: 'rgba(255,255,255,0.01)' }}
+        style={{
+          padding: 'clamp(14px, 3vw, 20px) clamp(12px, 2vw, 18px)',
+          background: 'rgba(255,255,255,0.01)',
+        }}
         aria-label="selected node"
       >
         {selected ? (
@@ -460,7 +469,7 @@ export function GraphClient({ data }: { data: GraphData }) {
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
               <button
                 type="button"
                 disabled={
@@ -504,7 +513,8 @@ export function GraphClient({ data }: { data: GraphData }) {
                   }
                 }}
                 style={{
-                  flex: 1,
+                  flex: '1 1 190px',
+                  minHeight: 42,
                   padding: 10,
                   borderRadius: 10,
                   background: accent,
@@ -527,10 +537,14 @@ export function GraphClient({ data }: { data: GraphData }) {
                       : 'draft check-in →'}
               </button>
               <a
-                href={'/' + selected.kind + '/' + selected.id}
+                href={selectedHref ?? '#'}
                 title={`open ${selected.kind}`}
                 className="mono"
                 style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: 42,
                   padding: '10px 14px',
                   borderRadius: 10,
                   color: 'rgba(255,255,255,0.55)',

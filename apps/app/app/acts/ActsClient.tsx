@@ -11,8 +11,7 @@
 import * as React from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { ActCard } from '@/app/_components/ActCard';
-
-const accent = '#FFC452';
+import { accent } from '@/app/chat/_components/tokens';
 
 export function ActsClient() {
   const utils = trpc.useUtils();
@@ -81,8 +80,17 @@ export function ActsClient() {
   const update = trpc.acts.update.useMutation({ onSuccess: invalidate });
 
   const acts = data?.acts ?? [];
-  const countLabel =
-    filter === 'sent' ? 'sent' : filter === 'all' ? 'shown' : acts.length === 1 ? 'draft' : 'drafts';
+  const countLabel = React.useMemo(
+    () =>
+      filter === 'sent'
+        ? 'sent'
+        : filter === 'all'
+          ? 'shown'
+          : acts.length === 1
+            ? 'draft'
+            : 'drafts',
+    [acts.length, filter],
+  );
 
   return (
     <main
@@ -97,7 +105,7 @@ export function ActsClient() {
     >
       <header
         style={{
-          padding: '14px 20px',
+          padding: '14px clamp(14px, 4vw, 20px)',
           borderBottom: '1px solid var(--border-soft)',
           display: 'flex',
           alignItems: 'center',
@@ -131,8 +139,8 @@ export function ActsClient() {
 
       <section
         style={{
-          padding: '20px 20px 0',
-          maxWidth: 640,
+          padding: '16px clamp(14px, 4vw, 20px) 0',
+          maxWidth: 680,
           width: '100%',
           margin: '0 auto',
           boxSizing: 'border-box',
@@ -159,6 +167,7 @@ export function ActsClient() {
                 onClick={() => setFilter(key)}
                 className="mono"
                 style={{
+                  minHeight: 34,
                   padding: '6px 12px',
                   borderRadius: 999,
                   border: active ? `1.5px solid ${accent}` : '1px solid var(--border-soft)',
