@@ -1,7 +1,0 @@
-# one address per line. names are derived from the address automatically.
-# add a CSV `email,first_name` header only when you want to override.
-ada.lovelace@example.com
-GRACE@example.com
-info@example.com
-dev2907@example.com
-ak@example.com
