@@ -443,9 +443,8 @@ export default function ChatClient({ userName, initialThread = [] }: ChatClientP
     // rail is display:none and the thread is the full-width column.
     <div className="surface-split">
       <main
-        className="surface-primary"
+        className="surface-primary chat-surface"
         style={{
-          minHeight: '100dvh',
           display: 'flex',
           flexDirection: 'column',
           background: 'var(--bg-page)',

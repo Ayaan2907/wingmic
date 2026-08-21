@@ -29,9 +29,19 @@ const CHROMELESS = ['/signin', '/onboarding'];
 function activeFor(pathname: string): BottomTabKey | null {
   if (pathname === '/') return 'home';
   if (pathname.startsWith('/chat')) return 'chat';
+  if (pathname.startsWith('/search')) return 'chat';
   if (pathname.startsWith('/graph')) return 'graph';
+  if (
+    pathname.startsWith('/person') ||
+    pathname.startsWith('/company') ||
+    pathname.startsWith('/event') ||
+    pathname.startsWith('/topic')
+  ) {
+    return 'graph';
+  }
   if (pathname.startsWith('/acts')) return 'acts';
-  return null; // entity / search / settings — no tab highlighted
+  if (pathname.startsWith('/imports') || pathname.startsWith('/settings')) return 'home';
+  return null;
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {

@@ -50,7 +50,7 @@
 }
 
 html {
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
 }
 
 body {
@@ -59,6 +59,7 @@ body {
   font-family: var(--font-inter), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  overscroll-behavior-y: none;
   background-image:
     radial-gradient(ellipse at 18% 0%, rgba(255, 196, 82, 0.05) 0%, transparent 55%),
     radial-gradient(ellipse at 82% 100%, rgba(255, 107, 107, 0.035) 0%, transparent 55%);
@@ -313,6 +314,7 @@ a:focus-visible {
   display: flex;
   align-items: flex-start;
   z-index: 50;
+  touch-action: manipulation;
 }
 
 /* Content gets bottom room for the bar on mobile. */
@@ -423,11 +425,26 @@ a:focus-visible {
   pointer-events: none;
 }
 
+.chat-surface {
+  min-height: 100svh;
+  height: 100svh;
+  overflow: hidden;
+}
+
+.chat-scroll {
+  scrollbar-gutter: stable both-edges;
+  contain: content;
+}
+
 .capture-orb {
   top: -18px;
 }
 
 @media (min-width: 1120px) {
+  .chat-surface {
+    min-height: 100dvh;
+    height: 100dvh;
+  }
   .capture-orb {
     top: 0;
   }

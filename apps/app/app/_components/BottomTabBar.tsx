@@ -63,14 +63,16 @@ export function NavLink({ tab, active }: { tab: (typeof NAV_TABS)[number]; activ
         alignItems: 'center',
         justifyContent: 'center',
         gap: 2,
-        minHeight: 44,
+        minHeight: 48,
         textDecoration: 'none',
         position: 'relative',
         fontFamily: 'JetBrains Mono, monospace',
         fontSize: 9,
         letterSpacing: 0.5,
         textTransform: 'uppercase',
-        transition: 'color 0.16s ease-out',
+        WebkitTapHighlightColor: 'transparent',
+        transition: 'color 0.16s ease-out, transform 0.16s ease-out',
+        transform: active ? 'translateY(-1px)' : 'none',
       }}
     >
       {active && (
@@ -81,7 +83,7 @@ export function NavLink({ tab, active }: { tab: (typeof NAV_TABS)[number]; activ
         style={{
           fontSize: 20,
           color: active ? accent : 'var(--text-55)',
-          transform: active ? 'translateY(-1px)' : 'none',
+          transform: active ? 'translateY(-1px) scale(1.03)' : 'none',
           transition: 'color 0.16s ease-out, transform 0.16s ease-out',
         }}
       >

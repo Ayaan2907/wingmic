@@ -57,10 +57,15 @@ export function ChatThread() {
 
   return (
     <div
+      className="chat-scroll"
       style={{
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
+        minHeight: 0,
+        overflowY: 'auto',
+        overscrollBehavior: 'contain',
+        WebkitOverflowScrolling: 'touch',
         padding: '20px 16px var(--thread-scroll-pad, 200px)',
         maxWidth: 640,
         width: '100%',
@@ -1042,7 +1047,7 @@ export function UndoChip() {
       style={{
         position: 'fixed',
         left: '50%',
-        bottom: 180,
+        bottom: 'calc(var(--chat-composer-bottom, 72px) + 64px)',
         transform: 'translateX(-50%)',
         padding: '8px 14px',
         background: 'rgba(255,107,107,0.12)',
