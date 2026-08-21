@@ -3,14 +3,15 @@
 /**
  * OnboardingClient — /onboarding first-run flow (PR κ-onboarding).
  *
- * Four steps: (1) welcome, (2) first / last / linkedin url, (3) mic-permission
- * explainer (mock — getUserMedia waits until record in chat), (4) privacy
- * acknowledgement + "get started".
+ * Four steps: (1) welcome, (2) first / last / linkedin url / optional public
+ * calendar ics, (3) mic-permission explainer (mock — getUserMedia waits until
+ * record in chat), (4) privacy acknowledgement + "get started".
  *
  * Both "get started" and skip `await acknowledge.mutateAsync(...)` then
  * `router.push('/chat')`. Skip still acknowledges on purpose: a skip that left the
  * flag false would re-trigger the home gate forever. Skip may omit the profile;
- * "next" on the you-step requires first + last.
+ * "next" on the you-step requires first + last. An empty calendar is a skip —
+ * AppShell then prompts to add it in settings until one is saved.
  *
  * Full-viewport, renders no nav of its own — /onboarding is in AppShell's
  * CHROMELESS list (PR λ-shell). Colors via @/app/chat/_components/tokens.
@@ -20,6 +21,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc/client';
 import { normalizeLinkedInUrl } from '@/lib/imports';
+import { parseCalendarIcsUrl } from '@/lib/enrich/parseIcs';
 import { accent, second, third, blue, violet } from '@/app/chat/_components/tokens';
 
 const TOTAL_STEPS = 4;
@@ -36,7 +38,7 @@ const STEPS: { eyebrow: string; title: string; titleTwist: string; body: string 
     eyebrow: '◆ you',
     title: 'who you are,',
     titleTwist: 'in the graph.',
-    body: 'first, last, and an optional linkedin url. skip is fine — this is for you, not a login.',
+    body: 'first, last, optional linkedin, optional public calendar. skip the calendar and we will ask again in settings.',
   },
   {
     eyebrow: '◆ the mic',
@@ -67,11 +69,18 @@ const fieldStyle: React.CSSProperties = {
   outline: 'none',
 };
 
-function profilePayload(firstName: string, lastName: string, linkedinUrl: string) {
+function profilePayload(
+  firstName: string,
+  lastName: string,
+  linkedinUrl: string,
+  calendarIcsUrl: string,
+) {
+  const calendar = calendarIcsUrl.trim();
   return {
     firstName: firstName.trim() || undefined,
     lastName: lastName.trim() || undefined,
     linkedinUrl: linkedinUrl.trim() || undefined,
+    ...(calendar ? { calendarIcsUrl: calendar } : {}),
   };
 }
 
@@ -84,6 +93,7 @@ export default function OnboardingClient() {
   const [firstName, setFirstName] = React.useState('');
   const [lastName, setLastName] = React.useState('');
   const [linkedinUrl, setLinkedinUrl] = React.useState('');
+  const [calendarIcsUrl, setCalendarIcsUrl] = React.useState('');
 
   const finish = React.useCallback(async (mode: 'profile' | 'skip') => {
     if (leaving) return;
@@ -91,14 +101,16 @@ export default function OnboardingClient() {
     setError(null);
     try {
       await acknowledge.mutateAsync(
-        mode === 'skip' ? undefined : profilePayload(firstName, lastName, linkedinUrl),
+        mode === 'skip'
+          ? undefined
+          : profilePayload(firstName, lastName, linkedinUrl, calendarIcsUrl),
       );
       router.push('/chat');
     } catch {
       setLeaving(false);
       setError("couldn't save — try again");
     }
-  }, [acknowledge, router, leaving, firstName, lastName, linkedinUrl]);
+  }, [acknowledge, router, leaving, firstName, lastName, linkedinUrl, calendarIcsUrl]);
 
   const goNext = React.useCallback(() => {
     if (step === PROFILE_STEP) {
@@ -118,10 +130,14 @@ export default function OnboardingClient() {
         setError('linkedin url must be a linkedin.com profile');
         return;
       }
+      if (calendarIcsUrl.trim() && !parseCalendarIcsUrl(calendarIcsUrl)) {
+        setError('paste a public google calendar ics url');
+        return;
+      }
     }
     setError(null);
     setStep((s) => Math.min(TOTAL_STEPS - 1, s + 1));
-  }, [step, firstName, lastName, linkedinUrl]);
+  }, [step, firstName, lastName, linkedinUrl, calendarIcsUrl]);
 
   const current = STEPS[step];
   const isLast = step === TOTAL_STEPS - 1;
@@ -204,6 +220,20 @@ export default function OnboardingClient() {
                 onChange={(e) => setLinkedinUrl(e.target.value)}
                 placeholder="https://www.linkedin.com/in/you"
                 maxLength={300}
+                style={fieldStyle}
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span className="mono" style={{ fontSize: 11, letterSpacing: 1, color: 'var(--text-40)' }}>
+                public ics url
+              </span>
+              <input
+                type="url"
+                autoComplete="off"
+                value={calendarIcsUrl}
+                onChange={(e) => setCalendarIcsUrl(e.target.value)}
+                placeholder="https://calendar.google.com/calendar/ical/…/public/basic.ics"
+                maxLength={500}
                 style={fieldStyle}
               />
             </label>

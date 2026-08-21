@@ -1,5 +1,5 @@
 import { isBlockedExtractUrl, type WebSearchHit } from '@/lib/web-search';
-import { parseEventExternal, type EventExternalSource } from './parseEventExternal';
+import { parseEventExternal, type EventExternalSource } from '@wingmic/extractor';
 
 export type ParsedEventFields = {
   url: string | null;

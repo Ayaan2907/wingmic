@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import * as schema from '@wingmic/db/schema';
+import { parseCalendarIcsUrl } from '@/lib/enrich/parseIcs';
 
 // settings.get / settings.update — read + partial-write the caller's own
 // preference columns on `users`. Columns exist from the α-0 migration; no
@@ -15,6 +16,7 @@ const updateInput = z.object({
   linkerModelOverride: z.string().max(120).nullable().optional(),
   preferredMicDeviceId: z.string().max(200).nullable().optional(),
   asrLanguage: z.string().min(2).max(20).optional(),
+  calendarIcsUrl: z.string().max(500).nullable().optional(),
 });
 
 export const settingsRouter = router({
@@ -29,6 +31,7 @@ export const settingsRouter = router({
       preferredMicDeviceId: row.preferredMicDeviceId,
       asrLanguage: row.asrLanguage,
       acknowledgedPrivacy: row.acknowledgedPrivacy,
+      calendarIcsUrl: row.calendarIcsUrl ?? null,
     };
   }),
 
@@ -40,6 +43,20 @@ export const settingsRouter = router({
     if (input.linkerModelOverride !== undefined) patch.linkerModelOverride = input.linkerModelOverride;
     if (input.preferredMicDeviceId !== undefined) patch.preferredMicDeviceId = input.preferredMicDeviceId;
     if (input.asrLanguage !== undefined) patch.asrLanguage = input.asrLanguage;
+    if (input.calendarIcsUrl !== undefined) {
+      if (input.calendarIcsUrl === null || input.calendarIcsUrl === '') {
+        patch.calendarIcsUrl = null;
+      } else {
+        const parsed = parseCalendarIcsUrl(input.calendarIcsUrl);
+        if (!parsed) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'paste a public google calendar ics url',
+          });
+        }
+        patch.calendarIcsUrl = parsed;
+      }
+    }
 
     // Empty patch → no-op (drizzle `.set({})` would emit invalid SQL).
     if (Object.keys(patch).length > 0) {

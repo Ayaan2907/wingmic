@@ -17,7 +17,7 @@ vi.mock('../embeddings', () => ({
   cosine: vi.fn(() => 0),
 }));
 
-import { commit } from '../resolution';
+import { commit, matchLocalPerson } from '../resolution';
 
 const migrationsFolder = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -27,6 +27,74 @@ const dbPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   `wingmic-resolution-test-${randomUUID()}.db`,
 );
+
+describe('matchLocalPerson()', () => {
+  const entities = [
+    {
+      id: 'duplicate_a',
+      name: 'Jordan Lee',
+      aliases: [],
+      importSource: 'voice-capture',
+      embedding: null,
+    },
+    {
+      id: 'duplicate_b',
+      name: 'Jordan Lee',
+      aliases: [],
+      importSource: 'voice-capture',
+      embedding: null,
+    },
+  ] as unknown as schema.Entity[];
+
+  it.each([
+    {
+      label: 'email',
+      email: 'jordan@example.com',
+      linkedin: null,
+      emails: new Map([
+        ['duplicate_a', ['jordan@example.com']],
+        ['duplicate_b', ['jordan@example.com']],
+      ]),
+      linkedins: new Map<string, string[]>(),
+    },
+    {
+      label: 'LinkedIn URL',
+      email: null,
+      linkedin: 'https://linkedin.com/in/jordan-lee',
+      emails: new Map<string, string[]>(),
+      linkedins: new Map([
+        ['duplicate_a', ['https://www.linkedin.com/in/jordan-lee']],
+        ['duplicate_b', ['https://www.linkedin.com/in/jordan-lee']],
+      ]),
+    },
+  ])('does not select arbitrarily when a $label matches multiple people', ({
+    email,
+    linkedin,
+    emails,
+    linkedins,
+  }) => {
+    const match = matchLocalPerson(
+      {
+        name: 'Jordan Lee',
+        aliases: [],
+        role: null,
+        companyHint: null,
+        topics: [],
+        notes: null,
+        email,
+        linkedin,
+      },
+      entities,
+      [],
+      new Map(),
+      emails,
+      linkedins,
+      new Map(),
+    );
+
+    expect(match).toBeNull();
+  });
+});
 
 describe('commit() sourceInteractionId', () => {
   let db: ReturnType<typeof drizzle<typeof schema>>;
@@ -287,18 +355,18 @@ describe('commit() sourceInteractionId', () => {
   });
 
   it('reuses the person with a unique email when two same-name people exist', async () => {
-    const emailUserId = 'user_commit_dup_email';
+    const dupUserId = 'user_commit_dup_email';
     const now = Date.now();
     await client.execute({
       sql: `INSERT INTO user (id, email, email_verified, name, image, created_at, updated_at)
             VALUES (?, 'dup-email@example.com', 1, 'Jordan', null, ?, ?)`,
-      args: [emailUserId, now, now],
+      args: [dupUserId, now, now],
     });
     await client.execute({
       sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, import_source, embedding, created_at, updated_at)
             VALUES ('dup_email_a', ?, 'person', 'Jordan Lee', '[]', 'voice-capture', NULL, ?, ?),
                    ('dup_email_b', ?, 'person', 'Jordan Lee', '[]', 'voice-capture', NULL, ?, ?)`,
-      args: [emailUserId, now, now, emailUserId, now, now],
+      args: [dupUserId, now, now, dupUserId, now, now],
     });
     await client.execute({
       sql: `INSERT INTO entity_fact (id, entity_id, key, value, confidence, created_at)
@@ -327,7 +395,7 @@ describe('commit() sourceInteractionId', () => {
       },
       {
         db: db as never,
-        userId: emailUserId,
+        userId: dupUserId,
         transcript: 'email follow-up with Jordan',
         capturedAt: new Date(),
       },
@@ -405,6 +473,319 @@ describe('commit() sourceInteractionId', () => {
     expect(second.persons[0]!.entityId).not.toBe(first.entityIds[0]);
   });
 
+  it('reuses the selected person when two same-name people exist', async () => {
+    const bindUserId = 'user_commit_preferred_dup';
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO user (id, email, email_verified, name, image, created_at, updated_at)
+            VALUES (?, 'preferred-dup@example.com', 1, 'Ada', null, ?, ?)`,
+      args: [bindUserId, now, now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, import_source, embedding, created_at, updated_at)
+            VALUES ('pref_jordan_a', ?, 'person', 'Jordan Lee', '[]', 'voice-capture', NULL, ?, ?),
+                   ('pref_jordan_b', ?, 'person', 'Jordan Lee', '[]', 'voice-capture', NULL, ?, ?)`,
+      args: [bindUserId, now, now, bindUserId, now, now],
+    });
+
+    const result = await commit(
+      {
+        persons: [
+          {
+            name: 'Jordan Lee',
+            role: null,
+            companyHint: null,
+            topics: [],
+            notes: 'add to the one I just opened',
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId: bindUserId,
+        transcript: 'add to the one I just opened',
+        capturedAt: new Date(),
+        preferredEntityId: 'pref_jordan_a',
+      },
+    );
+
+    expect(result.newEntities).toBe(0);
+    expect(result.persons[0]!.created).toBe(false);
+    expect(result.persons[0]!.entityId).toBe('pref_jordan_a');
+  });
+
+  it('injects and links the preferred person when extraction returns none', async () => {
+    const bindUserId = 'user_commit_preferred_empty';
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO user (id, email, email_verified, name, image, created_at, updated_at)
+            VALUES (?, 'preferred-empty@example.com', 1, 'Ada', null, ?, ?)`,
+      args: [bindUserId, now, now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, import_source, embedding, created_at, updated_at)
+            VALUES ('pref_grace', ?, 'person', 'Grace Hopper', '[]', 'voice-capture', NULL, ?, ?)`,
+      args: [bindUserId, now, now],
+    });
+
+    const result = await commit(
+      {
+        persons: [],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId: bindUserId,
+        transcript: 'her linkedin is /in/gracehopper',
+        capturedAt: new Date(),
+        preferredEntityId: 'pref_grace',
+      },
+    );
+
+    expect(result.newEntities).toBe(0);
+    expect(result.matchedEntities).toBe(1);
+    expect(result.entityIds).toEqual(['pref_grace']);
+    expect(result.persons[0]!.created).toBe(false);
+
+    const notes = await db.query.entityFacts.findMany({
+      where: and(
+        eq(schema.entityFacts.entityId, 'pref_grace'),
+        eq(schema.entityFacts.key, 'note'),
+      ),
+    });
+    expect(notes.some((f) => f.value === 'her linkedin is /in/gracehopper')).toBe(true);
+
+    const linkedin = await db.query.entityFacts.findMany({
+      where: and(
+        eq(schema.entityFacts.entityId, 'pref_grace'),
+        eq(schema.entityFacts.key, 'linkedin'),
+      ),
+    });
+    expect(linkedin[0]?.value).toBe('https://www.linkedin.com/in/gracehopper');
+  });
+
+  it('does not force preferred onto a differently named unique person', async () => {
+    const bindUserId = 'user_commit_preferred_other';
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO user (id, email, email_verified, name, image, created_at, updated_at)
+            VALUES (?, 'preferred-other@example.com', 1, 'Ada', null, ?, ?)`,
+      args: [bindUserId, now, now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, import_source, embedding, created_at, updated_at)
+            VALUES ('pref_open_grace', ?, 'person', 'Grace Hopper', '[]', 'voice-capture', NULL, ?, ?),
+                   ('pref_named_ada', ?, 'person', 'Ada Lovelace', '[]', 'voice-capture', NULL, ?, ?)`,
+      args: [bindUserId, now, now, bindUserId, now, now],
+    });
+
+    const result = await commit(
+      {
+        persons: [
+          {
+            name: 'Ada Lovelace',
+            role: null,
+            companyHint: null,
+            topics: [],
+            notes: 'also met ada',
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId: bindUserId,
+        transcript: 'also met ada lovelace',
+        capturedAt: new Date(),
+        preferredEntityId: 'pref_open_grace',
+      },
+    );
+
+    expect(result.persons[0]!.entityId).toBe('pref_named_ada');
+    expect(result.persons[0]!.created).toBe(false);
+  });
+
+  it('writes parentInteractionId and threadRootId on a follow-up capture', async () => {
+    const bindUserId = 'user_commit_parent';
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO user (id, email, email_verified, name, image, created_at, updated_at)
+            VALUES (?, 'parent@example.com', 1, 'Ada', null, ?, ?)`,
+      args: [bindUserId, now, now],
+    });
+
+    const first = await commit(
+      {
+        persons: [
+          {
+            name: 'Grace Hopper',
+            role: null,
+            companyHint: null,
+            topics: [],
+            notes: 'first take',
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId: bindUserId,
+        transcript: 'met grace hopper',
+        capturedAt: new Date(),
+      },
+    );
+
+    const second = await commit(
+      {
+        persons: [
+          {
+            name: 'Grace Hopper',
+            role: null,
+            companyHint: null,
+            topics: [],
+            notes: 'linkedin follow-up',
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId: bindUserId,
+        transcript: 'her linkedin is /in/gracehopper',
+        capturedAt: new Date(),
+        parentInteractionId: first.interactionId,
+        threadRootId: first.interactionId,
+        preferredEntityId: first.entityIds[0],
+      },
+    );
+
+    const child = await db.query.interactions.findFirst({
+      where: eq(schema.interactions.id, second.interactionId),
+    });
+    expect(child?.parentInteractionId).toBe(first.interactionId);
+    expect(child?.threadRootId).toBe(first.interactionId);
+    expect(second.persons[0]!.entityId).toBe(first.entityIds[0]);
+  });
+
+  it('stamps a pasted LinkedIn URL on the unique person and skips url-token topics', async () => {
+    const bindUserId = 'user_commit_linkedin_url';
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO user (id, email, email_verified, name, image, created_at, updated_at)
+            VALUES (?, 'li-url@example.com', 1, 'Ada', null, ?, ?)`,
+      args: [bindUserId, now, now],
+    });
+
+    const first = await commit(
+      {
+        persons: [
+          {
+            name: 'Tanzila Sameen',
+            role: null,
+            companyHint: 'Noemai',
+            topics: ['novium'],
+            notes: 'met at salesforce event',
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [{ name: 'Noemai', domainHint: null, industry: [] }],
+        events: [],
+        topics: ['novium'],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId: bindUserId,
+        transcript: 'met Tanzila Sameen at Noemai',
+        capturedAt: new Date(),
+      },
+    );
+
+    const second = await commit(
+      {
+        persons: [
+          {
+            name: 'Tanzila Sameen',
+            role: null,
+            companyHint: null,
+            topics: ['https', 'linkedin', 'tanzeela-sameen'],
+            notes: null,
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [],
+        events: [],
+        topics: ['https', 'linkedin', 'tanzeela-sameen'],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId: bindUserId,
+        transcript: 'https://in.linkedin.com/in/tanzeela-sameen her linkedin',
+        capturedAt: new Date(),
+        parentInteractionId: first.interactionId,
+        threadRootId: first.interactionId,
+        preferredEntityId: first.entityIds[0],
+      },
+    );
+
+    expect(second.persons[0]!.entityId).toBe(first.entityIds[0]);
+    const linkedin = await db.query.entityFacts.findMany({
+      where: and(
+        eq(schema.entityFacts.entityId, first.entityIds[0]!),
+        eq(schema.entityFacts.key, 'linkedin'),
+      ),
+    });
+    expect(linkedin[0]?.value).toBe('https://www.linkedin.com/in/tanzeela-sameen');
+
+    const topicRows = await db.query.entityTopics.findMany({
+      where: eq(schema.entityTopics.sourceInteractionId, second.interactionId),
+    });
+    const topicIds = topicRows.map((t) => t.topicId);
+    const topics =
+      topicIds.length > 0
+        ? await db.query.topics.findMany()
+        : [];
+    const names = topics
+      .filter((t) => topicIds.includes(t.id))
+      .map((t) => t.name.toLowerCase());
+    expect(names).not.toContain('https');
+    expect(names).not.toContain('linkedin');
+    expect(names).not.toContain('tanzeela-sameen');
+  });
+
   it('leaves event dates blank when speech has no date hint', async () => {
     const result = await commit(
       {
@@ -427,6 +808,155 @@ describe('commit() sourceInteractionId', () => {
     });
     expect(event?.dateRangeStart).toBeNull();
     expect(event?.dateRangeEnd).toBeNull();
+  });
+
+  it('harvests a pasted luma url onto a new event and binds the person', async () => {
+    const result = await commit(
+      {
+        persons: [
+          {
+            name: 'Ada Lovelace',
+            role: null,
+            companyHint: null,
+            topics: ['https', 'luma'],
+            notes: null,
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [],
+        events: [],
+        topics: ['https', 'luma', 'ethdenver'],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId,
+        transcript: 'https://lu.ma/ethdenver met ada there',
+        capturedAt: new Date('2026-08-20T12:00:00Z'),
+      },
+    );
+    expect(result.eventIds).toHaveLength(1);
+    const event = await db.query.events.findFirst({
+      where: eq(schema.events.id, result.eventIds[0]!),
+    });
+    expect(event?.url).toBe('https://lu.ma/ethdenver');
+    expect(event?.externalSource).toBe('luma');
+    expect(event?.externalId).toBe('ethdenver');
+    const edge = await db.query.entityEvents.findFirst({
+      where: and(
+        eq(schema.entityEvents.entityId, result.entityIds[0]!),
+        eq(schema.entityEvents.eventId, result.eventIds[0]!),
+      ),
+    });
+    expect(edge).toBeTruthy();
+    const topicEdges = await db.query.entityTopics.findMany({
+      where: eq(schema.entityTopics.sourceInteractionId, result.interactionId),
+    });
+    const topicRows = await db.query.topics.findMany();
+    const topicNames = topicRows
+      .filter((topic) => topicEdges.some((edge) => edge.topicId === topic.id))
+      .map((topic) => topic.name);
+    expect(topicNames).not.toContain('https');
+    expect(topicNames).not.toContain('luma');
+  });
+
+  it('keeps distinct Google Calendar event ids as separate events', async () => {
+    const first = await commit(
+      {
+        persons: [],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId,
+        transcript: 'https://calendar.google.com/calendar/event?eid=ZXZlbnQtMQ',
+        capturedAt: new Date('2026-08-20T12:00:00Z'),
+      },
+    );
+    const second = await commit(
+      {
+        persons: [],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId,
+        transcript: 'https://calendar.google.com/calendar/event?eid=ZXZlbnQtMg',
+        capturedAt: new Date('2026-08-20T13:00:00Z'),
+      },
+    );
+
+    expect(second.eventIds[0]).not.toBe(first.eventIds[0]);
+    const calendarEvents = await db.query.events.findMany({
+      where: eq(schema.events.externalSource, 'web'),
+    });
+    expect(calendarEvents.map((event) => event.externalId)).toEqual(
+      expect.arrayContaining(['gcal:ZXZlbnQtMQ', 'gcal:ZXZlbnQtMg']),
+    );
+  });
+
+  it('inherits preferredEventId when the follow-up names no event', async () => {
+    const first = await commit(
+      {
+        persons: [
+          {
+            name: 'Ada Lovelace',
+            role: null,
+            companyHint: null,
+            topics: [],
+            notes: null,
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [],
+        events: [{ name: 'ETH Denver', dateHint: null, location: null }],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId,
+        transcript: 'met ada at eth denver',
+        capturedAt: new Date('2026-08-20T12:00:00Z'),
+      },
+    );
+    const second = await commit(
+      {
+        persons: [],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId,
+        transcript: 'attached a photo',
+        capturedAt: new Date('2026-08-20T12:05:00Z'),
+        preferredEntityId: first.entityIds[0],
+        preferredEventId: first.eventIds[0],
+        parentInteractionId: first.interactionId,
+        threadRootId: first.interactionId,
+      },
+    );
+    const edge = await db.query.entityEvents.findFirst({
+      where: and(
+        eq(schema.entityEvents.entityId, first.entityIds[0]!),
+        eq(schema.entityEvents.eventId, first.eventIds[0]!),
+      ),
+    });
+    expect(second.eventIds).toEqual(first.eventIds);
+    expect(edge).toBeTruthy();
   });
 
   afterAll(async () => {

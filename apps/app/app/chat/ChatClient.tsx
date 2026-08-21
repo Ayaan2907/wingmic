@@ -13,11 +13,12 @@
 // the bottom nav is global). On `recorder.ready`, the provider pushes
 // /chat so the user sees the bubble + extraction in the thread.
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react';
 import { useCapture } from '@/app/_components/CaptureProvider';
 import { ChatHeader } from './_components/ChatHeader';
 import { ChatThread, UndoChip } from './_components/ChatThread';
 import { ChatEntityRail } from './_components/ChatEntityRail';
+import { CameraCapture } from './_components/CameraCapture';
 import { TAB_BAR_HEIGHT_PX, accent } from './_components/tokens';
 import type { ChatInitialItem } from './_components/types';
 
@@ -28,8 +29,26 @@ interface ChatClientProps {
 }
 
 function ChatComposer() {
-  const { recorder, submitText } = useCapture();
+  const {
+    recorder,
+    submitText,
+    openTarget,
+    setOpenTarget,
+    openEvent,
+    setOpenEvent,
+    pendingAttachment,
+    attachmentBusy,
+    attachmentError,
+    photoBindChoices,
+    attachFiles,
+    clearAttachment,
+    choosePhotoBind,
+    choosePhotoUnassigned,
+  } = useCapture();
   const [text, setText] = useState('');
+  const [dropping, setDropping] = useState(false);
+  const pinInputRef = useRef<HTMLInputElement>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const hot =
     recorder.status === 'arming' ||
     recorder.status === 'recording' ||
@@ -40,18 +59,52 @@ function ChatComposer() {
   if (hot) return null;
 
   const micUnavailable = !recorder.supported;
+  const placeholder = micUnavailable
+    ? 'log a memo or ask — mic unavailable'
+    : openTarget
+      ? `add to ${openTarget.name.toLowerCase()} · or start a new memo`
+      : 'log a memo or ask — "who was the rust person?"';
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if ((!trimmed && !pendingAttachment) || photoBindChoices || attachmentBusy) return;
     void submitText(trimmed);
     setText('');
   }
 
+  function onDragOver(e: DragEvent) {
+    if (![...e.dataTransfer.types].includes('Files')) return;
+    e.preventDefault();
+    setDropping(true);
+  }
+
+  function onDragLeave() {
+    setDropping(false);
+  }
+
+  function onDrop(e: DragEvent) {
+    e.preventDefault();
+    setDropping(false);
+    void attachFiles(e.dataTransfer.files);
+  }
+
   return (
+    <>
+    {cameraOpen ? (
+      <CameraCapture
+        onCapture={(file) => {
+          setCameraOpen(false);
+          void attachFiles([file]);
+        }}
+        onCancel={() => setCameraOpen(false)}
+      />
+    ) : null}
     <form
       onSubmit={onSubmit}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
       data-testid="chat-composer"
       style={{
         position: 'fixed',
@@ -68,6 +121,186 @@ function ChatComposer() {
         pointerEvents: 'none',
       }}
     >
+      {photoBindChoices && photoBindChoices.length > 1 ? (
+        <div
+          data-testid="photo-bind-picker"
+          style={{
+            marginBottom: 8,
+            padding: 10,
+            borderRadius: 12,
+            border: `1px solid ${accent}66`,
+            background: '#141414',
+            pointerEvents: 'auto',
+          }}
+        >
+          <div className="mono" style={{ fontSize: 10, color: 'var(--text-55)', marginBottom: 8 }}>
+            who is this photo for?
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {photoBindChoices.map((choice) => (
+              <button
+                key={choice.entityId}
+                type="button"
+                onClick={() => choosePhotoBind(choice)}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 999,
+                  border: '1px solid var(--border-mid)',
+                  background: 'transparent',
+                  color: accent,
+                  cursor: 'pointer',
+                  font: '700 11px Inter, system-ui, sans-serif',
+                }}
+              >
+                {choice.name}
+              </button>
+            ))}
+            <button
+              type="button"
+              aria-label="leave photo unassigned"
+              onClick={choosePhotoUnassigned}
+              style={{
+                padding: '4px 10px',
+                borderRadius: 999,
+                border: '1px solid var(--border-mid)',
+                background: 'transparent',
+                color: 'var(--text-70)',
+                cursor: 'pointer',
+                font: '700 11px Inter, system-ui, sans-serif',
+              }}
+            >
+              unassigned
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {attachmentError ? (
+        <div
+          role="alert"
+          className="mono"
+          style={{
+            marginBottom: 8,
+            color: 'var(--coral, #ff6b6b)',
+            fontSize: 11,
+            pointerEvents: 'auto',
+          }}
+        >
+          {attachmentError}
+        </div>
+      ) : null}
+      {openTarget ? (
+        <div
+          data-testid="open-capture-chip"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            marginBottom: 8,
+            padding: '6px 10px',
+            borderRadius: 8,
+            border: `1px solid ${accent}66`,
+            background: `${accent}14`,
+            pointerEvents: 'auto',
+          }}
+        >
+          <span className="mono" style={{ fontSize: 11, color: accent, letterSpacing: 0.3 }}>
+            adding to {openTarget.name.toLowerCase()}
+          </span>
+          <button
+            type="button"
+            aria-label="clear selected person"
+            onClick={() => setOpenTarget(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-55)',
+              cursor: 'pointer',
+              font: '700 12px Inter, system-ui, sans-serif',
+            }}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+      {openEvent ? (
+        <div
+          data-testid="open-event-chip"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            marginBottom: 8,
+            padding: '6px 10px',
+            borderRadius: 8,
+            border: `1px solid ${accent}66`,
+            background: `${accent}14`,
+            pointerEvents: 'auto',
+          }}
+        >
+          <span className="mono" style={{ fontSize: 11, color: accent, letterSpacing: 0.3 }}>
+            {openEvent.name.toLowerCase()} · open
+          </span>
+          <button
+            type="button"
+            aria-label="clear open event"
+            onClick={() => setOpenEvent(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-55)',
+              cursor: 'pointer',
+              font: '700 12px Inter, system-ui, sans-serif',
+            }}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+      {pendingAttachment ? (
+        <div
+          data-testid="composer-attachment-preview"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            marginBottom: 8,
+            pointerEvents: 'auto',
+          }}
+        >
+          {/* data-url preview; next/image does not take in-memory jpeg */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            alt="attached photo"
+            src={`data:image/jpeg;base64,${pendingAttachment.jpegBase64}`}
+            style={{
+              width: 44,
+              height: 44,
+              objectFit: 'cover',
+              borderRadius: 8,
+              border: '1px solid var(--border-mid)',
+            }}
+          />
+          <span className="mono" style={{ fontSize: 10, color: 'var(--text-55)', flex: 1 }}>
+            {pendingAttachment.qrText ? 'qr ready' : 'photo ready'}
+          </span>
+          <button
+            type="button"
+            aria-label="remove photo"
+            onClick={() => clearAttachment()}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-55)',
+              cursor: 'pointer',
+              font: '700 12px Inter, system-ui, sans-serif',
+            }}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
       <div
         style={{
           display: 'flex',
@@ -76,18 +309,65 @@ function ChatComposer() {
           padding: '10px 12px',
           borderRadius: 999,
           background: '#141414',
-          border: '1px solid var(--border-mid)',
+          border: dropping ? `1.5px solid ${accent}` : '1px solid var(--border-mid)',
           pointerEvents: 'auto',
         }}
       >
         <input
+          ref={pinInputRef}
+          type="file"
+          accept="image/*"
+          hidden
+          data-testid="composer-pin-input"
+          onChange={(e) => {
+            void attachFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
+        <button
+          type="button"
+          data-testid="composer-attach-pin"
+          aria-label="attach photo"
+          onClick={() => pinInputRef.current?.click()}
+          style={{
+            width: 28,
+            height: 28,
+            padding: 0,
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--text-55)',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <PinIcon />
+        </button>
+        <button
+          type="button"
+          data-testid="composer-attach-camera"
+          aria-label="take photo"
+          onClick={() => setCameraOpen(true)}
+          style={{
+            width: 28,
+            height: 28,
+            padding: 0,
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--text-55)',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <CameraIcon />
+        </button>
+        <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={
-            micUnavailable
-              ? 'log a memo or ask — mic unavailable'
-              : 'log a memo or ask — "who was the rust person?"'
-          }
+          placeholder={placeholder}
           aria-label="chat composer"
           style={{
             flex: 1,
@@ -101,6 +381,7 @@ function ChatComposer() {
         <button
           type="submit"
           className="mono"
+          disabled={Boolean(photoBindChoices) || attachmentBusy}
           style={{
             padding: '6px 12px',
             borderRadius: 999,
@@ -109,13 +390,43 @@ function ChatComposer() {
             boxShadow: '2px 2px 0 #000',
             fontSize: 11,
             fontWeight: 700,
-            cursor: 'pointer',
+            cursor: photoBindChoices || attachmentBusy ? 'default' : 'pointer',
+            opacity: photoBindChoices || attachmentBusy ? 0.5 : 1,
           }}
         >
           commit →
         </button>
       </div>
     </form>
+    </>
+  );
+}
+
+function PinIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M16 12v5.5a4 4 0 0 1-8 0V7a3 3 0 0 1 6 0v9.5a2 2 0 0 1-4 0V8"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M8 8 9.2 6.2A1 1 0 0 1 10 6h4a1 1 0 0 1 .8.4L16 8h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h3Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="14" r="3" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
   );
 }
 

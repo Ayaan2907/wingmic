@@ -32,7 +32,8 @@ describe('onboarding router', () => {
         linker_model_override TEXT,
         preferred_mic_device_id TEXT,
         asr_language TEXT NOT NULL DEFAULT 'en-US',
-        acknowledged_privacy INTEGER NOT NULL DEFAULT 0
+        acknowledged_privacy INTEGER NOT NULL DEFAULT 0,
+        calendar_ics_url TEXT
       );
       CREATE TABLE identity_claim (
         id TEXT PRIMARY KEY,
@@ -148,6 +149,22 @@ describe('onboarding router', () => {
     expect(String(claims.rows[0]!.value)).toBe('https://www.linkedin.com/in/ada-lovelace-3');
     expect(Number(claims.rows[0]!.verified)).toBe(0);
     expect(Number(claims.rows[0]!.public)).toBe(0);
+  });
+
+  it('persists a public calendar ics url on acknowledge', async () => {
+    const ics =
+      'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics';
+    await caller(userId).acknowledge({ calendarIcsUrl: ics });
+    expect((await userRow(userId))?.calendarIcsUrl).toBe(ics);
+  });
+
+  it('rejects a secret private-token calendar ics url on acknowledge', async () => {
+    await expect(
+      caller(userId).acknowledge({
+        calendarIcsUrl:
+          'https://calendar.google.com/calendar/ical/ada%40example.com/private-abc/basic.ics',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
   it('does not copy A profile onto B', async () => {

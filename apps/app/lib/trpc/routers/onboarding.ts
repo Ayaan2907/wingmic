@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server';
 import { router, protectedProcedure } from '../trpc';
 import * as schema from '@wingmic/db/schema';
 import { normalizeLinkedInUrl } from '@/lib/imports';
+import { parseCalendarIcsUrl } from '@/lib/enrich/parseIcs';
 import { webSearchProviderFromEnv } from '@/lib/web-search';
 import { enrichOwnerAfterLinkedin } from '@/lib/enrich/enrichOwner';
 import { scheduleEnrich } from '@/lib/enrich/schedule';
@@ -22,10 +23,18 @@ const optionalLinkedIn = z
   .optional()
   .transform((s) => (s && s.length > 0 ? s : undefined));
 
+const optionalCalendar = z
+  .string()
+  .trim()
+  .max(500)
+  .optional()
+  .transform((s) => (s && s.length > 0 ? s : undefined));
+
 const acknowledgeInput = z.object({
   firstName: optionalLabel,
   lastName: optionalLabel,
   linkedinUrl: optionalLinkedIn,
+  calendarIcsUrl: optionalCalendar,
 });
 
 function joinDisplayName(first?: string, last?: string): string | null {
@@ -65,12 +74,24 @@ export const onboardingRouter = router({
       }
     }
 
+    let calendarIcsUrl: string | null = null;
+    if (input?.calendarIcsUrl) {
+      calendarIcsUrl = parseCalendarIcsUrl(input.calendarIcsUrl);
+      if (!calendarIcsUrl) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'paste a public google calendar ics url',
+        });
+      }
+    }
+
     await ctx.db.transaction(async (tx) => {
       await tx
         .update(schema.users)
         .set({
           acknowledgedPrivacy: true,
           ...(displayName ? { name: displayName } : {}),
+          ...(calendarIcsUrl ? { calendarIcsUrl } : {}),
         })
         .where(eq(schema.users.id, ctx.user.id));
 

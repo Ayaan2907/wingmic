@@ -9,10 +9,13 @@ type Settings = {
   preferredMicDeviceId: string | null;
   asrLanguage: string;
   acknowledgedPrivacy: boolean;
+  calendarIcsUrl: string | null;
 };
 
 let getData: Settings | undefined;
 const mutateSpy = vi.fn();
+const invalidateSettingsSpy = vi.fn(async () => {});
+let mutationOptions: any;
 
 const routerPush = vi.fn();
 const signOut = vi.fn(async () => {});
@@ -35,9 +38,17 @@ vi.mock('next/link', () => ({
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
+    useUtils: () => ({
+      settings: { get: { invalidate: invalidateSettingsSpy } },
+    }),
     settings: {
       get: { useQuery: () => ({ data: getData, isLoading: getData === undefined }) },
-      update: { useMutation: () => ({ mutate: mutateSpy, isPending: false }) },
+      update: {
+        useMutation: (options: any) => {
+          mutationOptions = options;
+          return { mutate: mutateSpy, isPending: false };
+        },
+      },
     },
   },
 }));
@@ -51,6 +62,7 @@ function fixture(over: Partial<Settings> = {}): Settings {
     preferredMicDeviceId: null,
     asrLanguage: 'en-US',
     acknowledgedPrivacy: false,
+    calendarIcsUrl: null,
     ...over,
   };
 }
@@ -70,6 +82,8 @@ describe('SettingsClient', () => {
   beforeEach(() => {
     getData = fixture();
     mutateSpy.mockClear();
+    invalidateSettingsSpy.mockClear();
+    mutationOptions = undefined;
     routerPush.mockClear();
     signOut.mockClear();
   });
@@ -134,6 +148,77 @@ describe('SettingsClient', () => {
     fireEvent.change(input, { target: { value: 'x' } });
     fireEvent.blur(input);
     expect(mutateSpy).not.toHaveBeenCalled();
+  });
+
+  it('explains how to export a public calendar feed', () => {
+    renderSettings();
+    const section = screen.getByTestId('settings-calendars');
+    expect(section.textContent).toMatch(/export a public calendar/i);
+    expect(section.textContent).toMatch(/make available to public/i);
+    expect(section.textContent).not.toMatch(/luma/i);
+    expect(section.textContent).not.toMatch(/secret/i);
+  });
+
+  it('puts an eye control next to the calendar url that the feed stays private', () => {
+    renderSettings();
+    const section = screen.getByTestId('settings-calendars');
+    expect(screen.getByRole('button', { name: /private/i })).toBeTruthy();
+    expect(section.textContent).toMatch(/publicly available events/i);
+  });
+
+  it('prompts to paste a public calendar when onboarding skipped it', () => {
+    renderSettings({ calendarIcsUrl: null });
+    expect(screen.getByTestId('settings-calendar-nudge').textContent).toMatch(
+      /paste a public ics url/i,
+    );
+  });
+
+  it('drops the settings calendar nudge after a public ics url is saved', () => {
+    renderSettings({
+      calendarIcsUrl:
+        'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics',
+    });
+    expect(screen.queryByTestId('settings-calendar-nudge')).toBeNull();
+  });
+
+  it('blurring a google calendar ics url persists it', () => {
+    renderSettings();
+    const input = screen.getByPlaceholderText(/public\/basic\.ics/i) as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        value:
+          'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics',
+      },
+    });
+    fireEvent.blur(input);
+    expect(mutateSpy).toHaveBeenCalledWith({
+      calendarIcsUrl:
+        'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics',
+    });
+  });
+
+  it('restores the saved calendar after a private ics url is entered', () => {
+    const saved =
+      'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics';
+    renderSettings({ calendarIcsUrl: saved });
+    const input = screen.getByPlaceholderText(/public\/basic\.ics/i) as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        value:
+          'https://calendar.google.com/calendar/ical/ada%40example.com/private-token/basic.ics',
+      },
+    });
+    fireEvent.blur(input);
+    expect(input.value).toBe(saved);
+    expect(screen.getByRole('alert').textContent).toMatch(/public google calendar ics url/i);
+    expect(mutateSpy).not.toHaveBeenCalled();
+  });
+
+  it('invalidates settings.get after a successful update', async () => {
+    renderSettings();
+    fireEvent.click(screen.getByRole('radio', { name: /forever/i }));
+    await mutationOptions.onSuccess();
+    expect(invalidateSettingsSpy).toHaveBeenCalledTimes(1);
   });
 
   it('signs out from the account section and returns to sign-in', async () => {

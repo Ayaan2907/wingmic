@@ -277,6 +277,8 @@ Runs in `apps/app`, same as capture.
 For each PersonCandidate from the extractor:
   Pull all entities owned by this user (deletedAt IS NULL).
   Match in strict order (same owner only):
+    0. explicit preferredEntityId on person 0 (chat follow-up bind), unless
+       that candidate uniquely names someone else via email / LinkedIn / exact name
     1. unique email (trim + lowercase)
     2. unique normalized LinkedIn (/in/ profile)
     3. colliding email/LinkedIn → best fuzzy score among hits (never create)
@@ -284,9 +286,25 @@ For each PersonCandidate from the extractor:
     5. exact normalized name, set size === 1 (aliases count)
     6. fuzzy resolvePerson; link iff score ≥ 0.85
 
+  Empty extractor persons + preferredEntityId injects a candidate from the
+  opened person so notes/facts still stamp on them.
+
+  Follow-up captures write parentInteractionId + threadRootId
+  (parent.threadRootId ?? parent.id). Append-only; parent transcript is not mutated.
+
+  Spoken or pasted LinkedIn /in/{handle} URLs are harvested before topic
+  ranking and stored as a linkedin fact on the bound person. URL tokens
+  (https, linkedin, the handle) are not topics. We never fetch LinkedIn HTML.
+
+  Spoken or pasted Luma / Partiful / Google Calendar event URLs become a
+  canonical event (url + external_source/id). Follow-up memos inherit an
+  open event session until dismissed. Photos persist on
+  `interaction_attachment` and render on person / company / event capture
+  lists. A public Google Calendar iCal URL in settings can fill dates when
+  the page is login-walled.
+
   normalizePersonName = lowercase tokens, punctuation stripped, space-joined.
   Partial names ("Jordan" vs "Jordan Lee") do NOT auto-link.
-
   resolvePerson score (when fuzzy runs):
     nameScore = max(nameSimilarity(cand.name, entity.name), alias scores)
     embedScore = cosine(entity.embedding, cand.embedding)

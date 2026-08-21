@@ -40,6 +40,11 @@ export const EventCandidate = z.object({
     .nullable()
     .describe('ISO date or relative descriptor like "yesterday" or "last tuesday"'),
   location: z.string().nullable(),
+  url: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('Luma / Partiful / Google Calendar / official event URL if spoken or pasted'),
 });
 export type EventCandidate = z.infer<typeof EventCandidate>;
 

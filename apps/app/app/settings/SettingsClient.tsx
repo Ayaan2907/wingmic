@@ -22,6 +22,7 @@ import { useRouter } from 'next/navigation';
 import { signOut } from '@/lib/auth-client';
 import { trpc } from '@/lib/trpc/client';
 import { accent } from '@/app/chat/_components/tokens';
+import { parseCalendarIcsUrl } from '@/lib/enrich/parseIcs';
 
 type RetentionMode = '24h' | '7d' | 'forever' | 'never';
 
@@ -31,6 +32,7 @@ export type SettingsInitialData = {
   preferredMicDeviceId: string | null;
   asrLanguage: string;
   acknowledgedPrivacy: boolean;
+  calendarIcsUrl: string | null;
 };
 
 const RETENTION_OPTIONS: { value: RetentionMode; label: string; hint: string }[] = [
@@ -82,9 +84,13 @@ export default function SettingsClient({
   initialSettings: SettingsInitialData;
 }) {
   const { data } = trpc.settings.get.useQuery(undefined, { initialData: initialSettings });
-  const update = trpc.settings.update.useMutation();
+  const utils = trpc.useUtils();
+  const update = trpc.settings.update.useMutation({
+    onSuccess: () => utils.settings.get.invalidate(),
+  });
   const router = useRouter();
   const [signingOut, setSigningOut] = React.useState(false);
+  const [calendarError, setCalendarError] = React.useState<string | null>(null);
 
   // Optimistic local mirror — seeded from server prefetch + query cache.
   const [local, setLocal] = React.useState<{
@@ -92,11 +98,13 @@ export default function SettingsClient({
     linkerModelOverride: string;
     preferredMicDeviceId: string;
     asrLanguage: string;
+    calendarIcsUrl: string;
   }>(() => ({
     audioRetentionMode: initialSettings.audioRetentionMode,
     linkerModelOverride: initialSettings.linkerModelOverride ?? '',
     preferredMicDeviceId: initialSettings.preferredMicDeviceId ?? '',
     asrLanguage: initialSettings.asrLanguage,
+    calendarIcsUrl: initialSettings.calendarIcsUrl ?? '',
   }));
 
   React.useEffect(() => {
@@ -106,9 +114,15 @@ export default function SettingsClient({
         linkerModelOverride: data.linkerModelOverride ?? '',
         preferredMicDeviceId: data.preferredMicDeviceId ?? '',
         asrLanguage: data.asrLanguage,
+        calendarIcsUrl: data.calendarIcsUrl ?? '',
       });
     }
   }, [data]);
+
+  React.useEffect(() => {
+    if (window.location.hash !== '#calendars') return;
+    document.getElementById('calendars')?.scrollIntoView({ block: 'start' });
+  }, []);
 
   if (!data) {
     return (
@@ -279,6 +293,96 @@ export default function SettingsClient({
           </label>
         </Section>
 
+        <Section title="calendars">
+          <div id="calendars" data-testid="settings-calendars" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {!local.calendarIcsUrl ? (
+              <p
+                data-testid="settings-calendar-nudge"
+                className="mono"
+                style={{ fontSize: 11, color: 'var(--text-55)', margin: 0, lineHeight: 1.5 }}
+              >
+                skipped during setup — paste a public ics url here.
+              </p>
+            ) : null}
+            <p style={{ fontSize: 13, color: 'var(--text-85)', margin: 0, lineHeight: 1.5 }}>
+              export a public calendar feed and paste the ics url. we only fetch events that
+              calendar already publishes.
+            </p>
+            <p className="mono" style={{ fontSize: 11, color: 'var(--text-40)', margin: 0, lineHeight: 1.5 }}>
+              google calendar: calendar settings → make available to public → integrate calendar →
+              copy the public address in ical format.
+            </p>
+            <div style={fieldRow}>
+              <label htmlFor="settings-calendar-ics" style={labelStyle}>
+                public ics url
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  id="settings-calendar-ics"
+                  style={{ ...textInput, flex: 1, minWidth: 0 }}
+                  value={local.calendarIcsUrl}
+                  placeholder="https://calendar.google.com/calendar/ical/…/public/basic.ics"
+                  autoComplete="off"
+                  onChange={(e) => setLocal((s) => (s ? { ...s, calendarIcsUrl: e.target.value } : s))}
+                  onBlur={(e) => {
+                    const value = e.target.value.trim();
+                    if (value && !parseCalendarIcsUrl(value)) {
+                      setLocal((s) => ({
+                        ...s,
+                        calendarIcsUrl: data.calendarIcsUrl ?? '',
+                      }));
+                      setCalendarError('paste a public google calendar ics url');
+                      return;
+                    }
+                    setCalendarError(null);
+                    update.mutate({ calendarIcsUrl: value || null });
+                  }}
+                />
+                <button
+                  type="button"
+                  data-testid="settings-calendar-privacy"
+                  aria-describedby="settings-calendar-privacy-note"
+                  aria-label="private. we only fetch publicly available events from your calendar."
+                  className="mono"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    flexShrink: 0,
+                    padding: '8px 10px',
+                    borderRadius: 10,
+                    border: '1px solid var(--border-soft)',
+                    background: 'transparent',
+                    color: 'var(--text-55)',
+                    fontSize: 11,
+                    letterSpacing: 0.6,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  <EyeIcon />
+                  private
+                </button>
+              </div>
+              <p
+                id="settings-calendar-privacy-note"
+                className="mono"
+                style={{ fontSize: 11, color: 'var(--text-40)', margin: 0, lineHeight: 1.5 }}
+              >
+                we only fetch publicly available events from your calendar.
+              </p>
+              {calendarError ? (
+                <p
+                  role="alert"
+                  className="mono"
+                  style={{ fontSize: 11, color: '#ff8b8b', margin: 0, lineHeight: 1.5 }}
+                >
+                  {calendarError}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </Section>
+
         {/* advanced ──────────────────────────────────────────── */}
         <Section title="advanced">
           <label style={fieldRow}>
@@ -340,5 +444,20 @@ export default function SettingsClient({
         </Section>
       </div>
     </main>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
   );
 }

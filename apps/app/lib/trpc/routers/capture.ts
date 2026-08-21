@@ -12,7 +12,84 @@ import { webSearchProviderFromEnv } from '@/lib/web-search';
 import { enrichPersonsAfterCommit } from '@/lib/enrich/enrichPersons';
 import { enrichEventsAfterCommit } from '@/lib/enrich/enrichEvents';
 import { scheduleEnrich } from '@/lib/enrich/schedule';
+import { MAX_ATTACHMENT_BYTES } from '@/lib/chat/compressImage';
+import { mergePhotoSignals } from '@/lib/capture/photoSignals';
+import { readPhotoSignals } from '@/lib/capture/readPhotoSignals';
 import * as schema from '@wingmic/db/schema';
+import type { DB } from '@wingmic/db';
+
+export type CaptureAttachment = {
+  id: string;
+  entityId: string | null;
+  jpegBase64: string;
+};
+
+type ValidatedCaptureAttachment = {
+  jpegBase64: string;
+  byteSize: number;
+};
+
+function validateCaptureAttachment(
+  jpegBase64: string | undefined,
+): ValidatedCaptureAttachment | undefined {
+  if (!jpegBase64) return undefined;
+  const canonicalBase64 =
+    /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+  if (!canonicalBase64.test(jpegBase64)) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'photo couldnt be read' });
+  }
+
+  const bytes = Buffer.from(jpegBase64, 'base64');
+  if (bytes.toString('base64') !== jpegBase64) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'photo couldnt be read' });
+  }
+  if (bytes.byteLength > MAX_ATTACHMENT_BYTES) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'photo is too large — try a closer crop' });
+  }
+  const isJpeg =
+    bytes.byteLength >= 32 &&
+    bytes[0] === 0xff &&
+    bytes[1] === 0xd8 &&
+    bytes[2] === 0xff &&
+    bytes[bytes.byteLength - 2] === 0xff &&
+    bytes[bytes.byteLength - 1] === 0xd9;
+  if (!isJpeg) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'photo couldnt be read' });
+  }
+
+  return { jpegBase64, byteSize: bytes.byteLength };
+}
+
+async function persistCaptureAttachment(args: {
+  db: DB;
+  interactionId: string;
+  entityId: string | null;
+  eventId: string | null;
+  attachment: ValidatedCaptureAttachment | undefined;
+}): Promise<CaptureAttachment[]> {
+  const existing = await args.db.query.interactionAttachments.findMany({
+    where: eq(schema.interactionAttachments.interactionId, args.interactionId),
+    columns: { id: true, entityId: true, jpegBase64: true },
+  });
+  if (existing.length > 0 || !args.attachment) return existing;
+
+  const inserted = await args.db
+    .insert(schema.interactionAttachments)
+    .values({
+      interactionId: args.interactionId,
+      entityId: args.entityId,
+      eventId: args.eventId,
+      mimeType: 'image/jpeg',
+      jpegBase64: args.attachment.jpegBase64,
+      byteSize: args.attachment.byteSize,
+    })
+    .returning({
+      id: schema.interactionAttachments.id,
+      entityId: schema.interactionAttachments.entityId,
+      jpegBase64: schema.interactionAttachments.jpegBase64,
+    });
+  return inserted;
+}
 
 export const captureRouter = router({
   /**
@@ -36,10 +113,23 @@ export const captureRouter = router({
         capturedAt: z.coerce.date().optional(),
         /** Client-generated capture id for retry idempotency (wired into interactions). */
         clientCaptureId: z.string().min(1).max(128).optional(),
+        /** Prior capture this memo replies to. Must be owned by the caller. */
+        parentInteractionId: z.string().min(1).max(128).optional(),
+        /** Person the user opened in chat. Must be an owned, living person. */
+        targetEntityId: z.string().min(1).max(128).optional(),
+        /** Event session still open in chat. */
+        targetEventId: z.string().min(1).max(128).optional(),
+        attachment: z
+          .object({
+            jpegBase64: z.string().min(32).max(600_000),
+          })
+          .optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        const attachment = validateCaptureAttachment(input.attachment?.jpegBase64);
+
         // Idempotent retry: same clientCaptureId → return existing interaction.
         if (input.clientCaptureId) {
           const existing = await ctx.db.query.interactions.findFirst({
@@ -66,6 +156,13 @@ export const captureRouter = router({
                 ...topicLinks.map((t) => t.entityId),
               ]),
             ];
+            const attachmentRows = await persistCaptureAttachment({
+              db: ctx.db,
+              interactionId: existing.id,
+              entityId: entityIds.length === 1 ? entityIds[0]! : null,
+              eventId: null,
+              attachment,
+            });
             return {
               extracted: {
                 persons: [],
@@ -77,11 +174,70 @@ export const captureRouter = router({
               interactionId: existing.id,
               entityIds,
               duplicate: true as const,
+              attachments: attachmentRows,
             };
           }
         }
 
-        const providerEntities = await transcribeEntities(input.transcript);
+        let parentInteractionId: string | undefined;
+        let threadRootId: string | undefined;
+        let preferredEntity: {
+          id: string;
+          name: string;
+          aliases: string[] | null;
+          importSource: string | null;
+        } | null = null;
+        let preferredEventId: string | undefined;
+
+        if (input.parentInteractionId) {
+          const parent = await ctx.db.query.interactions.findFirst({
+            where: and(
+              eq(schema.interactions.id, input.parentInteractionId),
+              eq(schema.interactions.userId, ctx.user.id),
+            ),
+            columns: { id: true, threadRootId: true, deletedAt: true },
+          });
+          if (!parent || parent.deletedAt) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'parent capture not found' });
+          }
+          parentInteractionId = parent.id;
+          threadRootId = parent.threadRootId ?? parent.id;
+        }
+
+        if (input.targetEntityId) {
+          const target = await ctx.db.query.entities.findFirst({
+            where: and(
+              eq(schema.entities.id, input.targetEntityId),
+              eq(schema.entities.ownerUserId, ctx.user.id),
+              eq(schema.entities.kind, 'person'),
+              isNull(schema.entities.deletedAt),
+            ),
+            columns: { id: true, name: true, aliases: true, importSource: true },
+          });
+          if (!target) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'target person not found' });
+          }
+          preferredEntity = target;
+        }
+
+        if (input.targetEventId) {
+          const targetEvent = await ctx.db.query.events.findFirst({
+            where: eq(schema.events.id, input.targetEventId),
+            columns: { id: true },
+          });
+          if (!targetEvent) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'target event not found' });
+          }
+          preferredEventId = targetEvent.id;
+        }
+
+        let transcript = input.transcript;
+        if (attachment) {
+          const signals = await readPhotoSignals(attachment.jpegBase64);
+          transcript = mergePhotoSignals(transcript, signals);
+        }
+
+        const providerEntities = await transcribeEntities(transcript);
 
         const recentEntities = await ctx.db.query.entities.findMany({
           where: and(
@@ -130,7 +286,11 @@ export const captureRouter = router({
           }
         }
 
-        const knownPersons = recentEntities.map((e) => {
+        const contactEntities = preferredEntity
+          ? [preferredEntity, ...recentEntities.filter((e) => e.id !== preferredEntity.id)]
+          : recentEntities;
+
+        const knownPersons = contactEntities.map((e) => {
           const aliases = Array.isArray(e.aliases) ? e.aliases.filter(Boolean) : [];
           const email = emailByEntity.get(e.id);
           const bits = [e.name, ...aliases.slice(0, 3)];
@@ -140,7 +300,7 @@ export const captureRouter = router({
         });
 
         const extracted = await extractHybrid({
-          transcript: input.transcript,
+          transcript,
           providerEntities,
           knownContacts: {
             persons: knownPersons,
@@ -151,9 +311,25 @@ export const captureRouter = router({
         const result = await commit(extracted, {
           db: ctx.db,
           userId: ctx.user.id,
-          transcript: input.transcript,
+          transcript,
           capturedAt: input.capturedAt ?? new Date(),
           clientCaptureId: input.clientCaptureId,
+          parentInteractionId,
+          threadRootId,
+          preferredEntityId: preferredEntity?.id,
+          preferredEventId,
+        });
+
+        const attachmentEntityId =
+          preferredEntity?.id ?? (result.entityIds.length === 1 ? result.entityIds[0]! : null);
+        const attachmentEventId =
+          preferredEventId ?? (result.eventIds.length === 1 ? result.eventIds[0]! : null);
+        const attachments = await persistCaptureAttachment({
+          db: ctx.db,
+          interactionId: result.interactionId,
+          entityId: attachmentEntityId,
+          eventId: attachmentEventId,
+          attachment,
         });
 
         // Acts insert is best-effort after commit() — graph already persisted.
@@ -242,7 +418,7 @@ export const captureRouter = router({
                         : null,
                     contextName: targetPerson?.companyHint ?? null,
                     seedBody: action.body,
-                    transcript: input.transcript,
+                    transcript,
                   });
                   return {
                     userId: ctx.user.id,
@@ -265,30 +441,38 @@ export const captureRouter = router({
           }
         }
 
+        const callerRow = await ctx.db.query.users.findFirst({
+          where: eq(schema.users.id, ctx.user.id),
+          columns: { calendarIcsUrl: true },
+        });
+        const calendarIcsUrl = callerRow?.calendarIcsUrl ?? null;
         const provider = webSearchProviderFromEnv();
-        if (provider) {
+        if (provider || calendarIcsUrl) {
           const capturedAt = input.capturedAt ?? new Date();
           scheduleEnrich(async () => {
             await Promise.all([
-              enrichPersonsAfterCommit({
-                db: ctx.db,
-                userId: ctx.user.id,
-                interactionId: result.interactionId,
-                extractedPersons: extracted.persons,
-                persons: result.persons,
-                provider,
-              }),
+              provider
+                ? enrichPersonsAfterCommit({
+                    db: ctx.db,
+                    userId: ctx.user.id,
+                    interactionId: result.interactionId,
+                    extractedPersons: extracted.persons,
+                    persons: result.persons,
+                    provider,
+                  })
+                : Promise.resolve(),
               enrichEventsAfterCommit({
                 db: ctx.db,
                 eventIds: result.eventIds,
                 capturedAt,
                 provider,
+                calendarIcsUrl,
               }),
             ]);
           });
         }
 
-        return { extracted, ...result };
+        return { extracted, ...result, attachments };
       } catch (err) {
         if (err instanceof ExtractionError) {
           throw new TRPCError({
