@@ -9,6 +9,7 @@
 // "stays full opacity" carve-out.
 
 import Link from 'next/link';
+import { memo } from 'react';
 import { useCapture } from '@/app/_components/CaptureProvider';
 import { AskExchange } from './AskPrimitives';
 import { PersonCaptureCard } from './PersonCaptureCard';
@@ -46,13 +47,9 @@ export function ChatThread() {
     recorder.status === 'cancel_armed' ||
     recorder.status === 'locked';
 
-  // β₁ thread-dimming: the message list dims while the mic is hot. The
-  // live phantom bubble lives in the global RecordingOverlay (above this
-  // surface in the layer stack), so the dim applies cleanly to the list.
-  const dimStyle: React.CSSProperties = {
-    opacity: recording ? 0.4 : 1,
+  // RecordingOverlay owns the dim layer globally — avoid double-dimming here.
+  const threadStyle: React.CSSProperties = {
     pointerEvents: recording ? 'none' : 'auto',
-    transition: 'opacity 180ms ease-out',
     display: 'flex',
     flexDirection: 'column',
     gap: 18,
@@ -60,22 +57,27 @@ export function ChatThread() {
 
   return (
     <div
+      className="chat-scroll"
       style={{
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        padding: '20px 16px 200px',
+        minHeight: 0,
+        overflowY: 'auto',
+        overscrollBehavior: 'contain',
+        WebkitOverflowScrolling: 'touch',
+        padding: '20px 16px var(--thread-scroll-pad, 200px)',
         maxWidth: 640,
         width: '100%',
         margin: '0 auto',
         gap: 18,
       }}
     >
-      <div style={dimStyle}>
+      <div style={threadStyle}>
         {visibleMessages.length === 0 && !recording && <WelcomeAgent />}
 
         {visibleMessages.map((m) => (
-          <MessageBubble
+          <MemoMessageBubble
             key={m.id}
             message={m}
             onRetry={() => retryBubble(m.id)}
@@ -331,6 +333,14 @@ function MessageBubble(props: MessageBubbleProps) {
   );
 }
 
+const MemoMessageBubble = memo(MessageBubble, (prev, next) => {
+  if (prev.message !== next.message) return false;
+  if (prev.pasteOpen !== next.pasteOpen) return false;
+  // Only the open paste editor cares about draft text churn.
+  if (prev.pasteOpen && prev.pasteDraft !== next.pasteDraft) return false;
+  return true;
+});
+
 // AgentReply — ack + extraction cards in-thread. Person rows stay here;
 // dump-to-/acts CTAs were removed (#146).
 function AgentReply({ message, result }: { message: ThreadMessage; result: GraphResult }) {
@@ -536,8 +546,7 @@ function FailedBubble(props: MessageBubbleProps) {
         padding: '14px 16px',
         borderRadius: 14,
         background: 'rgba(255,107,107,0.06)',
-        border: '1px solid rgba(255,107,107,0.25)',
-        borderLeft: `3px solid ${coral}`,
+        border: '1px solid rgba(255,107,107,0.35)',
         display: 'flex',
         flexDirection: 'column',
         gap: 10,
@@ -1038,7 +1047,7 @@ export function UndoChip() {
       style={{
         position: 'fixed',
         left: '50%',
-        bottom: 180,
+        bottom: 'calc(var(--chat-composer-bottom, 72px) + 64px)',
         transform: 'translateX(-50%)',
         padding: '8px 14px',
         background: 'rgba(255,107,107,0.12)',

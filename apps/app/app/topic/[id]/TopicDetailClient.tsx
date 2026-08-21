@@ -26,11 +26,17 @@ export interface TopicDetail {
 export default function TopicDetailClient({ detail }: { detail: TopicDetail }) {
   const router = useRouter();
 
-  const peopleCount = detail.related.filter((r) => r.kind === 'person').length;
-  const subText =
-    peopleCount > 0
-      ? `${peopleCount} ${peopleCount === 1 ? 'person' : 'people'} in your graph`
-      : 'topic in your graph';
+  const peopleCount = React.useMemo(
+    () => detail.related.filter((r) => r.kind === 'person').length,
+    [detail.related],
+  );
+  const subText = React.useMemo(
+    () =>
+      peopleCount > 0
+        ? `${peopleCount} ${peopleCount === 1 ? 'person' : 'people'} in your graph`
+        : 'topic in your graph',
+    [peopleCount],
+  );
 
   return (
     <EntityDetailScaffold

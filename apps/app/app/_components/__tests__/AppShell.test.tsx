@@ -74,12 +74,28 @@ describe('AppShell', () => {
     expect(chat?.getAttribute('aria-current')).toBe('page');
   });
 
+  it('keeps chat tab active on /search for seamless recall navigation', async () => {
+    mockPath('/search');
+    const { AppShell: Shell } = await import('../AppShell');
+    render(<Shell><div>s</div></Shell>);
+    const chat = screen.getByText('chat').closest('a');
+    expect(chat?.getAttribute('aria-current')).toBe('page');
+  });
+
   it('marks the active tab from the pathname', async () => {
     mockPath('/graph');
     const { AppShell: Shell } = await import('../AppShell');
     render(<Shell><div>g</div></Shell>);
     const graph = screen.getByText('graph').closest('a');
     expect(graph?.getAttribute('aria-current')).toBe('page');
+  });
+
+  it('keeps home tab active on /settings', async () => {
+    mockPath('/settings');
+    const { AppShell: Shell } = await import('../AppShell');
+    render(<Shell><div>settings</div></Shell>);
+    const home = screen.getByText('home').closest('a');
+    expect(home?.getAttribute('aria-current')).toBe('page');
   });
 
   it('renders NO nav chrome on /signin and /onboarding', async () => {

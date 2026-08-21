@@ -51,7 +51,15 @@ const labelStyle: React.CSSProperties = {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section style={{ marginBottom: 28 }}>
+    <section
+      style={{
+        marginBottom: 20,
+        padding: '14px 14px 12px',
+        borderRadius: 14,
+        border: '1px solid var(--border-soft)',
+        background: 'var(--surface-1)',
+      }}
+    >
       <h2 className="mono" style={{ ...labelStyle, margin: '0 0 12px' }}>
         {title}
       </h2>
@@ -69,10 +77,11 @@ const fieldRow: React.CSSProperties = {
 const textInput: React.CSSProperties = {
   background: 'var(--bg-elev, rgba(255,255,255,0.04))',
   border: '1px solid var(--border-soft)',
-  borderRadius: 10,
+  borderRadius: 12,
+  minHeight: 44,
   padding: '10px 12px',
   color: 'var(--ink)',
-  fontSize: 13,
+  fontSize: 14,
   fontFamily: 'inherit',
 };
 
@@ -91,6 +100,7 @@ export default function SettingsClient({
   const router = useRouter();
   const [signingOut, setSigningOut] = React.useState(false);
   const [calendarError, setCalendarError] = React.useState<string | null>(null);
+  const [calendarPrivacyOpen, setCalendarPrivacyOpen] = React.useState(false);
 
   // Optimistic local mirror — seeded from server prefetch + query cache.
   const [local, setLocal] = React.useState<{
@@ -139,7 +149,9 @@ export default function SettingsClient({
 
   const setRetention = (value: RetentionMode) => {
     setLocal((s) => (s ? { ...s, audioRetentionMode: value } : s));
-    update.mutate({ audioRetentionMode: value });
+    if (data.audioRetentionMode !== value) {
+      update.mutate({ audioRetentionMode: value });
+    }
   };
 
   return (
@@ -152,30 +164,24 @@ export default function SettingsClient({
       data-screen="settings"
     >
       <header
+        className="surface-header"
         style={{
-          padding: '14px 20px',
-          borderBottom: '1px solid var(--border-soft)',
-          position: 'sticky',
-          top: 0,
-          background: 'rgba(10,10,10,0.85)',
-          backdropFilter: 'blur(20px)',
-          zIndex: 30,
+          padding: '14px 16px',
         }}
       >
         <span
           className="mono"
-          style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.5, color: 'var(--ink)' }}
+          style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.3, color: 'var(--ink)' }}
         >
           settings
         </span>
       </header>
 
       <div
+        className="surface-wrap surface-wrap-compact"
         style={{
-          padding: '24px 20px 64px',
-          maxWidth: 640,
-          width: '100%',
-          margin: '0 auto',
+          paddingTop: 18,
+          paddingBottom: 64,
           boxSizing: 'border-box',
         }}
       >
@@ -201,8 +207,9 @@ export default function SettingsClient({
             className="mono"
             style={{
               alignSelf: 'flex-start',
+              minHeight: 44,
               padding: '8px 14px',
-              borderRadius: 10,
+              borderRadius: 12,
               border: '1px solid var(--border-soft)',
               background: 'transparent',
               color: 'var(--ink)',
@@ -228,6 +235,7 @@ export default function SettingsClient({
                     display: 'flex',
                     alignItems: 'center',
                     gap: 12,
+                    minHeight: 48,
                     padding: '12px 14px',
                     borderRadius: 12,
                     cursor: 'pointer',
@@ -275,7 +283,12 @@ export default function SettingsClient({
               value={local.preferredMicDeviceId}
               placeholder="default"
               onChange={(e) => setLocal((s) => (s ? { ...s, preferredMicDeviceId: e.target.value } : s))}
-              onBlur={(e) => update.mutate({ preferredMicDeviceId: e.target.value || null })}
+              onBlur={(e) => {
+                const value = e.target.value || null;
+                if (value !== data.preferredMicDeviceId) {
+                  update.mutate({ preferredMicDeviceId: value });
+                }
+              }}
             />
           </label>
           <label style={fieldRow}>
@@ -287,7 +300,9 @@ export default function SettingsClient({
               onChange={(e) => setLocal((s) => (s ? { ...s, asrLanguage: e.target.value } : s))}
               onBlur={(e) => {
                 const v = e.target.value.trim();
-                if (v.length >= 2) update.mutate({ asrLanguage: v });
+                if (v.length >= 2 && v !== data.asrLanguage) {
+                  update.mutate({ asrLanguage: v });
+                }
               }}
             />
           </label>
@@ -335,22 +350,29 @@ export default function SettingsClient({
                       return;
                     }
                     setCalendarError(null);
-                    update.mutate({ calendarIcsUrl: value || null });
+                    const nextValue = value || null;
+                    if (nextValue !== data.calendarIcsUrl) {
+                      update.mutate({ calendarIcsUrl: nextValue });
+                    }
                   }}
                 />
                 <button
                   type="button"
                   data-testid="settings-calendar-privacy"
                   aria-describedby="settings-calendar-privacy-note"
-                  aria-label="private. we only fetch publicly available events from your calendar."
+                  aria-expanded={calendarPrivacyOpen}
+                  aria-controls="settings-calendar-privacy-note"
+                  aria-label="private. tap for privacy details."
+                  onClick={() => setCalendarPrivacyOpen((prev) => !prev)}
                   className="mono"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 6,
                     flexShrink: 0,
+                    minHeight: 44,
                     padding: '8px 10px',
-                    borderRadius: 10,
+                    borderRadius: 12,
                     border: '1px solid var(--border-soft)',
                     background: 'transparent',
                     color: 'var(--text-55)',
@@ -366,6 +388,7 @@ export default function SettingsClient({
               <p
                 id="settings-calendar-privacy-note"
                 className="mono"
+                hidden={!calendarPrivacyOpen}
                 style={{ fontSize: 11, color: 'var(--text-40)', margin: 0, lineHeight: 1.5 }}
               >
                 we only fetch publicly available events from your calendar.
@@ -392,7 +415,12 @@ export default function SettingsClient({
               value={local.linkerModelOverride}
               placeholder="default model"
               onChange={(e) => setLocal((s) => (s ? { ...s, linkerModelOverride: e.target.value } : s))}
-              onBlur={(e) => update.mutate({ linkerModelOverride: e.target.value || null })}
+              onBlur={(e) => {
+                const value = e.target.value || null;
+                if (value !== data.linkerModelOverride) {
+                  update.mutate({ linkerModelOverride: value });
+                }
+              }}
             />
           </label>
         </Section>
