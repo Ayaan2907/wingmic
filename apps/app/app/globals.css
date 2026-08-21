@@ -306,11 +306,17 @@ a {
 .graph-shell .graph-surface {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
-  max-height: 100dvh;
+  min-height: calc(100dvh - 110px);
+  max-height: calc(100dvh - 110px);
   overflow: hidden;
   background: var(--bg-page);
   color: var(--ink);
+}
+@media (min-width: 1120px) {
+  .graph-shell .graph-surface {
+    min-height: 100dvh;
+    max-height: 100dvh;
+  }
 }
 .graph-toolbar {
   flex-shrink: 0;
