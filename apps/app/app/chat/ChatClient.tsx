@@ -93,9 +93,9 @@ function ChatComposer() {
     <>
     {cameraOpen ? (
       <CameraCapture
-        onCapture={(file) => {
+        onCapture={(file, qrText) => {
           setCameraOpen(false);
-          void attachFiles([file]);
+          void attachFiles([file], qrText !== undefined ? { qrText } : {});
         }}
         onCancel={() => setCameraOpen(false)}
       />

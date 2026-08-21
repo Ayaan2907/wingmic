@@ -1,9 +1,15 @@
+import { readQrFromFile } from './readQr';
+
 /** Client-side JPEG cap for chat attachments. Vision / QR stay a later slice. */
 export const MAX_ATTACHMENT_BYTES = 400_000;
 
 export type CompressedImage = {
   jpegBase64: string;
   byteSize: number;
+  qrText?: string | null;
+};
+
+export type CompressImageOptions = {
   qrText?: string | null;
 };
 
@@ -16,36 +22,20 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-type BarcodeDetectorLike = {
-  detect: (source: ImageBitmap) => Promise<Array<{ rawValue: string }>>;
-};
-
-async function readQrText(file: File): Promise<string | null> {
-  const Detector = (
-    globalThis as {
-      BarcodeDetector?: new (opts: { formats: string[] }) => BarcodeDetectorLike;
-    }
-  ).BarcodeDetector;
-  if (!Detector || typeof createImageBitmap !== 'function') return null;
-  try {
-    const bitmap = await createImageBitmap(file);
-    const codes = await new Detector({ formats: ['qr_code'] }).detect(bitmap);
-    bitmap.close();
-    return codes[0]?.rawValue?.trim() || null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Prefer a small JPEG as-is. Larger / non-JPEG images go through canvas when
  * the browser can decode them. Throws a short user-facing message on failure.
  */
-export async function compressImageFile(file: File): Promise<CompressedImage> {
+export async function compressImageFile(
+  file: File,
+  options: CompressImageOptions = {},
+): Promise<CompressedImage> {
   if (!file.type.startsWith('image/')) {
     throw new Error('drop a photo');
   }
-  const qrText = await readQrText(file);
+  const qrText =
+    options.qrText !== undefined ? options.qrText : await readQrFromFile(file);
   const buf = new Uint8Array(await file.arrayBuffer());
   if (file.type === 'image/jpeg' && buf.byteLength <= MAX_ATTACHMENT_BYTES) {
     return { jpegBase64: bytesToBase64(buf), byteSize: buf.byteLength, qrText };
