@@ -10,6 +10,7 @@ import {
   type EntityStat,
 } from '@/app/_components/entity/EntityDetailScaffold';
 import { EventDiamond } from '@/app/_components/entity/EntityAvatar';
+import { accent } from '@/app/chat/_components/tokens';
 import { trpc } from '@/lib/trpc/client';
 
 export interface EventDetail {
@@ -59,13 +60,15 @@ export default function EventDetailClient({ detail }: { detail: EventDetail }) {
     },
   });
 
-  const parts = [
-    fmtDate(detail.sub.date),
-    detail.sub.location,
-    detail.sub.durationDays ? `${detail.sub.durationDays} days` : null,
-  ].filter(Boolean) as string[];
-  const subText = parts.length ? parts.join(' · ') : 'date unknown';
-  const publicHref = safeEventUrl(detail.sub.url);
+  const subText = React.useMemo(() => {
+    const parts = [
+      fmtDate(detail.sub.date),
+      detail.sub.location,
+      detail.sub.durationDays ? `${detail.sub.durationDays} days` : null,
+    ].filter(Boolean) as string[];
+    return parts.length ? parts.join(' · ') : 'date unknown';
+  }, [detail.sub.date, detail.sub.location, detail.sub.durationDays]);
+  const publicHref = React.useMemo(() => safeEventUrl(detail.sub.url), [detail.sub.url]);
   const subNode = publicHref ? (
     <>
       {subText}
@@ -75,7 +78,7 @@ export default function EventDetailClient({ detail }: { detail: EventDetail }) {
         target="_blank"
         rel="noopener noreferrer"
         data-testid="event-public-url"
-        style={{ color: '#FFC452', textDecoration: 'none' }}
+        style={{ color: accent, textDecoration: 'none' }}
       >
         public page →
       </a>

@@ -194,12 +194,12 @@ export function ImportsClient() {
   }
 
   const ambiguousRows = preview.data?.rows.filter((r) => r.status === 'ambiguous') ?? [];
-  const unresolved =
-    ambiguousRows.length > 0 &&
-    ambiguousRows.some((r) => resolutions[r.index] === undefined);
+  const unresolved = React.useMemo(
+    () => ambiguousRows.length > 0 && ambiguousRows.some((r) => resolutions[r.index] === undefined),
+    [ambiguousRows, resolutions],
+  );
   const previewFailed = Boolean(preview.isError);
-  const commitBlocked =
-    busyUploading || unresolved || preview.isFetching || previewFailed;
+  const commitBlocked = busyUploading || unresolved || preview.isFetching || previewFailed;
 
   function commitImport() {
     if (!kind || contacts.length === 0 || unresolved || previewFailed) return;
@@ -228,7 +228,7 @@ export function ImportsClient() {
     >
       <header
         style={{
-          padding: '14px 20px',
+          padding: '14px clamp(14px, 4vw, 20px)',
           borderBottom: '1px solid var(--border-soft)',
           display: 'flex',
           alignItems: 'center',
@@ -264,8 +264,8 @@ export function ImportsClient() {
 
       <section
         style={{
-          padding: '20px 20px 40px',
-          maxWidth: 640,
+          padding: '16px clamp(14px, 4vw, 20px) 36px',
+          maxWidth: 680,
           width: '100%',
           margin: '0 auto',
           boxSizing: 'border-box',
@@ -296,7 +296,8 @@ export function ImportsClient() {
             if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click();
           }}
           style={{
-            padding: '28px 20px',
+            minHeight: 132,
+            padding: '24px clamp(14px, 4vw, 20px)',
             borderRadius: 14,
             border: `1.5px dashed ${accent}66`,
             background: `${accent}0d`,
@@ -344,6 +345,7 @@ export function ImportsClient() {
             style={{
               width: '100%',
               marginBottom: 16,
+              minHeight: 44,
               padding: 12,
               borderRadius: 10,
               border: '1px solid var(--border-soft)',
@@ -497,6 +499,7 @@ export function ImportsClient() {
                             display: 'block',
                             width: '100%',
                             marginTop: 4,
+                            minHeight: 40,
                             padding: '8px 10px',
                             borderRadius: 8,
                             border: '1px solid var(--border-soft)',
@@ -527,6 +530,7 @@ export function ImportsClient() {
               style={{
                 marginTop: 14,
                 width: '100%',
+                minHeight: 44,
                 padding: 12,
                 borderRadius: 10,
                 background: accent,

@@ -29,9 +29,19 @@ const CHROMELESS = ['/signin', '/onboarding'];
 function activeFor(pathname: string): BottomTabKey | null {
   if (pathname === '/') return 'home';
   if (pathname.startsWith('/chat')) return 'chat';
+  if (pathname.startsWith('/search')) return 'chat';
   if (pathname.startsWith('/graph')) return 'graph';
+  if (
+    pathname.startsWith('/person') ||
+    pathname.startsWith('/company') ||
+    pathname.startsWith('/event') ||
+    pathname.startsWith('/topic')
+  ) {
+    return 'graph';
+  }
   if (pathname.startsWith('/acts')) return 'acts';
-  return null; // entity / search / settings — no tab highlighted
+  if (pathname.startsWith('/imports') || pathname.startsWith('/settings')) return 'home';
+  return null;
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -39,7 +49,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { recorder, beginCapture } = useCapture();
 
   const chromeless = CHROMELESS.some((p) => pathname.startsWith(p));
-  const settings = trpc.settings.get.useQuery(undefined, { enabled: !chromeless });
+  const settings = trpc.settings.get.useQuery(undefined, {
+    enabled: !chromeless && !pathname.startsWith('/settings'),
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
 
   if (chromeless) return <>{children}</>;
 
@@ -52,10 +66,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <div className="app-content">
+      <a href="#main-content" className="skip-link">
+        skip to content
+      </a>
+      <main className="app-content" id="main-content">
         {showCalendarNudge ? <CalendarSettingsNudge /> : null}
         {children}
-      </div>
+      </main>
       {locked ? (
         <LockedBar onStop={() => recorder.stop()} onDiscard={() => recorder.discard()} duration={recorder.duration} />
       ) : (
@@ -81,8 +98,10 @@ function CalendarSettingsNudge() {
       data-testid="calendar-settings-nudge"
       style={{
         display: 'block',
-        margin: '12px 16px 0',
-        padding: '12px 14px',
+        margin: '12px auto 0',
+        padding: '14px',
+        maxWidth: 720,
+        width: 'calc(100% - 32px)',
         borderRadius: 12,
         border: '1.5px dashed rgba(255,196,82,0.4)',
         background: 'rgba(255,196,82,0.05)',

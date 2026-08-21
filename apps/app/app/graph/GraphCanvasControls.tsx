@@ -4,10 +4,12 @@ import type { CSSProperties } from 'react';
 import type { GraphSpacingPreset } from './graph-force';
 
 const btnStyle: CSSProperties = {
-  padding: '6px 10px',
+  padding: '8px 10px',
+  minHeight: 36,
+  minWidth: 36,
   borderRadius: 8,
   border: '1px solid var(--border-soft)',
-  background: 'rgba(255,255,255,0.04)',
+  background: 'var(--surface-2, rgba(255,255,255,0.06))',
   color: 'var(--text-55)',
   fontSize: 11,
   cursor: 'pointer',
@@ -50,17 +52,17 @@ export function GraphCanvasControls({
       data-testid="graph-canvas-controls"
       style={{
         position: 'absolute',
-        right: 12,
-        bottom: 12,
+        right: 10,
+        bottom: 10,
         zIndex: 5,
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
         alignItems: 'stretch',
-        maxWidth: 160,
+        width: 'min(220px, calc(100% - 20px))',
       }}
     >
-      <div style={{ display: 'flex', gap: 4 }}>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
         <button type="button" aria-label="zoom in" title="zoom in" style={btnStyle} onClick={onZoomIn}>
           +
         </button>
@@ -87,7 +89,7 @@ export function GraphCanvasControls({
           padding: 4,
           borderRadius: 8,
           border: '1px solid var(--border-soft)',
-          background: 'rgba(0,0,0,0.35)',
+          background: 'var(--bg-elev, rgba(0,0,0,0.4))',
         }}
         role="group"
         aria-label="node spacing"
@@ -98,7 +100,11 @@ export function GraphCanvasControls({
             type="button"
             aria-pressed={spacing === id}
             onClick={() => onSpacingChange(id)}
-            style={spacing === id ? activeBtnStyle : { ...btnStyle, flex: 1, border: 'none', background: 'transparent' }}
+            style={
+              spacing === id
+                ? { ...activeBtnStyle, flex: 1 }
+                : { ...btnStyle, flex: 1, border: 'none', background: 'transparent' }
+            }
           >
             {label}
           </button>

@@ -85,20 +85,19 @@ export default function PersonDetailClient({ detail }: { detail: PersonDetail })
     },
   });
 
-  const subText =
-    [detail.sub.role, detail.sub.companyName].filter(Boolean).join(' · ') || 'no role yet';
+  const subText = React.useMemo(
+    () => [detail.sub.role, detail.sub.companyName].filter(Boolean).join(' · ') || 'no role yet',
+    [detail.sub.role, detail.sub.companyName],
+  );
 
-  const parsed = parseImportSource(detail.importSource);
-  const tags =
-    parsed?.kind === 'linkedin'
-      ? ['linkedin']
-      : parsed?.kind === 'vcard'
-        ? ['vcard']
-        : parsed?.kind === 'device'
-          ? ['device']
-          : detail.importSource && detail.importSource !== 'voice-capture'
-            ? ['imported']
-            : undefined;
+  const tags = React.useMemo(() => {
+    const parsed = parseImportSource(detail.importSource);
+    if (parsed?.kind === 'linkedin') return ['linkedin'];
+    if (parsed?.kind === 'vcard') return ['vcard'];
+    if (parsed?.kind === 'device') return ['device'];
+    if (detail.importSource && detail.importSource !== 'voice-capture') return ['imported'];
+    return undefined;
+  }, [detail.importSource]);
 
   return (
     <div className="surface-split">

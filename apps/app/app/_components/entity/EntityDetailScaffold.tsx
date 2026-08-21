@@ -92,6 +92,8 @@ export interface EntityDetailScaffoldProps {
 }
 
 const STAT_COLORS = [accent, '#86efac', third];
+const SURFACE_WIDTH = 680;
+const SURFACE_SIDE_PADDING = 'clamp(14px, 4vw, 20px)';
 
 export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
   const {
@@ -131,8 +133,8 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
       <TopRow />
       <section
         style={{
-          padding: '4px 20px 0',
-          maxWidth: 640,
+          padding: `4px ${SURFACE_SIDE_PADDING} 0`,
+          maxWidth: SURFACE_WIDTH,
           width: '100%',
           margin: '0 auto',
           boxSizing: 'border-box',
@@ -184,7 +186,8 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
               fontSize: 12,
               color: 'var(--text-85)',
               display: 'flex',
-              alignItems: 'center',
+              alignItems: 'flex-start',
+              flexWrap: 'wrap',
               justifyContent: 'space-between',
               gap: 10,
             }}
@@ -311,10 +314,12 @@ function TopRow() {
   return (
     <div
       style={{
-        padding: '10px 20px 6px',
+        padding: `10px ${SURFACE_SIDE_PADDING} 6px`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
+        gap: 10,
+        flexWrap: 'wrap',
       }}
     >
       <Link
@@ -333,11 +338,11 @@ function TopRow() {
         ← back
       </Link>
       <div style={{ display: 'flex', gap: 6 }}>
-        <ChromeBtn href="/" label="graph">
+        <ChromeBtn href="/graph" label="graph">
           ◈
         </ChromeBtn>
-        <ChromeBtn href="/" label="settings">
-          ⚙
+        <ChromeBtn href="/settings" label="settings">
+          set
         </ChromeBtn>
       </div>
     </div>
@@ -361,8 +366,8 @@ function ChromeBtn({
       href={href}
       aria-label={label}
       style={{
-        width: 32,
-        height: 32,
+        minWidth: 44,
+        minHeight: 44,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -371,7 +376,10 @@ function ChromeBtn({
         border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
         color: 'var(--text-55)',
         textDecoration: 'none',
-        fontSize: 14,
+        fontSize: label === 'settings' ? 10 : 14,
+        fontFamily: label === 'settings' ? 'JetBrains Mono, monospace' : undefined,
+        letterSpacing: label === 'settings' ? 0.5 : undefined,
+        textTransform: label === 'settings' ? 'uppercase' as const : undefined,
       }}
     >
       {children}
@@ -406,6 +414,7 @@ function Hero({
         display: 'flex',
         gap: 16,
         alignItems: 'flex-start',
+        flexWrap: 'wrap',
         marginBottom: 16,
         marginTop: 4,
       }}
@@ -427,9 +436,10 @@ function Hero({
         </div>
         <h1
           style={{
-            font: '800 22px/1 Inter, system-ui, sans-serif',
+            font: '800 clamp(20px, 4.8vw, 24px)/1 Inter, system-ui, sans-serif',
             letterSpacing: '-0.025em',
             margin: 0,
+            overflowWrap: 'anywhere',
           }}
         >
           {name}
@@ -437,9 +447,11 @@ function Hero({
         <div
           className="mono"
           style={{
-            font: '400 12px JetBrains Mono, ui-monospace, monospace',
+            font: '400 clamp(11px, 2.9vw, 12px) JetBrains Mono, ui-monospace, monospace',
             color: 'var(--text-55)',
             marginTop: 4,
+            lineHeight: 1.45,
+            overflowWrap: 'anywhere',
           }}
         >
           {sub}
@@ -462,7 +474,10 @@ function CtaRow({
   const ghostInactive = !ghost.onClick || Boolean(ghost.disabled) || Boolean(ghost.pending);
 
   return (
-    <div style={{ display: 'flex', gap: 8, marginBottom: 24 }} data-testid="entity-ctas">
+    <div
+      style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}
+      data-testid="entity-ctas"
+    >
       <button
         type="button"
         disabled={primaryInactive}
@@ -470,7 +485,8 @@ function CtaRow({
         aria-busy={primary.pending || undefined}
         onClick={primary.onClick}
         style={{
-          flex: 1,
+          flex: '1 1 220px',
+          minHeight: 44,
           padding: 12,
           borderRadius: 10,
           background: accent,
@@ -490,7 +506,9 @@ function CtaRow({
         title={ghost.title}
         onClick={ghost.onClick}
         style={{
-          padding: '12px 18px',
+          flex: '1 1 140px',
+          minHeight: 44,
+          padding: '12px 16px',
           borderRadius: 10,
           background: 'transparent',
           color: 'var(--ink)',
@@ -509,7 +527,7 @@ function CtaRow({
 function StatTrio({ stats }: { stats: EntityStat[] }) {
   return (
     <div
-      style={{ display: 'flex', gap: 28, marginBottom: 24 }}
+      style={{ display: 'flex', gap: 20, rowGap: 14, flexWrap: 'wrap', marginBottom: 24 }}
       data-testid="entity-stats"
     >
       {stats.map((s, i) => (
@@ -681,7 +699,7 @@ function FollowupCard({ followup }: { followup: EntityFollowup }) {
         background: 'var(--surface-1, rgba(255,255,255,0.025))',
         border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         gap: 12,
         marginBottom: 10,
       }}
@@ -740,6 +758,7 @@ function RelatedRow({ item, isLast }: { item: EntityRelated; isLast: boolean }) 
         alignItems: 'center',
         gap: 12,
         padding: '11px 0',
+        minHeight: 44,
         borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.05)',
         textDecoration: 'none',
         color: 'inherit',
@@ -921,6 +940,7 @@ function PossibleMatchCard({
       style={{
         display: 'flex',
         alignItems: 'center',
+        flexWrap: 'wrap',
         gap: 12,
         padding: '11px 0',
         borderBottom: '1px solid rgba(255,255,255,0.05)',
@@ -964,6 +984,7 @@ function PossibleMatchCard({
             border: 'none',
             cursor: pending ? 'wait' : 'pointer',
             opacity: pending ? 0.5 : 1,
+            minHeight: 32,
           }}
         >
           merge into this

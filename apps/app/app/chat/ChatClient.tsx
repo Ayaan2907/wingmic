@@ -19,7 +19,7 @@ import { ChatHeader } from './_components/ChatHeader';
 import { ChatThread, UndoChip } from './_components/ChatThread';
 import { ChatEntityRail } from './_components/ChatEntityRail';
 import { CameraCapture } from './_components/CameraCapture';
-import { TAB_BAR_HEIGHT_PX, accent } from './_components/tokens';
+import { accent } from './_components/tokens';
 import type { ChatInitialItem } from './_components/types';
 
 interface ChatClientProps {
@@ -106,20 +106,8 @@ function ChatComposer() {
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       data-testid="chat-composer"
-      style={{
-        position: 'fixed',
-        bottom: TAB_BAR_HEIGHT_PX + 14,
-        left: 0,
-        right: 0,
-        maxWidth: 640,
-        margin: '0 auto',
-        padding: '10px 16px 0',
-        zIndex: 40,
-        boxSizing: 'border-box',
-        background:
-          'linear-gradient(180deg, rgba(10,10,10,0) 0%, var(--bg-page) 28%, var(--bg-page) 100%)',
-        pointerEvents: 'none',
-      }}
+      className="chat-composer-shell"
+      style={{ background: 'linear-gradient(180deg, rgba(10,10,10,0) 0%, var(--bg-page) 28%, var(--bg-page) 100%)' }}
     >
       {photoBindChoices && photoBindChoices.length > 1 ? (
         <div
@@ -129,7 +117,7 @@ function ChatComposer() {
             padding: 10,
             borderRadius: 12,
             border: `1px solid ${accent}66`,
-            background: '#141414',
+            background: 'var(--bg-card)',
             pointerEvents: 'auto',
           }}
         >
@@ -217,6 +205,8 @@ function ChatComposer() {
               color: 'var(--text-55)',
               cursor: 'pointer',
               font: '700 12px Inter, system-ui, sans-serif',
+              minWidth: 28,
+              minHeight: 28,
             }}
           >
             ×
@@ -252,6 +242,8 @@ function ChatComposer() {
               color: 'var(--text-55)',
               cursor: 'pointer',
               font: '700 12px Inter, system-ui, sans-serif',
+              minWidth: 28,
+              minHeight: 28,
             }}
           >
             ×
@@ -295,6 +287,8 @@ function ChatComposer() {
               color: 'var(--text-55)',
               cursor: 'pointer',
               font: '700 12px Inter, system-ui, sans-serif',
+              minWidth: 28,
+              minHeight: 28,
             }}
           >
             ×
@@ -308,7 +302,7 @@ function ChatComposer() {
           gap: 8,
           padding: '10px 12px',
           borderRadius: 999,
-          background: '#141414',
+          background: 'var(--bg-card)',
           border: dropping ? `1.5px solid ${accent}` : '1px solid var(--border-mid)',
           pointerEvents: 'auto',
         }}
@@ -330,8 +324,8 @@ function ChatComposer() {
           aria-label="attach photo"
           onClick={() => pinInputRef.current?.click()}
           style={{
-            width: 28,
-            height: 28,
+            minWidth: 44,
+            minHeight: 44,
             padding: 0,
             background: 'transparent',
             border: 'none',
@@ -350,8 +344,8 @@ function ChatComposer() {
           aria-label="take photo"
           onClick={() => setCameraOpen(true)}
           style={{
-            width: 28,
-            height: 28,
+            minWidth: 44,
+            minHeight: 44,
             padding: 0,
             background: 'transparent',
             border: 'none',
@@ -374,7 +368,7 @@ function ChatComposer() {
             background: 'transparent',
             border: 'none',
             color: 'var(--ink)',
-            fontSize: 14,
+            fontSize: 16,
             outline: 'none',
           }}
         />
@@ -449,9 +443,8 @@ export default function ChatClient({ userName, initialThread = [] }: ChatClientP
     // rail is display:none and the thread is the full-width column.
     <div className="surface-split">
       <main
-        className="surface-primary"
+        className="surface-primary chat-surface"
         style={{
-          minHeight: '100dvh',
           display: 'flex',
           flexDirection: 'column',
           background: 'var(--bg-page)',
