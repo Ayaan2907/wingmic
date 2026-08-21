@@ -293,17 +293,53 @@ export default function SettingsClient({
               google calendar: calendar settings → make available to public → integrate calendar →
               copy the public address in ical format.
             </p>
-            <label style={fieldRow}>
-              <span style={labelStyle}>public ics url</span>
-              <input
-                style={textInput}
-                value={local.calendarIcsUrl}
-                placeholder="https://calendar.google.com/calendar/ical/…/public/basic.ics"
-                autoComplete="off"
-                onChange={(e) => setLocal((s) => (s ? { ...s, calendarIcsUrl: e.target.value } : s))}
-                onBlur={(e) => update.mutate({ calendarIcsUrl: e.target.value.trim() || null })}
-              />
-            </label>
+            <div style={fieldRow}>
+              <label htmlFor="settings-calendar-ics" style={labelStyle}>
+                public ics url
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  id="settings-calendar-ics"
+                  style={{ ...textInput, flex: 1, minWidth: 0 }}
+                  value={local.calendarIcsUrl}
+                  placeholder="https://calendar.google.com/calendar/ical/…/public/basic.ics"
+                  autoComplete="off"
+                  onChange={(e) => setLocal((s) => (s ? { ...s, calendarIcsUrl: e.target.value } : s))}
+                  onBlur={(e) => update.mutate({ calendarIcsUrl: e.target.value.trim() || null })}
+                />
+                <button
+                  type="button"
+                  data-testid="settings-calendar-privacy"
+                  aria-describedby="settings-calendar-privacy-note"
+                  aria-label="private. we only fetch publicly available events from your calendar."
+                  className="mono"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    flexShrink: 0,
+                    padding: '8px 10px',
+                    borderRadius: 10,
+                    border: '1px solid var(--border-soft)',
+                    background: 'transparent',
+                    color: 'var(--text-55)',
+                    fontSize: 11,
+                    letterSpacing: 0.6,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  <EyeIcon />
+                  private
+                </button>
+              </div>
+              <p
+                id="settings-calendar-privacy-note"
+                className="mono"
+                style={{ fontSize: 11, color: 'var(--text-40)', margin: 0, lineHeight: 1.5 }}
+              >
+                we only fetch publicly available events from your calendar.
+              </p>
+            </div>
           </div>
         </Section>
 
@@ -368,5 +404,20 @@ export default function SettingsClient({
         </Section>
       </div>
     </main>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
   );
 }

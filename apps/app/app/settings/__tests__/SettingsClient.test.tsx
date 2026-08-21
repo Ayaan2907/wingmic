@@ -147,6 +147,13 @@ describe('SettingsClient', () => {
     expect(section.textContent).not.toMatch(/secret/i);
   });
 
+  it('puts an eye control next to the calendar url that the feed stays private', () => {
+    renderSettings();
+    const section = screen.getByTestId('settings-calendars');
+    expect(screen.getByRole('button', { name: /private/i })).toBeTruthy();
+    expect(section.textContent).toMatch(/publicly available events/i);
+  });
+
   it('blurring a google calendar ics url persists it', () => {
     renderSettings();
     const input = screen.getByPlaceholderText(/public\/basic\.ics/i) as HTMLInputElement;
