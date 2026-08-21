@@ -354,7 +354,7 @@ export function GraphClient({ data }: { data: GraphData }) {
                 position: 'absolute',
                 left: 'clamp(10px, 4vw, 16px)',
                 right: 'clamp(10px, 4vw, 16px)',
-                bottom: 'clamp(10px, 4vw, 16px)',
+                bottom: 'calc(var(--dock-control-clearance, 72px) + 74px)',
                 zIndex: 3,
                 maxWidth: 360,
                 margin: '0 auto',
