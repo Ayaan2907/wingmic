@@ -7,7 +7,6 @@ import {
   graphNeighborhoodIds,
   isHighlightedGraphNode,
   shouldShowGraphNodeCaption,
-  GRAPH_CAPTION_ZOOM_MIN,
 } from '../graph-node-label';
 
 describe('graphNodeInitials', () => {
@@ -47,16 +46,11 @@ describe('isHighlightedGraphNode', () => {
 });
 
 describe('shouldShowGraphNodeCaption', () => {
-  it('shows for selected or hovered nodes at any zoom', () => {
+  it('shows only for selected or hovered nodes', () => {
     expect(shouldShowGraphNodeCaption('p1', 'p1', null, 1)).toBe(true);
     expect(shouldShowGraphNodeCaption('p1', null, 'p1', 1)).toBe(true);
-  });
-
-  it('shows at high zoom only otherwise', () => {
-    expect(shouldShowGraphNodeCaption('p1', null, null, GRAPH_CAPTION_ZOOM_MIN)).toBe(
-      true,
-    );
-    expect(shouldShowGraphNodeCaption('p1', null, null, 1)).toBe(false);
+    expect(shouldShowGraphNodeCaption('p1', null, null, 2)).toBe(false);
+    expect(shouldShowGraphNodeCaption('p1', null, null, 0.8)).toBe(false);
   });
 });
 

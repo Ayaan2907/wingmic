@@ -171,6 +171,13 @@ describe('GraphClient', () => {
     expect(createDraftMutate).not.toHaveBeenCalled();
   });
 
+  it('topic open link routes to the topic detail page', () => {
+    render(<GraphClient data={DATA} />);
+    fireEvent.click(screen.getByText('rust'));
+    const opens = screen.getAllByRole('link', { name: /^open$/i });
+    expect(opens.every((a) => a.getAttribute('href') === '/topic/t1')).toBe(true);
+  });
+
   it('paints visible relation edges on the canvas payload', () => {
     render(<GraphClient data={DATA} />);
     const worksAt = screen.getByTestId('graph-link-0');

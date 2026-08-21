@@ -17,7 +17,7 @@ type NodeKind = 'person' | 'company' | 'event' | 'topic';
 type LinkRel = 'works_at' | 'attended' | 'discussed';
 
 export type GraphNode = { id: string; kind: NodeKind; label: string };
-export type GraphLink = { source: string; target: string; rel: LinkRel };
+export type GraphLink = { source: string; target: string; rel: LinkRel; hub?: boolean };
 export type GraphData = { nodes: GraphNode[]; links: GraphLink[] };
 
 /**
@@ -42,7 +42,7 @@ export function discussedHubLinks(
     const key = `${source}|${target}|discussed`;
     if (seen.has(key) || source === target) return;
     seen.add(key);
-    links.push({ source, target, rel: 'discussed' });
+    links.push({ source, target, rel: 'discussed', hub: true });
   };
   for (const row of ec) {
     for (const topicId of topicsByEntity.get(row.entityId) ?? []) add(row.companyId, topicId);
