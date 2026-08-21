@@ -284,22 +284,27 @@ export default function SettingsClient({
         </Section>
 
         <Section title="calendars">
-          <p style={{ fontSize: 13, color: 'var(--text-85)', margin: 0, lineHeight: 1.5 }}>
-            paste a luma, partiful, or google calendar event link in chat and we attach it to the
-            open person. or drop your calendar&apos;s secret ics address here so we can fill
-            dates when luma doesn&apos;t.
-          </p>
-          <label style={fieldRow}>
-            <span style={labelStyle}>google calendar ics url</span>
-            <input
-              style={textInput}
-              value={local.calendarIcsUrl}
-              placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"
-              autoComplete="off"
-              onChange={(e) => setLocal((s) => (s ? { ...s, calendarIcsUrl: e.target.value } : s))}
-              onBlur={(e) => update.mutate({ calendarIcsUrl: e.target.value.trim() || null })}
-            />
-          </label>
+          <div data-testid="settings-calendars" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <p style={{ fontSize: 13, color: 'var(--text-85)', margin: 0, lineHeight: 1.5 }}>
+              export a public calendar feed and paste the ics url. we only fetch events that
+              calendar already publishes.
+            </p>
+            <p className="mono" style={{ fontSize: 11, color: 'var(--text-40)', margin: 0, lineHeight: 1.5 }}>
+              google calendar: calendar settings → make available to public → integrate calendar →
+              copy the public address in ical format.
+            </p>
+            <label style={fieldRow}>
+              <span style={labelStyle}>public ics url</span>
+              <input
+                style={textInput}
+                value={local.calendarIcsUrl}
+                placeholder="https://calendar.google.com/calendar/ical/…/public/basic.ics"
+                autoComplete="off"
+                onChange={(e) => setLocal((s) => (s ? { ...s, calendarIcsUrl: e.target.value } : s))}
+                onBlur={(e) => update.mutate({ calendarIcsUrl: e.target.value.trim() || null })}
+              />
+            </label>
+          </div>
         </Section>
 
         {/* advanced ──────────────────────────────────────────── */}

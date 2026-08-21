@@ -51,7 +51,7 @@ export const settingsRouter = router({
         if (!parsed) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
-            message: 'paste a google calendar ics url',
+            message: 'paste a public google calendar ics url',
           });
         }
         patch.calendarIcsUrl = parsed;

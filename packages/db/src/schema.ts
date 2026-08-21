@@ -57,7 +57,7 @@ export const users = sqliteTable('user', {
   preferredMicDeviceId: text('preferred_mic_device_id'),
   asrLanguage: text('asr_language').notNull().default('en-US'),
   acknowledgedPrivacy: integer('acknowledged_privacy', { mode: 'boolean' }).notNull().default(false),
-  /** Public Google Calendar secret iCal URL. Never log this value. */
+  /** Public Google Calendar iCal URL (`/public/basic.ics`). Never log. */
   calendarIcsUrl: text('calendar_ics_url'),
 });
 

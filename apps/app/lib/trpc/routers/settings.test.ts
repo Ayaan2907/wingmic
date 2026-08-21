@@ -66,13 +66,22 @@ describe('settings router', () => {
     expect(res.calendarIcsUrl).toBeNull();
   });
 
-  it('persists a google calendar ics url and clears it', async () => {
+  it('persists a public google calendar ics url and clears it', async () => {
     const ics =
-      'https://calendar.google.com/calendar/ical/ada%40example.com/private-abc/basic.ics';
+      'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics';
     await caller().update({ calendarIcsUrl: ics });
     expect((await caller().get()).calendarIcsUrl).toBe(ics);
     await caller().update({ calendarIcsUrl: null });
     expect((await caller().get()).calendarIcsUrl).toBeNull();
+  });
+
+  it('rejects a secret private-token ics address', async () => {
+    await expect(
+      caller().update({
+        calendarIcsUrl:
+          'https://calendar.google.com/calendar/ical/ada%40example.com/private-abc/basic.ics',
+      }),
+    ).rejects.toThrow();
   });
 
   it('rejects a non-ics calendar url', async () => {

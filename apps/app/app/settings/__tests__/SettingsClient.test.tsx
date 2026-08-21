@@ -138,19 +138,28 @@ describe('SettingsClient', () => {
     expect(mutateSpy).not.toHaveBeenCalled();
   });
 
+  it('explains how to export a public calendar feed', () => {
+    renderSettings();
+    const section = screen.getByTestId('settings-calendars');
+    expect(section.textContent).toMatch(/export a public calendar/i);
+    expect(section.textContent).toMatch(/make available to public/i);
+    expect(section.textContent).not.toMatch(/luma/i);
+    expect(section.textContent).not.toMatch(/secret/i);
+  });
+
   it('blurring a google calendar ics url persists it', () => {
     renderSettings();
-    const input = screen.getByPlaceholderText(/calendar\/ical/i) as HTMLInputElement;
+    const input = screen.getByPlaceholderText(/public\/basic\.ics/i) as HTMLInputElement;
     fireEvent.change(input, {
       target: {
         value:
-          'https://calendar.google.com/calendar/ical/ada%40example.com/private-abc/basic.ics',
+          'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics',
       },
     });
     fireEvent.blur(input);
     expect(mutateSpy).toHaveBeenCalledWith({
       calendarIcsUrl:
-        'https://calendar.google.com/calendar/ical/ada%40example.com/private-abc/basic.ics',
+        'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics',
     });
   });
 

@@ -78,17 +78,23 @@ export function matchIcsEvent(
 }
 
 const ICS_FETCH_MS = 8_000;
+const ICS_MAX_BYTES = 512 * 1024;
+const PUBLIC_ICS_PATH = /^\/calendar\/ical\/[^/]+\/public\/(?:basic|full)\.ics$/i;
 
 export async function fetchCalendarIcs(url: string): Promise<string | null> {
+  const parsed = parseCalendarIcsUrl(url);
+  if (!parsed) return null;
   try {
-    const res = await fetch(url, {
+    const res = await fetch(parsed, {
       method: 'GET',
-      redirect: 'follow',
+      redirect: 'error',
       signal: AbortSignal.timeout(ICS_FETCH_MS),
-      headers: { accept: 'text/calendar, text/plain, */*' },
+      headers: { accept: 'text/calendar, text/plain' },
     });
     if (!res.ok) return null;
-    const text = await res.text();
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength < 16 || buf.byteLength > ICS_MAX_BYTES) return null;
+    const text = new TextDecoder('utf-8', { fatal: false }).decode(buf);
     if (!/BEGIN:VCALENDAR/i.test(text)) return null;
     return text;
   } catch {
@@ -96,7 +102,11 @@ export async function fetchCalendarIcs(url: string): Promise<string | null> {
   }
 }
 
-/** Public Google Calendar secret iCal address only — not an arbitrary URL. */
+/**
+ * Public Google Calendar iCal feed only.
+ * Secret `/private-{token}/` addresses are capability URLs for the whole
+ * calendar — we never store or fetch those.
+ */
 export function parseCalendarIcsUrl(raw: string | null | undefined): string | null {
   const trimmed = raw?.trim();
   if (!trimmed) return null;
@@ -107,9 +117,13 @@ export function parseCalendarIcsUrl(raw: string | null | undefined): string | nu
     return null;
   }
   if (url.protocol !== 'https:') return null;
+  if (url.username || url.password) return null;
+  if (url.port && url.port !== '443') return null;
+  if (url.search || url.hash) return null;
   const host = url.hostname.replace(/^www\./, '').toLowerCase();
-  const path = url.pathname.toLowerCase();
-  if (!path.includes('/calendar/ical/') || !path.endsWith('.ics')) return null;
-  if (host !== 'calendar.google.com' && !host.endsWith('.google.com')) return null;
-  return url.toString();
+  if (host !== 'calendar.google.com') return null;
+  const path = url.pathname;
+  if (/\/private(?:-|\/)/i.test(path)) return null;
+  if (!PUBLIC_ICS_PATH.test(path)) return null;
+  return `https://calendar.google.com${path}`;
 }
