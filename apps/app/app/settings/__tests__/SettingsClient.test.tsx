@@ -154,6 +154,21 @@ describe('SettingsClient', () => {
     expect(section.textContent).toMatch(/publicly available events/i);
   });
 
+  it('prompts to paste a public calendar when onboarding skipped it', () => {
+    renderSettings({ calendarIcsUrl: null });
+    expect(screen.getByTestId('settings-calendar-nudge').textContent).toMatch(
+      /paste a public ics url/i,
+    );
+  });
+
+  it('drops the settings calendar nudge after a public ics url is saved', () => {
+    renderSettings({
+      calendarIcsUrl:
+        'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics',
+    });
+    expect(screen.queryByTestId('settings-calendar-nudge')).toBeNull();
+  });
+
   it('blurring a google calendar ics url persists it', () => {
     renderSettings();
     const input = screen.getByPlaceholderText(/public\/basic\.ics/i) as HTMLInputElement;

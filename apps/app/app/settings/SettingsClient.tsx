@@ -114,6 +114,11 @@ export default function SettingsClient({
     }
   }, [data]);
 
+  React.useEffect(() => {
+    if (window.location.hash !== '#calendars') return;
+    document.getElementById('calendars')?.scrollIntoView({ block: 'start' });
+  }, []);
+
   if (!data) {
     return (
       <main
@@ -284,7 +289,16 @@ export default function SettingsClient({
         </Section>
 
         <Section title="calendars">
-          <div data-testid="settings-calendars" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div id="calendars" data-testid="settings-calendars" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {!local.calendarIcsUrl ? (
+              <p
+                data-testid="settings-calendar-nudge"
+                className="mono"
+                style={{ fontSize: 11, color: 'var(--text-55)', margin: 0, lineHeight: 1.5 }}
+              >
+                skipped during setup — paste a public ics url here.
+              </p>
+            ) : null}
             <p style={{ fontSize: 13, color: 'var(--text-85)', margin: 0, lineHeight: 1.5 }}>
               export a public calendar feed and paste the ics url. we only fetch events that
               calendar already publishes.

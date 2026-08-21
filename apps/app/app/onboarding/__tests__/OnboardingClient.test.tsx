@@ -57,6 +57,7 @@ describe('OnboardingClient', () => {
     expect(screen.getByPlaceholderText('Ada')).toBeTruthy();
 
     fillProfile();
+    expect(screen.getByPlaceholderText(/public\/basic\.ics/i)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /next/i }));
     expect(screen.getByText(/step 3 of 4/i)).toBeTruthy();
     expect(screen.getByText(/press record/i)).toBeTruthy();
@@ -93,10 +94,48 @@ describe('OnboardingClient', () => {
       lastName: 'Lovelace',
       linkedinUrl: 'https://www.linkedin.com/in/ada-lovelace',
     });
+    expect(mutateAsyncSpy.mock.calls[0]?.[0]).not.toHaveProperty('calendarIcsUrl');
     await waitFor(() => expect(pushSpy).toHaveBeenCalledWith('/chat'));
     expect(mutateAsyncSpy.mock.invocationCallOrder[0]).toBeLessThan(
       pushSpy.mock.invocationCallOrder[0],
     );
+  });
+
+  it('sends a public calendar ics url when filled on the you-step', async () => {
+    render(<OnboardingClient />);
+    walkToProfile();
+    fillProfile();
+    fireEvent.change(screen.getByPlaceholderText(/public\/basic\.ics/i), {
+      target: {
+        value:
+          'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics',
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    fireEvent.click(screen.getByRole('button', { name: /get started/i }));
+
+    await waitFor(() => expect(mutateAsyncSpy).toHaveBeenCalledTimes(1));
+    expect(mutateAsyncSpy).toHaveBeenCalledWith({
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      linkedinUrl: 'https://www.linkedin.com/in/ada-lovelace',
+      calendarIcsUrl:
+        'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics',
+    });
+  });
+
+  it('blocks next on the you-step when the calendar url is present but not public ics', () => {
+    render(<OnboardingClient />);
+    walkToProfile();
+    fillProfile();
+    fireEvent.change(screen.getByPlaceholderText(/public\/basic\.ics/i), {
+      target: { value: 'https://example.com/not-a-calendar' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    expect(screen.getByText(/public google calendar ics/i)).toBeTruthy();
+    expect(screen.getByText(/step 2 of 4/i)).toBeTruthy();
+    expect(mutateAsyncSpy).not.toHaveBeenCalled();
   });
 
   it('skip acknowledges without profile even if linkedin is invalid', async () => {

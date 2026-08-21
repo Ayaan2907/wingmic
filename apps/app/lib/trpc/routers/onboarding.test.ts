@@ -151,6 +151,22 @@ describe('onboarding router', () => {
     expect(Number(claims.rows[0]!.public)).toBe(0);
   });
 
+  it('persists a public calendar ics url on acknowledge', async () => {
+    const ics =
+      'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics';
+    await caller(userId).acknowledge({ calendarIcsUrl: ics });
+    expect((await userRow(userId))?.calendarIcsUrl).toBe(ics);
+  });
+
+  it('rejects a secret private-token calendar ics url on acknowledge', async () => {
+    await expect(
+      caller(userId).acknowledge({
+        calendarIcsUrl:
+          'https://calendar.google.com/calendar/ical/ada%40example.com/private-abc/basic.ics',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
   it('does not copy A profile onto B', async () => {
     expect((await userRow(otherUserId))?.name).toBeNull();
     const bClaims = await client.execute({

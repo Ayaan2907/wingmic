@@ -62,6 +62,17 @@ vi.mock('@/lib/trpc/client', () => ({
         fetch: recallFetchMock,
       },
     },
+    settings: {
+      get: {
+        useQuery: () => ({
+          data: {
+            calendarIcsUrl:
+              'https://calendar.google.com/calendar/ical/x/public/basic.ics',
+          },
+          isLoading: false,
+        }),
+      },
+    },
     useUtils: () => ({
       recall: {
         query: {
