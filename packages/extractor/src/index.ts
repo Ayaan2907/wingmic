@@ -21,4 +21,12 @@ export {
 } from './schema';
 export { SYSTEM_PROMPT, userPrompt } from './prompt';
 export { extractHybrid, mapProviderEntities, applyHeuristics, mergeResults, sanitizeExtraction, extractTopicPhrases, applyHarvestedLinkedin } from './hybrid';
+export {
+  parseEventExternal,
+  harvestEventFromTranscript,
+  applyHarvestedEvent,
+  isEventUrlDebrisTopic,
+  type EventExternalSource,
+  type HarvestedEvent,
+} from './eventUrl';
 export type { AssemblyAIEntity } from './types';

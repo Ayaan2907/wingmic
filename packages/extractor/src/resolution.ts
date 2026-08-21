@@ -9,6 +9,7 @@ import {
 } from './schema';
 import { embedText, embedTexts, cosine } from './embeddings';
 import { canonicalizeLinkedin, harvestLinkedinFromTranscript, isLinkedinUrlDebrisTopic } from './linkedin';
+import { applyHarvestedEvent, parseEventExternal } from './eventUrl';
 import { entityMatchesPersonName, nameSimilarity, slugify } from './slug';
 
 export interface CommitPersonResolution {
@@ -44,6 +45,8 @@ interface ResolveContext {
    * candidate uniquely names someone else (email / LinkedIn / exact name).
    */
   preferredEntityId?: string | null;
+  /** Event session still open in chat. Injected when the memo names no event. */
+  preferredEventId?: string | null;
 }
 
 /**
@@ -103,6 +106,24 @@ export async function commit(
       linkedin: p.linkedin || (bindToFirst && i === 0 ? spokenLinkedin : p.linkedin),
       topics: p.topics.filter((t) => !isLinkedinUrlDebrisTopic(t, spokenLinkedin)),
     }));
+  }
+
+  const harvestedEvents = applyHarvestedEvent(extracted, transcript);
+  extracted.events = harvestedEvents.events;
+  extracted.topics = harvestedEvents.topics;
+
+  if (ctx.preferredEventId && extracted.events.length === 0) {
+    const preferredEvent = await db.query.events.findFirst({
+      where: eq(schema.events.id, ctx.preferredEventId),
+    });
+    if (preferredEvent) {
+      extracted.events.push({
+        name: preferredEvent.name,
+        dateHint: null,
+        location: preferredEvent.location ?? null,
+        url: preferredEvent.url ?? null,
+      });
+    }
   }
 
   // ── Embeddings (parallel) ────────────────────────────────────────────
@@ -453,21 +474,48 @@ async function upsertEvent(
   const slug = slugify(e.name);
   const dateGuess =
     e.dateHint && /^\d{4}-\d{2}-\d{2}/.test(e.dateHint) ? new Date(e.dateHint) : null;
+  const harvested = e.url ? parseEventExternal(e.url) : null;
+
+  if (harvested) {
+    const byExternal = await db.query.events.findFirst({
+      where: and(
+        eq(schema.events.externalSource, harvested.source),
+        eq(schema.events.externalId, harvested.id),
+      ),
+    });
+    if (byExternal) {
+      const patch: Partial<typeof schema.events.$inferInsert> = {
+        observedCount: byExternal.observedCount + 1,
+        promotedAt:
+          byExternal.observedCount + 1 >= 2 && !byExternal.promotedAt
+            ? new Date()
+            : byExternal.promotedAt,
+      };
+      if (!byExternal.url && e.url) patch.url = e.url;
+      if (!byExternal.location && e.location) patch.location = e.location;
+      await db.update(schema.events).set(patch).where(eq(schema.events.id, byExternal.id));
+      return byExternal.id;
+    }
+  }
 
   const existing = await db.query.events.findFirst({
     where: eq(schema.events.slug, slug),
   });
   if (existing) {
-    await db
-      .update(schema.events)
-      .set({
-        observedCount: existing.observedCount + 1,
-        promotedAt:
-          existing.observedCount + 1 >= 2 && !existing.promotedAt
-            ? new Date()
-            : existing.promotedAt,
-      })
-      .where(eq(schema.events.id, existing.id));
+    const patch: Partial<typeof schema.events.$inferInsert> = {
+      observedCount: existing.observedCount + 1,
+      promotedAt:
+        existing.observedCount + 1 >= 2 && !existing.promotedAt
+          ? new Date()
+          : existing.promotedAt,
+    };
+    if (!existing.url && e.url) patch.url = e.url;
+    if (!existing.location && e.location) patch.location = e.location;
+    if (!existing.externalSource && !existing.externalId && harvested) {
+      patch.externalSource = harvested.source;
+      patch.externalId = harvested.id;
+    }
+    await db.update(schema.events).set(patch).where(eq(schema.events.id, existing.id));
     return existing.id;
   }
   const inserted = await db
@@ -478,6 +526,9 @@ async function upsertEvent(
       dateRangeStart: dateGuess,
       dateRangeEnd: dateGuess,
       location: e.location ?? null,
+      url: e.url ?? null,
+      externalSource: harvested?.source ?? null,
+      externalId: harvested?.id ?? null,
       observedCount: 1,
     })
     .returning({ id: schema.events.id });

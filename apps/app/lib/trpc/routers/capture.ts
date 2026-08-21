@@ -13,6 +13,8 @@ import { enrichPersonsAfterCommit } from '@/lib/enrich/enrichPersons';
 import { enrichEventsAfterCommit } from '@/lib/enrich/enrichEvents';
 import { scheduleEnrich } from '@/lib/enrich/schedule';
 import { MAX_ATTACHMENT_BYTES } from '@/lib/chat/compressImage';
+import { mergePhotoSignals } from '@/lib/capture/photoSignals';
+import { readPhotoSignals } from '@/lib/capture/readPhotoSignals';
 import * as schema from '@wingmic/db/schema';
 import type { DB } from '@wingmic/db';
 
@@ -26,6 +28,7 @@ async function persistCaptureAttachment(args: {
   db: DB;
   interactionId: string;
   entityId: string | null;
+  eventId: string | null;
   jpegBase64: string | undefined;
 }): Promise<CaptureAttachment[]> {
   if (!args.jpegBase64) return [];
@@ -43,6 +46,7 @@ async function persistCaptureAttachment(args: {
     .values({
       interactionId: args.interactionId,
       entityId: args.entityId,
+      eventId: args.eventId,
       mimeType: 'image/jpeg',
       jpegBase64: args.jpegBase64,
       byteSize: bytes.byteLength,
@@ -81,6 +85,8 @@ export const captureRouter = router({
         parentInteractionId: z.string().min(1).max(128).optional(),
         /** Person the user opened in chat. Must be an owned, living person. */
         targetEntityId: z.string().min(1).max(128).optional(),
+        /** Event session still open in chat. */
+        targetEventId: z.string().min(1).max(128).optional(),
         attachment: z
           .object({
             jpegBase64: z.string().min(32).max(600_000),
@@ -144,6 +150,7 @@ export const captureRouter = router({
           aliases: string[] | null;
           importSource: string | null;
         } | null = null;
+        let preferredEventId: string | undefined;
 
         if (input.parentInteractionId) {
           const parent = await ctx.db.query.interactions.findFirst({
@@ -176,7 +183,24 @@ export const captureRouter = router({
           preferredEntity = target;
         }
 
-        const providerEntities = await transcribeEntities(input.transcript);
+        if (input.targetEventId) {
+          const targetEvent = await ctx.db.query.events.findFirst({
+            where: eq(schema.events.id, input.targetEventId),
+            columns: { id: true },
+          });
+          if (!targetEvent) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'target event not found' });
+          }
+          preferredEventId = targetEvent.id;
+        }
+
+        let transcript = input.transcript;
+        if (input.attachment?.jpegBase64) {
+          const signals = await readPhotoSignals(input.attachment.jpegBase64);
+          transcript = mergePhotoSignals(transcript, signals);
+        }
+
+        const providerEntities = await transcribeEntities(transcript);
 
         const recentEntities = await ctx.db.query.entities.findMany({
           where: and(
@@ -239,7 +263,7 @@ export const captureRouter = router({
         });
 
         const extracted = await extractHybrid({
-          transcript: input.transcript,
+          transcript,
           providerEntities,
           knownContacts: {
             persons: knownPersons,
@@ -250,12 +274,13 @@ export const captureRouter = router({
         const result = await commit(extracted, {
           db: ctx.db,
           userId: ctx.user.id,
-          transcript: input.transcript,
+          transcript,
           capturedAt: input.capturedAt ?? new Date(),
           clientCaptureId: input.clientCaptureId,
           parentInteractionId,
           threadRootId,
           preferredEntityId: preferredEntity?.id,
+          preferredEventId,
         });
 
         // Acts insert is best-effort after commit() — graph already persisted.
@@ -344,7 +369,7 @@ export const captureRouter = router({
                         : null,
                     contextName: targetPerson?.companyHint ?? null,
                     seedBody: action.body,
-                    transcript: input.transcript,
+                    transcript,
                   });
                   return {
                     userId: ctx.user.id,
@@ -367,33 +392,46 @@ export const captureRouter = router({
           }
         }
 
+        const callerRow = await ctx.db.query.users.findFirst({
+          where: eq(schema.users.id, ctx.user.id),
+          columns: { calendarIcsUrl: true },
+        });
+        const calendarIcsUrl = callerRow?.calendarIcsUrl ?? null;
         const provider = webSearchProviderFromEnv();
-        if (provider) {
+        if (provider || calendarIcsUrl) {
           const capturedAt = input.capturedAt ?? new Date();
           scheduleEnrich(async () => {
             await Promise.all([
-              enrichPersonsAfterCommit({
-                db: ctx.db,
-                userId: ctx.user.id,
-                interactionId: result.interactionId,
-                extractedPersons: extracted.persons,
-                persons: result.persons,
-                provider,
-              }),
+              provider
+                ? enrichPersonsAfterCommit({
+                    db: ctx.db,
+                    userId: ctx.user.id,
+                    interactionId: result.interactionId,
+                    extractedPersons: extracted.persons,
+                    persons: result.persons,
+                    provider,
+                  })
+                : Promise.resolve(),
               enrichEventsAfterCommit({
                 db: ctx.db,
                 eventIds: result.eventIds,
                 capturedAt,
                 provider,
+                calendarIcsUrl,
               }),
             ]);
           });
         }
 
+        const attachmentEntityId =
+          preferredEntity?.id ?? (result.entityIds.length === 1 ? result.entityIds[0]! : null);
+        const attachmentEventId =
+          preferredEventId ?? (result.eventIds.length === 1 ? result.eventIds[0]! : null);
         const attachments = await persistCaptureAttachment({
           db: ctx.db,
           interactionId: result.interactionId,
-          entityId: preferredEntity?.id ?? null,
+          entityId: attachmentEntityId,
+          eventId: attachmentEventId,
           jpegBase64: input.attachment?.jpegBase64,
         });
 

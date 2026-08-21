@@ -79,6 +79,29 @@ describe('enrichEventsAfterCommit', () => {
     expect(row?.externalId).toBe('ethdenver');
   });
 
+  it('extracts a pasted luma url instead of searching by name', async () => {
+    const db = await seedEvent({ url: 'https://lu.ma/ethdenver' });
+    const search = vi.fn(async () => []);
+    const extract = vi.fn(async () => [
+      {
+        url: 'https://lu.ma/ethdenver',
+        content: 'Feb 27 – Mar 1, 2026 · Denver',
+      },
+    ]);
+    await enrichEventsAfterCommit({
+      db: db as never,
+      eventIds: ['ev_eth'],
+      capturedAt: new Date('2026-08-20T00:00:00Z'),
+      provider: { id: 'tavily', search, extract },
+    });
+    expect(search).not.toHaveBeenCalled();
+    expect(extract).toHaveBeenCalled();
+    const row = await db.query.events.findFirst({ where: eq(schema.events.id, 'ev_eth') });
+    expect(row?.location).toBe('Denver');
+    expect(row?.externalSource).toBe('luma');
+    expect(row?.externalId).toBe('ethdenver');
+  });
+
   it('skips search when url and dates are already set', async () => {
     const db = await seedEvent({ url: 'https://www.ethdenver.com', dates: true });
     const search = vi.fn(async () => []);

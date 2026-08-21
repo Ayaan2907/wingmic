@@ -11,6 +11,12 @@ describe('parseEventExternal', () => {
       source: 'partiful',
       id: 'xyz',
     });
+    expect(
+      parseEventExternal('https://calendar.google.com/calendar/event?eid=YWJjMTIz'),
+    ).toEqual({
+      source: 'web',
+      id: 'gcal:YWJjMTIz',
+    });
     expect(parseEventExternal('https://www.ethdenver.com')).toBeNull();
   });
 });

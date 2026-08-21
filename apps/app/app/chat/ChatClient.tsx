@@ -33,6 +33,8 @@ function ChatComposer() {
     submitText,
     openTarget,
     setOpenTarget,
+    openEvent,
+    setOpenEvent,
     pendingAttachment,
     photoBindChoices,
     attachFiles,
@@ -165,6 +167,41 @@ function ChatComposer() {
             type="button"
             aria-label="clear selected person"
             onClick={() => setOpenTarget(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-55)',
+              cursor: 'pointer',
+              font: '700 12px Inter, system-ui, sans-serif',
+            }}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+      {openEvent ? (
+        <div
+          data-testid="open-event-chip"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            marginBottom: 8,
+            padding: '6px 10px',
+            borderRadius: 8,
+            border: `1px solid ${accent}66`,
+            background: `${accent}14`,
+            pointerEvents: 'auto',
+          }}
+        >
+          <span className="mono" style={{ fontSize: 11, color: accent, letterSpacing: 0.3 }}>
+            {openEvent.name.toLowerCase()} · open
+          </span>
+          <button
+            type="button"
+            aria-label="clear open event"
+            onClick={() => setOpenEvent(null)}
             style={{
               background: 'transparent',
               border: 'none',

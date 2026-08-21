@@ -31,6 +31,7 @@ export type SettingsInitialData = {
   preferredMicDeviceId: string | null;
   asrLanguage: string;
   acknowledgedPrivacy: boolean;
+  calendarIcsUrl: string | null;
 };
 
 const RETENTION_OPTIONS: { value: RetentionMode; label: string; hint: string }[] = [
@@ -92,11 +93,13 @@ export default function SettingsClient({
     linkerModelOverride: string;
     preferredMicDeviceId: string;
     asrLanguage: string;
+    calendarIcsUrl: string;
   }>(() => ({
     audioRetentionMode: initialSettings.audioRetentionMode,
     linkerModelOverride: initialSettings.linkerModelOverride ?? '',
     preferredMicDeviceId: initialSettings.preferredMicDeviceId ?? '',
     asrLanguage: initialSettings.asrLanguage,
+    calendarIcsUrl: initialSettings.calendarIcsUrl ?? '',
   }));
 
   React.useEffect(() => {
@@ -106,6 +109,7 @@ export default function SettingsClient({
         linkerModelOverride: data.linkerModelOverride ?? '',
         preferredMicDeviceId: data.preferredMicDeviceId ?? '',
         asrLanguage: data.asrLanguage,
+        calendarIcsUrl: data.calendarIcsUrl ?? '',
       });
     }
   }, [data]);
@@ -275,6 +279,25 @@ export default function SettingsClient({
                 const v = e.target.value.trim();
                 if (v.length >= 2) update.mutate({ asrLanguage: v });
               }}
+            />
+          </label>
+        </Section>
+
+        <Section title="calendars">
+          <p style={{ fontSize: 13, color: 'var(--text-85)', margin: 0, lineHeight: 1.5 }}>
+            paste a luma, partiful, or google calendar event link in chat and we attach it to the
+            open person. or drop your calendar&apos;s secret ics address here so we can fill
+            dates when luma doesn&apos;t.
+          </p>
+          <label style={fieldRow}>
+            <span style={labelStyle}>google calendar ics url</span>
+            <input
+              style={textInput}
+              value={local.calendarIcsUrl}
+              placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"
+              autoComplete="off"
+              onChange={(e) => setLocal((s) => (s ? { ...s, calendarIcsUrl: e.target.value } : s))}
+              onBlur={(e) => update.mutate({ calendarIcsUrl: e.target.value.trim() || null })}
             />
           </label>
         </Section>

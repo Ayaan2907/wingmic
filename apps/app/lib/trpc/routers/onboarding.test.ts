@@ -32,7 +32,8 @@ describe('onboarding router', () => {
         linker_model_override TEXT,
         preferred_mic_device_id TEXT,
         asr_language TEXT NOT NULL DEFAULT 'en-US',
-        acknowledged_privacy INTEGER NOT NULL DEFAULT 0
+        acknowledged_privacy INTEGER NOT NULL DEFAULT 0,
+        calendar_ics_url TEXT
       );
       CREATE TABLE identity_claim (
         id TEXT PRIMARY KEY,

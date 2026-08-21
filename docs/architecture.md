@@ -296,6 +296,13 @@ For each PersonCandidate from the extractor:
   ranking and stored as a linkedin fact on the bound person. URL tokens
   (https, linkedin, the handle) are not topics. We never fetch LinkedIn HTML.
 
+  Spoken or pasted Luma / Partiful / Google Calendar event URLs become a
+  canonical event (url + external_source/id). Follow-up memos inherit an
+  open event session until dismissed. Photos persist on
+  `interaction_attachment` and render on person / company / event capture
+  lists. A public Google Calendar iCal URL in settings can fill dates when
+  the page is login-walled.
+
   normalizePersonName = lowercase tokens, punctuation stripped, space-joined.
   Partial names ("Tomo" vs "Tomo Matsuo") do NOT auto-link.
 

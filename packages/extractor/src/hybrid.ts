@@ -29,6 +29,7 @@ import { linkerModel } from './models';
 import { STOPWORDS } from './stopwords';
 import { env } from '../../../apps/app/lib/config/env';
 import { harvestLinkedinFromTranscript, isLinkedinUrlDebrisTopic } from './linkedin';
+import { applyHarvestedEvent } from './eventUrl';
 
 export interface HybridInput {
   transcript: string;
@@ -84,7 +85,7 @@ export async function extractHybrid({
   const filled = applyHeuristics(skeleton, transcript, dateSpans);
   const llm = await runLinkerLLM(transcript, filled, knownContacts);
   const merged = mergeResults(filled, llm);
-  return applyHarvestedLinkedin(sanitizeExtraction(merged), transcript);
+  return applyHarvestedEvent(applyHarvestedLinkedin(sanitizeExtraction(merged), transcript), transcript);
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -736,6 +737,7 @@ export function mergeResults(
     } else {
       existing.dateHint = existing.dateHint ?? e.dateHint;
       existing.location = existing.location ?? e.location;
+      existing.url = existing.url ?? e.url;
     }
   }
   const events = [...eventByName.values()];

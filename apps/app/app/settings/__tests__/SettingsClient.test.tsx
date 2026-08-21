@@ -9,6 +9,7 @@ type Settings = {
   preferredMicDeviceId: string | null;
   asrLanguage: string;
   acknowledgedPrivacy: boolean;
+  calendarIcsUrl: string | null;
 };
 
 let getData: Settings | undefined;
@@ -51,6 +52,7 @@ function fixture(over: Partial<Settings> = {}): Settings {
     preferredMicDeviceId: null,
     asrLanguage: 'en-US',
     acknowledgedPrivacy: false,
+    calendarIcsUrl: null,
     ...over,
   };
 }
@@ -134,6 +136,22 @@ describe('SettingsClient', () => {
     fireEvent.change(input, { target: { value: 'x' } });
     fireEvent.blur(input);
     expect(mutateSpy).not.toHaveBeenCalled();
+  });
+
+  it('blurring a google calendar ics url persists it', () => {
+    renderSettings();
+    const input = screen.getByPlaceholderText(/calendar\/ical/i) as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        value:
+          'https://calendar.google.com/calendar/ical/ada%40example.com/private-abc/basic.ics',
+      },
+    });
+    fireEvent.blur(input);
+    expect(mutateSpy).toHaveBeenCalledWith({
+      calendarIcsUrl:
+        'https://calendar.google.com/calendar/ical/ada%40example.com/private-abc/basic.ics',
+    });
   });
 
   it('signs out from the account section and returns to sign-in', async () => {

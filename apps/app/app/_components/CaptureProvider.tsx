@@ -56,6 +56,11 @@ export type OpenCaptureTarget = {
   name: string;
 };
 
+export type OpenEventSession = {
+  eventId: string;
+  name: string;
+};
+
 export type PendingAttachment = CompressedImage;
 
 function lastCommittedPeople(messages: ThreadMessage[]): OpenCaptureTarget[] {
@@ -72,6 +77,19 @@ function lastCommittedPeople(messages: ThreadMessage[]): OpenCaptureTarget[] {
   return [];
 }
 
+function lastCommittedEvent(messages: ThreadMessage[]): OpenEventSession | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg?.status !== 'committed' || !msg.graphResult) continue;
+    const { extracted, eventIds } = msg.graphResult;
+    if (eventIds?.length === 1 && extracted.events[0]?.name) {
+      return { eventId: eventIds[0]!, name: extracted.events[0].name };
+    }
+    return null;
+  }
+  return null;
+}
+
 export interface CaptureContextValue {
   recorder: UseAudioRecorder;
   messages: ThreadMessage[];
@@ -83,6 +101,8 @@ export interface CaptureContextValue {
   /** Selected person on a committed memo. Next memo binds as a follow-up. */
   openTarget: OpenCaptureTarget | null;
   setOpenTarget: (target: OpenCaptureTarget | null) => void;
+  openEvent: OpenEventSession | null;
+  setOpenEvent: (event: OpenEventSession | null) => void;
   pendingAttachment: PendingAttachment | null;
   photoBindChoices: OpenCaptureTarget[] | null;
   attachFiles: (files: FileList | File[] | null) => Promise<void>;
@@ -162,6 +182,8 @@ const DEFAULT_VALUE: CaptureContextValue = {
   setPasteDraft: () => {},
   openTarget: null,
   setOpenTarget: () => {},
+  openEvent: null,
+  setOpenEvent: () => {},
   pendingAttachment: null,
   photoBindChoices: null,
   attachFiles: async () => {},
@@ -201,14 +223,19 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const [pasteDraft, setPasteDraft] = useState('');
   const [undoQueue, setUndoQueue] = useState<UndoEntry[]>([]);
   const [openTarget, setOpenTarget] = useState<OpenCaptureTarget | null>(null);
+  const [openEvent, setOpenEvent] = useState<OpenEventSession | null>(null);
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
   const [photoBindChoices, setPhotoBindChoices] = useState<OpenCaptureTarget[] | null>(null);
   const openTargetRef = useRef<OpenCaptureTarget | null>(null);
+  const openEventRef = useRef<OpenEventSession | null>(null);
   const pendingAttachmentRef = useRef<PendingAttachment | null>(null);
   const messagesRef = useRef<ThreadMessage[]>([]);
   useEffect(() => {
     openTargetRef.current = openTarget;
   }, [openTarget]);
+  useEffect(() => {
+    openEventRef.current = openEvent;
+  }, [openEvent]);
   useEffect(() => {
     pendingAttachmentRef.current = pendingAttachment;
   }, [pendingAttachment]);
@@ -241,12 +268,18 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   function followUpCommitFields(): {
     parentInteractionId?: string;
     targetEntityId?: string;
+    targetEventId?: string;
   } {
     const target = openTargetRef.current;
-    if (!target) return {};
+    const event = openEventRef.current;
     return {
-      parentInteractionId: target.interactionId,
-      targetEntityId: target.entityId,
+      ...(target
+        ? {
+            parentInteractionId: target.interactionId,
+            targetEntityId: target.entityId,
+          }
+        : {}),
+      ...(event ? { targetEventId: event.eventId } : {}),
     };
   }
 
@@ -311,6 +344,14 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     const next = { ...target, interactionId: result.interactionId };
     openTargetRef.current = next;
     setOpenTarget(next);
+  }
+
+  function advanceOpenEvent(result: GraphResult) {
+    if (result.eventIds?.length === 1 && result.extracted.events[0]?.name) {
+      const next = { eventId: result.eventIds[0]!, name: result.extracted.events[0].name };
+      openEventRef.current = next;
+      setOpenEvent(next);
+    }
   }
 
   /** Schedule an undo chip + auto-expire timer for a soft-deleted bubble. */
@@ -497,6 +538,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           previewJpegBase64: pendingAttachmentRef.current?.jpegBase64 ?? null,
         });
         advanceOpenTarget(result as GraphResult);
+        advanceOpenEvent(result as GraphResult);
         clearPendingAttachment();
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
@@ -702,6 +744,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           previewJpegBase64: pendingAttachmentRef.current?.jpegBase64 ?? null,
         });
         advanceOpenTarget(result as GraphResult);
+        advanceOpenEvent(result as GraphResult);
         clearPendingAttachment();
       } catch (err) {
         const message = err instanceof Error ? err.message : 'commit failed.';
@@ -749,6 +792,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
             previewJpegBase64: pendingAttachmentRef.current?.jpegBase64 ?? null,
           });
           advanceOpenTarget(result as GraphResult);
+          advanceOpenEvent(result as GraphResult);
           clearPendingAttachment();
         } catch (err) {
           const message = err instanceof Error ? err.message : 'commit failed.';
@@ -823,6 +867,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           graphResult: result as GraphResult,
         });
         advanceOpenTarget(result as GraphResult);
+        advanceOpenEvent(result as GraphResult);
         clearPendingAttachment();
       } catch (err) {
         const message = err instanceof Error ? err.message : 'commit failed.';
@@ -852,6 +897,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           graphResult: result as GraphResult,
         });
         advanceOpenTarget(result as GraphResult);
+        advanceOpenEvent(result as GraphResult);
         clearPendingAttachment();
       } catch (err) {
         const message = err instanceof Error ? err.message : 'commit failed.';
@@ -942,7 +988,15 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     setMessages((prev) => {
       const ids = new Set(prev.map((m) => m.id));
       const seeded = seedMessages(initial).filter((m) => !ids.has(m.id));
-      return [...seeded, ...prev];
+      const next = [...seeded, ...prev];
+      if (!openEventRef.current) {
+        const session = lastCommittedEvent(next);
+        if (session) {
+          openEventRef.current = session;
+          setOpenEvent(session);
+        }
+      }
+      return next;
     });
   }, []);
 
@@ -962,6 +1016,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       setPasteDraft,
       openTarget,
       setOpenTarget,
+      openEvent,
+      setOpenEvent,
       pendingAttachment,
       photoBindChoices,
       attachFiles,
@@ -987,6 +1043,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       pasteOpenForId,
       pasteDraft,
       openTarget,
+      openEvent,
       pendingAttachment,
       photoBindChoices,
       attachFiles,

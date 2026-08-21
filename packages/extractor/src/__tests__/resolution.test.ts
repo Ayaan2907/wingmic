@@ -742,6 +742,105 @@ describe('commit() sourceInteractionId', () => {
     expect(event?.dateRangeEnd).toBeNull();
   });
 
+  it('harvests a pasted luma url onto a new event and binds the person', async () => {
+    const result = await commit(
+      {
+        persons: [
+          {
+            name: 'Ada Lovelace',
+            role: null,
+            companyHint: null,
+            topics: ['https', 'luma'],
+            notes: null,
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [],
+        events: [],
+        topics: ['https', 'luma', 'ethdenver'],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId,
+        transcript: 'https://lu.ma/ethdenver met ada there',
+        capturedAt: new Date('2026-08-20T12:00:00Z'),
+      },
+    );
+    expect(result.eventIds).toHaveLength(1);
+    const event = await db.query.events.findFirst({
+      where: eq(schema.events.id, result.eventIds[0]!),
+    });
+    expect(event?.url).toBe('https://lu.ma/ethdenver');
+    expect(event?.externalSource).toBe('luma');
+    expect(event?.externalId).toBe('ethdenver');
+    const edge = await db.query.entityEvents.findFirst({
+      where: and(
+        eq(schema.entityEvents.entityId, result.entityIds[0]!),
+        eq(schema.entityEvents.eventId, result.eventIds[0]!),
+      ),
+    });
+    expect(edge).toBeTruthy();
+  });
+
+  it('inherits preferredEventId when the follow-up names no event', async () => {
+    const first = await commit(
+      {
+        persons: [
+          {
+            name: 'Ada Lovelace',
+            role: null,
+            companyHint: null,
+            topics: [],
+            notes: null,
+            email: null,
+            linkedin: null,
+            aliases: [],
+          },
+        ],
+        companies: [],
+        events: [{ name: 'ETH Denver', dateHint: null, location: null }],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId,
+        transcript: 'met ada at eth denver',
+        capturedAt: new Date('2026-08-20T12:00:00Z'),
+      },
+    );
+    const second = await commit(
+      {
+        persons: [],
+        companies: [],
+        events: [],
+        topics: [],
+        actions: [],
+      },
+      {
+        db: db as never,
+        userId,
+        transcript: 'attached a photo',
+        capturedAt: new Date('2026-08-20T12:05:00Z'),
+        preferredEntityId: first.entityIds[0],
+        preferredEventId: first.eventIds[0],
+        parentInteractionId: first.interactionId,
+        threadRootId: first.interactionId,
+      },
+    );
+    const edge = await db.query.entityEvents.findFirst({
+      where: and(
+        eq(schema.entityEvents.entityId, first.entityIds[0]!),
+        eq(schema.entityEvents.eventId, first.eventIds[0]!),
+      ),
+    });
+    expect(second.eventIds).toEqual(first.eventIds);
+    expect(edge).toBeTruthy();
+  });
+
   afterAll(async () => {
     await client.close();
     try {
