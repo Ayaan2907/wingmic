@@ -17,10 +17,10 @@ import {
   StatBlock,
   Sticker,
   Step,
-  CodeBlock,
   LiveFeed,
 } from './_components/marketing-ui';
-import HeroPhone from './_components/HeroPhone';
+import HeroStage from './_components/HeroPhone';
+import WaitlistForm from './_components/WaitlistForm';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3211';
 
@@ -30,17 +30,9 @@ const TWEAK_DEFAULTS = {
   "thirdColor": "#FF8FAB"
 } ;
 
-// Waitlist endpoint — Formspree. Public by design (endpoint IDs are not secret).
-// If you fork wingmic, swap this for your own Formspree / equivalent endpoint.
-const WAITLIST_ENDPOINT = 'https://formspree.io/f/meenaaqb';
-
 function App() {
   const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
   const [tweaksOpen, setTweaksOpen] = useState(false);
-  const [email, setEmail] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const accent = tweaks.accentColor;
   const second = tweaks.secondColor;
@@ -48,7 +40,6 @@ function App() {
 
   const navLinks = [
     { href: '#how', label: 'How' },
-    { href: '#api', label: 'API' },
     { href: '#mcp', label: 'MCP' },
     { href: '#imports', label: 'Imports' },
     { href: '#acts', label: 'Acts' },
@@ -70,28 +61,6 @@ function App() {
   const applyTweak = (key, val) => {
     setTweaks((t) => ({ ...t, [key]: val }));
     window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [key]: val } }, '*');
-  };
-
-  const submitWaitlist = async () => {
-    if (!email.includes('@')) {
-      setErrorMsg('that does not look like a real email.');
-      return;
-    }
-    setPending(true);
-    setErrorMsg('');
-    try {
-      const res = await fetch(WAITLIST_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ email, source: 'wingmic.xyz/waitlist' })
-      });
-      if (!res.ok) throw new Error(`formspree returned ${res.status}`);
-      setSubmitted(true);
-    } catch (err) {
-      setErrorMsg('could not reach the waitlist. try again in a moment.');
-    } finally {
-      setPending(false);
-    }
   };
 
   return (
@@ -190,74 +159,19 @@ function App() {
           position: 'relative'
         }}>
 
-          {/* Left — type-driven hero */}
-          <div>
-            <div className="mono" style={{ fontSize: 11, color: accent, marginBottom: 20, letterSpacing: 2, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, animation: 'pulse-d 1.5s infinite' }} />
-              persistent storage for your social RAM
-            </div>
-
-            <h1 style={{
-              fontSize: 'clamp(48px, 8vw, 110px)',
-              fontWeight: 900, lineHeight: 0.92,
-              letterSpacing: '-0.045em', marginBottom: 32
+          {/* Interactive stage — iPhone on mobile, MacBook on desktop */}
+          <div className="wm-hero-phone-wrap" style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>
+            <HeroStage />
+            {/* mobile-only: scroll cue at the bottom of the first screen */}
+            <a href="#how" className="wm-scroll-cue mono" aria-label="scroll for more" style={{
+              alignItems: 'center', gap: 4, color: 'rgba(255,255,255,0.5)', fontSize: 11,
+              letterSpacing: 1, textTransform: 'uppercase',
             }}>
-              <span style={{ display: 'block' }}>You met</span>
-              <span style={{ display: 'block', position: 'relative' }}>
-                <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: accent }}>twelve</span> people
+              scroll
+              <span style={{ display: 'inline-flex', animation: 'drift-down 1.6s ease-in-out infinite' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </span>
-              <span style={{ display: 'block' }}>this week.</span>
-              <span style={{ display: 'block', color: 'rgba(255,255,255,0.4)', fontSize: '0.55em', fontWeight: 600, marginTop: 16, fontFamily: "system-ui" }}>
-                <span style={{ color: 'rgb(224, 165, 47)' }}>Wingmic remembers</span> <span className="scribble" style={{ color: 'rgb(255, 255, 255)' }}>everyone</span>.
-              </span>
-            </h1>
-
-            <p style={{ fontSize: 18, color: 'rgba(255,255,255,0.55)', lineHeight: 1.55, maxWidth: 480, marginBottom: 32 }}>
-              Voice-first networking memory graph for developers. You speak after a conversation, Wingmic does the rest, your agent gets the API.
-            </p>
-
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 32 }}>
-              <a href="#waitlist" style={{
-                padding: '15px 26px', borderRadius: 10,
-                background: accent, color: '#000',
-                fontSize: 15, fontWeight: 700,
-                display: 'inline-flex', alignItems: 'center', gap: 8,
-                boxShadow: `4px 4px 0 #000`,
-                border: '1.5px solid #000'
-              }}>
-                Join the beta
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7h12m0 0L8 2m5 5l-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-              </a>
-              <a href="#how" style={{
-                padding: '15px 26px', borderRadius: 10,
-                background: 'transparent', color: '#fff',
-                fontSize: 15, fontWeight: 600,
-                border: '1.5px solid rgba(255,255,255,0.25)'
-              }}>How it works ↓</a>
-            </div>
-
-            {/* social proof row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ display: 'flex' }}>
-                {['#FFC452', '#FF6B6B', '#7DD3FC', '#A78BFA', '#86efac'].map((c, i) =>
-                <div key={i} style={{
-                  width: 30, height: 30, borderRadius: '50%',
-                  background: c, marginLeft: i ? -10 : 0,
-                  border: '2.5px solid #0a0a0a',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 11, fontWeight: 800, color: '#000'
-                }}>{['J', 'D', 'L', 'M', 'A'][i]}</div>
-                )}
-              </div>
-              <div className="mono" style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
-                <span style={{ color: '#fff', fontWeight: 700 }}>45+</span> devs on the waitlist
-              </div>
-            </div>
-          </div>
-
-          {/* Right — interactive phone: explainer video + live demo */}
-          <div className="wm-hero-phone-wrap" style={{ display: 'flex', justifyContent: 'center' }}>
-            <HeroPhone width={420} />
+            </a>
           </div>
         </div>
       </section>
@@ -499,108 +413,6 @@ function App() {
         </div>
       </section>
 
-      {/* ─────────────────── API — developer first ─────────────────── */}
-      <section id="api" className="wm-section" style={{ padding: '120px 32px', background: '#06060a', borderTop: `2px solid ${accent}30`, position: 'relative' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 64, flexWrap: 'wrap', gap: 24 }}>
-            <div>
-              <div className="mono" style={{ fontSize: 11, color: third, marginBottom: 16, letterSpacing: 2, textTransform: 'uppercase' }}>
-                ◆ API · SDK · Webhooks
-              </div>
-              <h2 className="wm-section-h2" style={{
-                fontSize: 'clamp(36px, 5vw, 68px)', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 16, maxWidth: 800
-              }}>
-                Your network is <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: third }}>queryable</span>.
-              </h2>
-              <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.5)', maxWidth: 600, lineHeight: 1.55 }}>
-                Every node, edge, and follow-up is exposed through a typed REST API and a TypeScript SDK. Build agents, slack bots, scripts — do whatever you want with it.
-              </p>
-            </div>
-            <a href="#" className="mono" style={{
-              padding: '12px 18px', borderRadius: 8,
-              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.15)',
-              fontSize: 12.5, color: '#fff', display: 'inline-flex', alignItems: 'center', gap: 8
-            }}>
-              docs · OpenAPI 3.1 →
-            </a>
-          </div>
-
-          <div className="wm-stack" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 24 }}>
-            {/* Code */}
-            <CodeBlock
-              accent={accent}
-              filename="agent.ts"
-              lines={[
-              { kind: 'keyword', text: 'import' },
-              { kind: 'comment', text: '  { Wingmic } from "@wingmic/sdk";' },
-              { kind: 'comment', text: '' },
-              { kind: 'comment', text: '// connect once' },
-              { kind: 'text', text: 'const wm = new Wingmic({ apiKey: env.WM_KEY });' },
-              { kind: 'comment', text: '' },
-              { kind: 'comment', text: '// natural language → graph query' },
-              { kind: 'text', text: 'const matches = await wm.query({' },
-              { kind: 'string', text: '  text: "who knows about edge config?",' },
-              { kind: 'text', text: '  limit: 5,' },
-              { kind: 'text', text: '});' },
-              { kind: 'comment', text: '' },
-              { kind: 'comment', text: '// → [{ person, score, lastContext, edges }, …]' },
-              { kind: 'comment', text: '' },
-              { kind: 'comment', text: '// or stream a voice memo straight in' },
-              { kind: 'text', text: 'await wm.capture.stream(audioStream);' }]
-              } />
-            
-
-            {/* Endpoints */}
-            <div style={{
-              borderRadius: 14, padding: 22,
-              background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.08)'
-            }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>REST endpoints</span>
-                <span className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>v1.api.wingmic.xyz</span>
-              </div>
-              {[
-              { m: 'POST', p: '/v1/capture', d: 'Voice or text → entities' },
-              { m: 'GET', p: '/v1/nodes', d: 'List people, orgs, events' },
-              { m: 'GET', p: '/v1/edges', d: 'Filter by node, type, recency' },
-              { m: 'POST', p: '/v1/query', d: 'Natural-language search' },
-              { m: 'GET', p: '/v1/followups', d: 'Pending action items' },
-              { m: 'POST', p: '/v1/webhooks', d: 'Pipe to Slack, Discord, Linear' }].
-              map((e) =>
-              <div key={e.p} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.04)'
-              }}>
-                  <span className="mono" style={{ fontSize: 10, fontWeight: 800, color: e.m === 'POST' ? '#86efac' : third, minWidth: 38, padding: '2px 6px', background: e.m === 'POST' ? 'rgba(134,239,172,0.1)' : 'rgba(125,211,252,0.1)', borderRadius: 4, textAlign: 'center' }}>{e.m}</span>
-                  <span className="mono" style={{ fontSize: 12.5, color: '#fff', fontWeight: 600, flex: 1 }}>{e.p}</span>
-                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{e.d}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Feature row */}
-          <div className="wm-stack-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginTop: 32 }}>
-            {[
-            { k: 'TypeScript SDK', v: 'Fully typed, zero deps' },
-            { k: 'Webhooks', v: 'Real-time, retries built-in' },
-            { k: 'OpenAPI 3.1', v: 'Generate any-language clients' },
-            { k: 'Streaming', v: 'WS + SSE for live captures' }].
-            map((x) =>
-            <div key={x.k} style={{
-              padding: 18, borderRadius: 12,
-              background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)'
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l3.5 3.5L12 4" stroke={accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{x.k}</div>
-                </div>
-                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>{x.v}</div>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
 
       {/* ─────────────────── MCP SHOWCASE ─────────────────── */}
       <section id="mcp" className="wm-section" style={{ padding: '120px 32px', background: '#0a0a0a', borderTop: `2px solid ${accent}30`, position: 'relative', overflow: 'hidden' }}>
@@ -858,7 +670,7 @@ function App() {
                 <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>
                   Wingmic ships an open import spec — write a 30-line adapter and we'll merge it.
                 </span>
-                <a href="#api" style={{ marginLeft: 'auto', fontSize: 13, color: accent, fontWeight: 600 }}>
+                <a href="/contribute" style={{ marginLeft: 'auto', fontSize: 13, color: accent, fontWeight: 600 }}>
                   See spec →
                 </a>
               </div>
@@ -1157,7 +969,7 @@ function App() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginTop: 20 }}>
                 <div>
                   <div style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>45+</div>
-                  <div className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1.5 }}>devs on waitlist</div>
+                  <div className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1.5 }}>on the waitlist</div>
                 </div>
                 <div>
                   <div style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>32K</div>
@@ -1199,7 +1011,7 @@ function App() {
             fontSize: 12, color: accent, marginBottom: 28
           }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, animation: 'pulse-d 1.5s infinite' }} />
-            v0.1 beta · 45+ devs · waves of 50
+            v0.1 beta · 45+ on the list · waves of 50
           </div>
 
           <h2 style={{
@@ -1213,53 +1025,7 @@ function App() {
             Get early access to v0.1. We let people in waves of 50. Bring your own Claude key, MIT-licensed when GA.
           </p>
 
-          {!submitted ?
-          <form onSubmit={(e) => {e.preventDefault();submitWaitlist();}} className="wm-waitlist-form" style={{
-            display: 'flex', gap: 8, padding: 6, borderRadius: 12,
-            background: '#0a0a0a', border: `1.5px solid ${accent}50`,
-            maxWidth: 500, margin: '0 auto',
-            boxShadow: `4px 4px 0 ${accent}30`
-          }}>
-              <input
-              type="email" placeholder="you@dev.shop" value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              style={{
-                flex: 1, padding: '14px 16px', background: 'transparent', border: 'none',
-                color: '#fff', fontSize: 15, outline: 'none', fontFamily: 'inherit'
-              }} />
-            
-              <button type="submit" disabled={pending} style={{
-              padding: '14px 26px', borderRadius: 8, background: accent, color: '#000',
-              fontSize: 14, fontWeight: 700, border: 'none',
-              cursor: pending ? 'wait' : 'pointer',
-              opacity: pending ? 0.6 : 1,
-              fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6
-            }}>
-                {pending ? 'Sending…' : 'Request access'}
-                {!pending && <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7h12m0 0L8 2m5 5l-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>}
-              </button>
-            </form> :
-
-          <div style={{
-            padding: 24, borderRadius: 12, maxWidth: 500, margin: '0 auto',
-            background: `${accent}10`, border: `1px solid ${accent}40`
-          }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l3.5 3.5L11 4" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                </div>
-                <div style={{ fontSize: 16, color: '#fff' }}>You're on the list. We'll email you within a week.</div>
-              </div>
-            </div>
-          }
-
-          {errorMsg &&
-          <div className="mono" style={{
-            fontSize: 12, color: '#FF6B6B', marginTop: 14, letterSpacing: 0.5,
-            maxWidth: 500, marginLeft: 'auto', marginRight: 'auto', textAlign: 'center'
-          }}>
-              {errorMsg}
-            </div>}
+          <WaitlistForm accent={accent} source="wingmic.xyz/waitlist" />
 
           <div className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 24, letterSpacing: 1, textTransform: 'uppercase' }}>
             no spam · unsubscribe in one click · MIT-licensed @ GA
@@ -1279,12 +1045,12 @@ function App() {
               <span className="mono" style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>wingmic.xyz</span>
             </div>
             <p style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, maxWidth: 320 }}>
-              Persistent storage for your social RAM. Voice-first networking memory graph for developers.
+              Persistent storage for your social RAM. Speak after you meet someone — Wingmic remembers everyone.
             </p>
           </div>
           {[
           { h: 'Product', items: ['Beta', 'API', 'MCP', 'Changelog'] },
-          { h: 'Devs', items: ['Docs', 'OpenAPI', 'SDK', 'GitHub'] },
+          { h: 'Build', items: ['Docs', 'OpenAPI', 'SDK', 'GitHub'] },
           { h: 'Wingmic', items: ['Manifesto', 'Privacy', 'X / Twitter', 'Status'] }].
           map((col) =>
           <div key={col.h}>
@@ -1305,7 +1071,7 @@ function App() {
         </div>
         <div style={{ maxWidth: 1280, margin: '0 auto', paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div className="mono" style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.3)' }}>
-            wingmic.xyz · MIT @ GA · built for devs who hate losing connections
+            wingmic.xyz · MIT @ GA · built for people who hate losing connections
           </div>
           <div className="mono" style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.3)' }}>
             v0.1.0-beta · sf · ⌥ ◆

@@ -42,6 +42,20 @@ html {
   background: var(--bg-page);
   overflow-x: clip;
   width: 100%;
+  /* gentle section-by-section scroll (proximity = never traps tall sections) */
+  scroll-snap-type: y proximity;
+  scroll-padding-top: 92px;
+}
+
+/* each top-level section is a snap point */
+.wm-hero,
+.wm-section,
+footer.wm-section {
+  scroll-snap-align: start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-snap-type: none; }
 }
 
 body {
@@ -99,6 +113,16 @@ a {
   padding-bottom: 0.2em;
 }
 
+.wm-scroll-cue { display: none; }
+@keyframes mic-pulse {
+  0%   { box-shadow: 0 6px 20px rgba(255, 196, 82, 0.45), 0 0 0 0 rgba(255, 196, 82, 0.5); }
+  70%  { box-shadow: 0 8px 28px rgba(255, 196, 82, 0.6), 0 0 0 16px rgba(255, 196, 82, 0); }
+  100% { box-shadow: 0 6px 20px rgba(255, 196, 82, 0.45), 0 0 0 0 rgba(255, 196, 82, 0); }
+}
+@keyframes drift-down {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(4px); }
+}
 @keyframes blink {
   0%,
   50% {
@@ -259,21 +283,49 @@ a {
     font-size: clamp(32px, 8vw, 44px) !important;
     margin-bottom: 32px !important;
   }
+  /* hero headline: keep it inside the viewport on narrow screens */
+  .wm-hero h1 {
+    font-size: clamp(38px, 10vw, 80px) !important;
+  }
 
-  /* Hero */
+  /* Hero — mobile: the phone fills the first screen, text lives below the fold */
   .wm-hero {
-    padding-top: 110px !important;
-    padding-bottom: 64px !important;
+    padding-top: 86px !important;
+    padding-bottom: 0 !important;
     min-height: auto !important;
   }
   .wm-hero-grid {
     grid-template-columns: 1fr !important;
-    gap: 40px !important;
-    padding: 0 18px !important;
+    gap: 8px !important;
+    padding: 0 16px !important;
   }
   .wm-hero-phone-wrap {
-    max-width: 300px;
-    margin: 0 auto;
+    order: -1;            /* phone first, right under the nav */
+    min-height: calc(100vh - 86px);
+    min-height: calc(100dvh - 86px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    max-width: none;
+    margin: 0;
+  }
+  .wm-heroPhone {
+    width: auto !important;
+    max-width: none !important;
+  }
+  .wm-phoneBox {
+    /* width-driven so the frame keeps its exact aspect (no cut corners) */
+    width: min(94vw, calc((100vh - 182px) * 0.49)) !important;
+    width: min(94vw, calc((100dvh - 182px) * 0.49)) !important;
+    height: auto !important;
+    max-width: none;
+  }
+  .wm-scroll-cue {
+    display: flex !important;
+    justify-content: center;
+    margin-top: 12px;
   }
 
   /* Generic stackers */
@@ -344,10 +396,44 @@ a {
   .wm-hero-grid {
     padding: 0 14px !important;
   }
-  .wm-hero-phone-wrap {
-    max-width: 260px;
-  }
   .wm-step-grid .serif {
     font-size: 60px !important;
+  }
+}
+
+/* pre-mount placeholder so the hero reserves space before the frame resolves */
+.wm-stage-skeleton {
+  width: 100%;
+  min-height: 60vh;
+}
+
+/* ── Desktop: MacBook fills the first screen, hero copy below the fold ── */
+@media (min-width: 769px) {
+  .wm-hero {
+    padding-top: 96px !important;
+    padding-bottom: 0 !important;
+    min-height: auto !important;
+  }
+  .wm-hero-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  .wm-hero-phone-wrap {
+    order: -1;
+    min-height: calc(100vh - 96px);
+    min-height: calc(100dvh - 96px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .wm-macBook {
+    width: min(88vw, calc((100dvh - 260px) * 1.6));
+  }
+  .wm-scroll-cue {
+    display: flex !important;
+    justify-content: center;
+    margin-top: 12px;
   }
 }
