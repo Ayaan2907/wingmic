@@ -1,0 +1,44 @@
+apps/app/app/api/capture/transcribe/__tests__/route.test.ts
+  s_aae7f6445d6db1::t_76fa6d74e16536 34-41
+  s_aae7f6445d6db1::t_c64ef2869a033c 62-63
+  s_aae7f6445d6db1::t_6a62fa4b306b9d 118-130
+packages/db/src/schema.ts
+  s_aae7f6445d6db1::t_828f05d7f3aaa7 461-477
+  s_aae7f6445d6db1::t_6a4309a9213fe6 1
+apps/app/lib/trpc/routers/capture.test.ts
+  s_aae7f6445d6db1::t_fa22b7285326fd 96-137,139-149,151-153
+  s_aae7f6445d6db1::t_2bfd1b7c0f55df 8
+  s_aae7f6445d6db1::t_6906f0b0bed726 138,150
+apps/app/app/api/capture/transcribe/route.ts
+  s_aae7f6445d6db1::t_ffdd6f964021dc 25-26
+  s_aae7f6445d6db1::t_73aad4ae9a44c3 61-71
+apps/app/lib/trpc/routers/capture.ts
+  s_aae7f6445d6db1::t_88cb02b405a482 16
+  s_aae7f6445d6db1::t_d9300ffade7e28 183-197
+packages/db/drizzle/0011_luxuriant_ironclad.sql
+  s_aae7f6445d6db1::t_9a1bfeb9f0f02f 1-8
+apps/app/lib/usage/__tests__/dailyCap.test.ts
+  s_aae7f6445d6db1::t_480929c66cef97 1-66
+apps/app/lib/usage/dailyCap.ts
+  s_aae7f6445d6db1::t_f5db3954129b92 1-46
+packages/db/drizzle/meta/0011_snapshot.json
+  s_aae7f6445d6db1::t_d0804c324fe5fc 1-2226
+packages/db/drizzle/meta/_journal.json
+  s_aae7f6445d6db1::t_51e51df61a6685 81-87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "b0926608c5579495f9999e7f9730608ee9f591b6",
+  "prompts": {},
+  "sessions": {
+    "s_aae7f6445d6db1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "64f783b1-d6a6-4c37-b7e8-a070f7ae3dff",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
