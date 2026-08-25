@@ -9,9 +9,17 @@ import * as schema from '@wingmic/db/schema';
 
 const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
 
+/**
+ * Landing origins allowed to call the auth API cross-origin — the wingmic.xyz
+ * hero sends the magic link directly (issue #169). Also drives the CORS
+ * allowlist in app/api/auth/[...all]/route.ts.
+ */
+export const LANDING_ORIGINS = ['https://wingmic.xyz', 'http://localhost:3210'];
+
 export const auth = betterAuth({
   appName: 'wingmic',
   baseURL: env.BETTER_AUTH_URL,
+  trustedOrigins: LANDING_ORIGINS,
   secret: env.BETTER_AUTH_SECRET,
   database: drizzleAdapter(db, {
     provider: 'sqlite',
