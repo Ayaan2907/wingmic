@@ -1,0 +1,23 @@
+apps/app/app/signin/safeNext.ts
+  s_b1ca2a8cd512ee::t_7089b326b80a73 7-10
+apps/app/lib/enrich/__tests__/parseEventFields.test.ts
+  s_b1ca2a8cd512ee::t_2f62af45f6e93f 5-16
+apps/app/lib/enrich/parseEventFields.ts
+  s_b1ca2a8cd512ee::t_0b653a9c18eb6e 12-17,25-26,29-37,45-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "26c11f21b586725b9ee55bddcd9a4384837f4fb8",
+  "prompts": {},
+  "sessions": {
+    "s_b1ca2a8cd512ee": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3c54c2c7-249d-4d20-b355-0a201c106bca",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
