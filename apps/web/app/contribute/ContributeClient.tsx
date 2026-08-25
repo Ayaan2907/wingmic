@@ -5,6 +5,7 @@
 import GitHubActivity from '../_components/GitHubActivity';
 
 const REPO = 'Ayaan2907/wingmic';
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3211';
 const ACCENT = '#FFC452';
 
 export default function ContributeClient() {
@@ -33,10 +34,10 @@ export default function ContributeClient() {
           <a href="https://x.com/wingmicxyz" target="_blank" rel="noreferrer" aria-label="wingmic on X" style={{ color: 'rgba(255,255,255,0.55)', display: 'flex' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 6h2.3l-5 5.7L20 18h-4.6l-3.6-4.7L7.6 18H5.3l5.4-6.1L5 6h4.7l3.3 4.3L16.5 6zm-.8 10.6h1.3L8.4 7.3H7l8.7 9.3z" /></svg>
           </a>
-          <a href="/#waitlist" className="wm-nav-cta" style={{
+          <a href={APP_URL} className="wm-nav-cta" style={{
             padding: '8px 16px', borderRadius: 8, background: '#fff', color: '#000',
             fontSize: 13.5, fontWeight: 600, border: '1px solid rgba(255,255,255,0.2)',
-          }}>Get beta access</a>
+          }}>Log in</a>
         </div>
       </nav>
 

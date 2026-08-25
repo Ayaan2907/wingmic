@@ -8,7 +8,19 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { IphoneFrame, screenBox, IPHONE_ASPECT } from './Iphone';
-import WaitlistForm from './WaitlistForm';
+
+function OpenAppCta() {
+  return (
+    <a href={APP_URL} style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+      padding: '10px 14px', borderRadius: 8,
+      background: ACCENT, color: '#000',
+      fontSize: 12, fontWeight: 700, textDecoration: 'none',
+    }}>
+      open the app →
+    </a>
+  );
+}
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3211';
 const IS_LOCAL_APP = APP_URL.includes('localhost') || APP_URL.includes('127.0.0.1');
@@ -467,7 +479,7 @@ function DemoScreen({ micRef }) {
             <ContactCard data={data} />
             <div className="mono" style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', letterSpacing: 1, textTransform: 'uppercase' }}>graph</div>
             <MiniGraph data={data} />
-            <WaitlistForm compact accent={ACCENT} source="wingmic.xyz/demo" />
+            <OpenAppCta />
             <button type="button" onClick={reset} className="mono" style={{ alignSelf: 'center', fontSize: 11, color: 'rgba(255,255,255,0.55)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>↺ try again</button>
           </div>
         )}
@@ -610,7 +622,7 @@ function DesktopDemo({ mode }) {
               <ContactCard data={data} />
               <div className="mono" style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', letterSpacing: 1, textTransform: 'uppercase' }}>graph</div>
               <MiniGraph data={data} />
-              <WaitlistForm compact accent={ACCENT} source="wingmic.xyz/demo" />
+              <OpenAppCta />
               <button type="button" onClick={reset} className="mono" style={{ alignSelf: 'center', fontSize: 11, color: 'rgba(255,255,255,0.55)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>↺ try again</button>
             </div>
           )}
