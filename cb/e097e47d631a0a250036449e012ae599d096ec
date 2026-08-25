@@ -1,0 +1,27 @@
+apps/app/lib/auth.ts
+  s_b1ca2a8cd512ee::t_1fc06dbb9a4d0a 12-18,22
+apps/app/app/api/auth/[...all]/route.ts
+  s_b1ca2a8cd512ee::t_86a39de40d58c7 1,4-43
+apps/app/app/signin/SignInClient.tsx
+  s_b1ca2a8cd512ee::t_e3efd1738ab368 10-17,19
+apps/app/app/api/auth/[...all]/__tests__/route.test.ts
+  s_b1ca2a8cd512ee::t_ba3671a2a56f93 1-52
+apps/app/app/signin/page.tsx
+  s_b1ca2a8cd512ee::t_ed7eccea0cd6a8 12,15-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "cbe097e47d631a0a250036449e012ae599d096ec",
+  "prompts": {},
+  "sessions": {
+    "s_b1ca2a8cd512ee": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3c54c2c7-249d-4d20-b355-0a201c106bca",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
