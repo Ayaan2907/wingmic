@@ -1,0 +1,23 @@
+package.json
+  s_b1ca2a8cd512ee::t_82f8b6aa687e91 3
+apps/app/package.json
+  s_b1ca2a8cd512ee::t_82f8b6aa687e91 3
+apps/web/package.json
+  s_b1ca2a8cd512ee::t_82f8b6aa687e91 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "20bf56641f603a89fd489a522175e545beaac9c9",
+  "prompts": {},
+  "sessions": {
+    "s_b1ca2a8cd512ee": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3c54c2c7-249d-4d20-b355-0a201c106bca",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
