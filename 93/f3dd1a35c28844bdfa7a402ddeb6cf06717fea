@@ -1,0 +1,32 @@
+apps/web/app/_components/HeroPhone.tsx
+  s_aae7f6445d6db1::t_cedb3baf6dbd74 482,625
+  s_aae7f6445d6db1::t_ece5f08eb1d8cc 11-23
+apps/web/app/HomeClient.tsx
+  s_aae7f6445d6db1::t_60dfd1dbe30f3e 966
+  s_aae7f6445d6db1::t_d33000390b9e2d 528,535
+  s_aae7f6445d6db1::t_f00b6313dfa279 1024,1027-1036,1039
+  s_aae7f6445d6db1::t_a9ab99a6fb9958 1067
+  s_aae7f6445d6db1::t_21d8fe98b5b486 1013
+  s_aae7f6445d6db1::t_97fde5650c0b75 1085
+  s_aae7f6445d6db1::t_d35d0a0cd1154f 991-992
+  s_aae7f6445d6db1::t_37c80b4d8d14a3 1060
+  s_aae7f6445d6db1::t_27bbd885c9eb51 971
+  s_aae7f6445d6db1::t_c1625cd7b496bf 77,79
+  s_aae7f6445d6db1::t_f9bdde28019a5a 113,118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "93f3dd1a35c28844bdfa7a402ddeb6cf06717fea",
+  "prompts": {},
+  "sessions": {
+    "s_aae7f6445d6db1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "64f783b1-d6a6-4c37-b7e8-a070f7ae3dff",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
