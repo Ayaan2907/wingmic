@@ -1,0 +1,23 @@
+apps/web/app/globals.css
+  s_b1ca2a8cd512ee::t_62f079f2e3c985 117-121,325-327,438-439
+apps/web/app/HomeClient.tsx
+  s_b1ca2a8cd512ee::t_03843a661f7725 23,165-174,1038-1040
+apps/web/app/_components/MagicLinkForm.tsx
+  s_b1ca2a8cd512ee::t_ae74bc9d8132de 1-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "acd48ffad7d9adefc028f32d3f5bd4b2fa62862a",
+  "prompts": {},
+  "sessions": {
+    "s_b1ca2a8cd512ee": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3c54c2c7-249d-4d20-b355-0a201c106bca",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
