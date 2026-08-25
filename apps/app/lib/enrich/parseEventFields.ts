@@ -9,6 +9,12 @@ export type ParsedEventFields = {
   external: { source: EventExternalSource; id: string } | null;
 };
 
+const PLATFORM_URL_RE = /https?:\/\/(?:www\.)?(?:lu\.ma|luma\.com|partiful\.com)\/[^\s)]+/i;
+
+function trimUrlPunctuation(url: string): string {
+  return url.replace(/[.,;:!?)\]>]+$/, '');
+}
+
 export function parseEventFields(hits: WebSearchHit[]): ParsedEventFields {
   let firstUrl: string | null = null;
   let platformUrl: string | null = null;
@@ -16,10 +22,19 @@ export function parseEventFields(hits: WebSearchHit[]): ParsedEventFields {
   const blob = hits.map((h) => `${h.title}\n${h.snippet}`).join('\n');
 
   for (const hit of hits) {
-    const hitExternal = parseEventExternal(hit.url) ?? parseEventExternal(hit.snippet);
+    const urlExternal = parseEventExternal(hit.url);
+    const hitExternal = urlExternal ?? parseEventExternal(hit.snippet);
     if (!external && hitExternal) {
       external = hitExternal;
-      if (!isBlockedExtractUrl(hit.url)) platformUrl = hit.url;
+      if (urlExternal && !isBlockedExtractUrl(hit.url)) {
+        // hit.url itself is the Luma/Partiful link.
+        platformUrl = hit.url;
+      } else {
+        // External id came from the snippet — take the platform link from
+        // there, not the article that mentioned it.
+        const fromSnippet = `${hit.title}\n${hit.snippet}`.match(PLATFORM_URL_RE);
+        if (fromSnippet) platformUrl = trimUrlPunctuation(fromSnippet[0]);
+      }
     }
     if (!firstUrl && !isBlockedExtractUrl(hit.url)) {
       firstUrl = hit.url;
@@ -27,10 +42,8 @@ export function parseEventFields(hits: WebSearchHit[]): ParsedEventFields {
   }
   let url = platformUrl ?? firstUrl;
   if (!url && external) {
-    const fromBlob = blob.match(
-      /https?:\/\/(?:www\.)?(?:lu\.ma|luma\.com|partiful\.com)\/[^\s)]+/i,
-    );
-    if (fromBlob) url = fromBlob[0].replace(/[.,;:!?)\]>]+$/, '');
+    const fromBlob = blob.match(PLATFORM_URL_RE);
+    if (fromBlob) url = trimUrlPunctuation(fromBlob[0]);
   }
 
   const dates = parseDateRange(blob);

@@ -2,6 +2,18 @@ import { describe, it, expect } from 'vitest';
 import { parseEventFields } from '../parseEventFields';
 
 describe('parseEventFields', () => {
+  it('prefers the snippet platform link over an article url that only mentions it', () => {
+    const parsed = parseEventFields([
+      {
+        title: 'ETH Denver side events roundup',
+        url: 'https://blog.example.com/ethdenver-side-events',
+        snippet: 'rsvp for the rooftop mixer at https://lu.ma/rooftop-mixer, doors at 7.',
+      },
+    ]);
+    expect(parsed.external).toEqual({ source: 'luma', id: 'rooftop-mixer' });
+    expect(parsed.url).toBe('https://lu.ma/rooftop-mixer');
+  });
+
   it('fills official url, location, and date range from public hits', () => {
     const parsed = parseEventFields([
       {
