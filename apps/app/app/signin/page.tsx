@@ -9,8 +9,10 @@ export const metadata = {
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string | string[] }>;
+  searchParams: Promise<{ next?: string | string[]; email?: string | string[] }>;
 }) {
   const sp = await searchParams;
-  return <SignInClient next={safeNextPath(sp?.next)} />;
+  const rawEmail = Array.isArray(sp?.email) ? sp.email[0] : sp?.email;
+  const email = typeof rawEmail === 'string' && rawEmail.length <= 254 ? rawEmail : '';
+  return <SignInClient next={safeNextPath(sp?.next)} initialEmail={email} />;
 }
