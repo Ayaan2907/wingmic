@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import * as schema from '@wingmic/db/schema';
 
 import { captureRouter } from './capture';
+import { DAILY_LIMITS, utcDay } from '@/lib/usage/dailyCap';
 
 function jpegBase64(byteLength = 32): string {
   const bytes = Buffer.alloc(byteLength);
@@ -89,6 +90,64 @@ describe('capture.commit attachment retry', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
 
     expect(await db.query.interactionAttachments.findMany()).toHaveLength(0);
+  });
+});
+
+describe('capture.commit daily caps', () => {
+  let db: ReturnType<typeof drizzle<typeof schema>>;
+  let client: ReturnType<typeof createClient>;
+  const userId = 'user_caps';
+
+  beforeEach(async () => {
+    client = createClient({ url: ':memory:' });
+    db = drizzle(client, { schema });
+    await client.executeMultiple(`
+      CREATE TABLE interaction (
+        id TEXT PRIMARY KEY, user_id TEXT NOT NULL, transcript TEXT NOT NULL,
+        captured_at INTEGER NOT NULL, created_at INTEGER NOT NULL,
+        client_capture_id TEXT
+      );
+      CREATE TABLE usage_daily (
+        user_id TEXT NOT NULL, day TEXT NOT NULL, kind TEXT NOT NULL,
+        count INTEGER DEFAULT 0 NOT NULL, PRIMARY KEY (user_id, day, kind)
+      );
+    `);
+  });
+
+  function caller() {
+    const ctx = {
+      db,
+      user: { id: userId },
+      session: { user: { id: userId } },
+    } as unknown as Parameters<typeof captureRouter.createCaller>[0];
+    return captureRouter.createCaller(ctx);
+  }
+
+  async function seedUsage(kind: string, count: number) {
+    await client.execute({
+      sql: 'INSERT INTO usage_daily (user_id, day, kind, count) VALUES (?, ?, ?, ?)',
+      args: [userId, utcDay(), kind, count],
+    });
+  }
+
+  it('rejects the 21st memo of the day before extraction runs', async () => {
+    await seedUsage('message', DAILY_LIMITS.message);
+    await expect(
+      caller().commit({ transcript: 'one memo too many', clientCaptureId: 'capture_over_cap' }),
+    ).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+    expect(await db.query.interactions.findMany({ columns: { id: true } })).toHaveLength(0);
+  });
+
+  it('rejects the 11th photo of the day even when the message budget remains', async () => {
+    await seedUsage('image', DAILY_LIMITS.image);
+    await expect(
+      caller().commit({
+        transcript: 'photo memo',
+        clientCaptureId: 'capture_photo_cap',
+        attachment: { jpegBase64: jpegBase64() },
+      }),
+    ).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+    expect(await db.query.interactions.findMany({ columns: { id: true } })).toHaveLength(0);
   });
 });
 

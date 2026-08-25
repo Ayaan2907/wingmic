@@ -13,6 +13,7 @@ import { enrichPersonsAfterCommit } from '@/lib/enrich/enrichPersons';
 import { enrichEventsAfterCommit } from '@/lib/enrich/enrichEvents';
 import { scheduleEnrich } from '@/lib/enrich/schedule';
 import { MAX_ATTACHMENT_BYTES } from '@/lib/chat/compressImage';
+import { consumeDailyUsage, DAILY_LIMITS } from '@/lib/usage/dailyCap';
 import { mergePhotoSignals } from '@/lib/capture/photoSignals';
 import { readPhotoSignals } from '@/lib/capture/readPhotoSignals';
 import * as schema from '@wingmic/db/schema';
@@ -177,6 +178,21 @@ export const captureRouter = router({
               attachments: attachmentRows,
             };
           }
+        }
+
+        // Daily caps — after the idempotency check so retries don't double-count,
+        // before extraction so capped users never reach the paid LLM call.
+        if (!(await consumeDailyUsage(ctx.db, ctx.user.id, 'message'))) {
+          throw new TRPCError({
+            code: 'TOO_MANY_REQUESTS',
+            message: `that's ${DAILY_LIMITS.message} memos today — the cap resets at midnight utc.`,
+          });
+        }
+        if (attachment && !(await consumeDailyUsage(ctx.db, ctx.user.id, 'image'))) {
+          throw new TRPCError({
+            code: 'TOO_MANY_REQUESTS',
+            message: `that's ${DAILY_LIMITS.image} photos today — send this one without the photo, or wait for the midnight utc reset.`,
+          });
         }
 
         let parentInteractionId: string | undefined;

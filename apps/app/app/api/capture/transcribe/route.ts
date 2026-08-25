@@ -22,6 +22,8 @@
  * See: docs/superpowers/plans/2026-05-23-v0.1.1-hosted-capture.md §"Step 1"
  */
 import { auth } from '@/lib/auth';
+import { db } from '@wingmic/db';
+import { consumeDailyUsage, DAILY_LIMITS } from '@/lib/usage/dailyCap';
 import {
   MAX_AUDIO_BYTES,
   MAX_DURATION_SECONDS,
@@ -52,6 +54,17 @@ export async function POST(req: Request): Promise<Response> {
   if (!rateLimit(userId)) {
     return Response.json(
       errorBody('rate_limited', 'too many transcribes in the last minute. wait a beat.'),
+      { status: 429 },
+    );
+  }
+
+  // 2b. daily cap (DB-backed, survives deploys)
+  if (!(await consumeDailyUsage(db, userId, 'recording'))) {
+    return Response.json(
+      errorBody(
+        'rate_limited',
+        `that's ${DAILY_LIMITS.recording} recordings today — the cap resets at midnight utc.`,
+      ),
       { status: 429 },
     );
   }

@@ -31,6 +31,14 @@ vi.mock('assemblyai', () => {
   return { AssemblyAI };
 });
 
+// ── Mock db + daily cap (real client would dial Turso at import) ───────
+vi.mock('@wingmic/db', () => ({ db: {} }));
+const consumeDailyUsageMock = vi.fn();
+vi.mock('@/lib/usage/dailyCap', () => ({
+  consumeDailyUsage: (...args: unknown[]) => consumeDailyUsageMock(...args),
+  DAILY_LIMITS: { recording: 10, message: 20, image: 10 },
+}));
+
 import { POST } from '../route';
 import { __testing, MAX_AUDIO_BYTES } from '../_internals';
 
@@ -51,6 +59,8 @@ beforeEach(() => {
   __testing.reset();
   getSessionMock.mockReset();
   transcribeMock.mockReset();
+  consumeDailyUsageMock.mockReset();
+  consumeDailyUsageMock.mockResolvedValue(true);
 });
 
 describe('POST /api/capture/transcribe', () => {
@@ -103,6 +113,19 @@ describe('POST /api/capture/transcribe', () => {
     expect(body.transcript).toBe('met sarah at acme about rust.');
     expect(typeof body.durationMs).toBe('number');
     expect(body.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('returns 429 when the daily recording cap is spent', async () => {
+    getSessionMock.mockResolvedValueOnce(authedSession());
+    consumeDailyUsageMock.mockResolvedValueOnce(false);
+    const req = buildRequest(new Blob([new Uint8Array(1024)], { type: 'audio/webm' }));
+    const res = await POST(req);
+    expect(res.status).toBe(429);
+    const body = await res.json();
+    expect(body.error.code).toBe('rate_limited');
+    expect(body.error.message).toContain('midnight utc');
+    expect(consumeDailyUsageMock).toHaveBeenCalledWith(expect.anything(), 'user-1', 'recording');
+    expect(transcribeMock).not.toHaveBeenCalled();
   });
 
   it('returns 429 after 10 calls in the same minute', async () => {

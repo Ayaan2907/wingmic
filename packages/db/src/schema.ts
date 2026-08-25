@@ -1,4 +1,4 @@
-import { customType, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { customType, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { createId } from '@paralleldrive/cuid2';
 
@@ -456,6 +456,23 @@ export const acts = sqliteTable(
     index('act_secondary_entity_idx').on(t.secondaryEntityId),
     index('act_source_interaction_idx').on(t.sourceInteractionId),
   ],
+);
+
+// ─── Daily usage caps (per-user, per-UTC-day hard limits) ──────────────
+// Consumed via consumeDailyUsage() in apps/app/lib/usage/dailyCap.ts.
+
+export const usageDaily = sqliteTable(
+  'usage_daily',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** UTC calendar day, YYYY-MM-DD. */
+    day: text('day').notNull(),
+    kind: text('kind', { enum: ['recording', 'message', 'image'] }).notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.day, t.kind] })],
 );
 
 // ─── Connection requests (opt-in linking, exposed in v0.2+) ────────────
