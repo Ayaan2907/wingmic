@@ -20,7 +20,6 @@ import {
   LiveFeed,
 } from './_components/marketing-ui';
 import HeroStage from './_components/HeroPhone';
-import WaitlistForm from './_components/WaitlistForm';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3211';
 
@@ -75,9 +74,9 @@ function App() {
         color: '#fff', fontWeight: 500,
         display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24
       }}>
-        <span className="mono wm-topbar-tag" style={{ color: 'rgba(255,255,255,0.5)' }}>v0.1.0-beta · capture + recall ship first · waves of 50</span>
+        <span className="mono wm-topbar-tag" style={{ color: 'rgba(255,255,255,0.5)' }}>v1.0 · capture + recall are live · open to everyone</span>
         <span className="wm-topbar-dot" style={{ width: 4, height: 4, borderRadius: '50%', background: accent }} />
-        <a href="#waitlist" style={{ color: accent, fontWeight: 600 }}>get an invite →</a>
+        <a href={APP_URL} style={{ color: accent, fontWeight: 600 }}>open the app →</a>
       </div>
 
       <nav className="wm-nav" style={{
@@ -111,12 +110,12 @@ function App() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 6h2.3l-5 5.7L20 18h-4.6l-3.6-4.7L7.6 18H5.3l5.4-6.1L5 6h4.7l3.3 4.3L16.5 6zm-.8 10.6h1.3L8.4 7.3H7l8.7 9.3z" /></svg>
             </a>
           </div>
-          <a href="#waitlist" className="wm-nav-cta" style={{
+          <a href={APP_URL} className="wm-nav-cta" style={{
             padding: '8px 16px', borderRadius: 8,
             background: '#fff', color: '#000',
             fontSize: 13.5, fontWeight: 600,
             border: '1px solid rgba(255,255,255,0.2)'
-          }}>Get beta access</a>
+          }}>Log in</a>
           <button
             type="button"
             className="wm-mobile-menu-btn"
@@ -526,14 +525,14 @@ function App() {
                   </li>
                 ))}
               </ul>
-              <a href="#waitlist" style={{
+              <a href={APP_URL} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 8,
                 padding: '14px 22px', borderRadius: 10,
                 background: accent, color: '#000',
                 fontSize: 15, fontWeight: 700, textDecoration: 'none',
                 boxShadow: '3px 3px 0 #000', border: '1.5px solid #000',
               }}>
-                Connect LinkedIn
+                Get started
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7h12m0 0L8 2m5 5l-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
               </a>
             </div>
@@ -964,12 +963,12 @@ function App() {
               <h2 className="wm-section-h2" style={{
                 fontSize: 'clamp(36px, 5vw, 60px)', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 24
               }}>
-                Beta is <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: accent }}>cooking</span>.
+                v1 is <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: accent }}>live</span>.
               </h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginTop: 20 }}>
                 <div>
                   <div style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>45+</div>
-                  <div className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1.5 }}>on the waitlist</div>
+                  <div className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1.5 }}>early users</div>
                 </div>
                 <div>
                   <div style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>32K</div>
@@ -989,8 +988,8 @@ function App() {
         </div>
       </section>
 
-      {/* ─────────────────── WAITLIST ─────────────────── */}
-      <section id="waitlist" className="wm-section" style={{
+      {/* ─────────────────── SIGN IN ─────────────────── */}
+      <section id="signin" className="wm-section" style={{
         padding: '140px 32px', background: '#06060a',
         borderTop: `2px solid ${accent}30`, position: 'relative', overflow: 'hidden'
       }}>
@@ -1011,7 +1010,7 @@ function App() {
             fontSize: 12, color: accent, marginBottom: 28
           }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, animation: 'pulse-d 1.5s infinite' }} />
-            v0.1 beta · 45+ on the list · waves of 50
+            v1.0 · open to everyone · MIT-licensed
           </div>
 
           <h2 style={{
@@ -1022,13 +1021,22 @@ function App() {
             <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: accent }}>connections</span>.
           </h2>
           <p style={{ fontSize: 18, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, marginBottom: 40, maxWidth: 480, marginLeft: 'auto', marginRight: 'auto' }}>
-            Get early access to v0.1. We let people in waves of 50. Bring your own Claude key, MIT-licensed when GA.
+            Wingmic v1.0 is open. Sign in with a magic link — no password, no waitlist.
           </p>
 
-          <WaitlistForm accent={accent} source="wingmic.xyz/waitlist" />
+          <a href={APP_URL} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 10,
+            padding: '16px 30px', borderRadius: 10,
+            background: accent, color: '#000',
+            fontSize: 17, fontWeight: 700, textDecoration: 'none',
+            boxShadow: '3px 3px 0 #000', border: '1.5px solid #000',
+          }}>
+            Log in
+            <svg width="15" height="15" viewBox="0 0 14 14" fill="none"><path d="M1 7h12m0 0L8 2m5 5l-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+          </a>
 
           <div className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 24, letterSpacing: 1, textTransform: 'uppercase' }}>
-            no spam · unsubscribe in one click · MIT-licensed @ GA
+            magic-link sign in · no password · MIT-licensed
           </div>
         </div>
       </section>
@@ -1049,14 +1057,14 @@ function App() {
             </p>
           </div>
           {[
-          { h: 'Product', items: ['Beta', 'API', 'MCP', 'Changelog'] },
+          { h: 'Product', items: ['App', 'API', 'MCP', 'Changelog'] },
           { h: 'Build', items: ['Docs', 'OpenAPI', 'SDK', 'GitHub'] },
           { h: 'Wingmic', items: ['Manifesto', 'Privacy', 'X / Twitter', 'Status'] }].
           map((col) =>
           <div key={col.h}>
               <div className="mono" style={{ fontSize: 11, color: accent, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1.5 }}>{col.h}</div>
               {col.items.map((it) => {
-              const external = it === 'X / Twitter' ? 'https://x.com/wingmicxyz' : null;
+              const external = it === 'X / Twitter' ? 'https://x.com/wingmicxyz' : it === 'App' ? APP_URL : null;
               return (
                 <a
                   key={it}
@@ -1074,7 +1082,7 @@ function App() {
             wingmic.xyz · MIT @ GA · built for people who hate losing connections
           </div>
           <div className="mono" style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.3)' }}>
-            v0.1.0-beta · sf · ⌥ ◆
+            v1.0.0 · sf · ⌥ ◆
           </div>
         </div>
       </footer>

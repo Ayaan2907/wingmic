@@ -53,8 +53,7 @@ export interface HybridInput {
  *                                   `transcribe-entities.ts`; the AAI entity
  *                                   detection toggle isn't wired yet).
  *   Layer-2  applyHeuristics      — deterministic regex over the transcript:
- *                                   action-verb phrases and top-3 frequent
- *                                   non-stopword tokens for topics.
+ *                                   action-verb phrases and noun-phrase topics.
  *   Layer-3  runLinkerLLM         — best-effort LLM call with an 8-second
  *                                   timeout. On any failure (rate limit,
  *                                   schema-validation, network 5xx, timeout)
@@ -221,15 +220,108 @@ function mapVerbToKind(verb: string): ActionCandidate['kind'] {
   if (v === 'send' || v === 'email') return 'email';
   if (v === 'remind' || v === 'todo') return 'reminder';
   if (v === 'intro') return 'intro';
-  if (v === 'follow-up' || v === 'follow up') return 'todo';
-  // meet, call, message, ping, check in
+  if (
+    v === 'follow-up' ||
+    v === 'follow up' ||
+    v === 'ping' ||
+    v === 'message' ||
+    v === 'check in'
+  ) {
+    return 'todo';
+  }
+  // meet, call — only kept when a whenHint is attached below
   return 'meeting';
+}
+
+/** Role/title unigrams that leak from "co-founder / CEO of X" speech. */
+const ROLE_UNIGRAMS = new Set([
+  'founder',
+  'cofounder',
+  'president',
+  'director',
+  'officer',
+  'manager',
+  'engineer',
+  'business',
+  'company',
+  'startup',
+]);
+
+function isContentToken(token: string, blocked: Set<string>): boolean {
+  return (
+    token.length >= 4 &&
+    !STOPWORDS.has(token) &&
+    !blocked.has(token) &&
+    /^[a-z][a-z+#-]*$/.test(token)
+  );
+}
+
+/**
+ * Rank noun phrases (trigram > bigram > unigram) from a memo.
+ * Longer phrases beat repeated unigrams so "merchant cash advance" wins
+ * over "merchant" / "cash" / "advance".
+ */
+export function extractTopicPhrases(
+  transcript: string,
+  blocked: Iterable<string> = [],
+  limit = 3,
+): string[] {
+  const blockedSet = new Set([...blocked].map((s) => s.toLowerCase()));
+  const rawTokens = transcript
+    .toLowerCase()
+    .split(/[\s.,;:!?"'()\[\]{}<>/\\]+/)
+    .filter(Boolean);
+  const ok = rawTokens.map((t) => isContentToken(t, blockedSet));
+
+  const counts = new Map<string, { n: number; count: number }>();
+  const add = (start: number, n: number) => {
+    if (start + n > rawTokens.length) return;
+    for (let i = 0; i < n; i++) {
+      if (!ok[start + i]) return;
+    }
+    const token = rawTokens[start];
+    if (n === 1 && token && ROLE_UNIGRAMS.has(token)) return;
+    const slice = rawTokens.slice(start, start + n);
+    if (n > 1 && new Set(slice).size === 1) return;
+    const last = slice[slice.length - 1];
+    if (n > 1 && last && ROLE_UNIGRAMS.has(last)) return;
+    const phrase = slice.join(' ');
+    const cur = counts.get(phrase) ?? { n, count: 0 };
+    cur.count += 1;
+    counts.set(phrase, cur);
+  };
+
+  for (let i = 0; i < rawTokens.length; i++) {
+    add(i, 3);
+    add(i, 2);
+    add(i, 1);
+  }
+
+  const ranked = [...counts.entries()]
+    .map(([phrase, { n, count }]) => ({ phrase, n, score: count * n * n }))
+    .sort((a, b) => b.score - a.score || b.n - a.n || a.phrase.localeCompare(b.phrase));
+
+  const out: string[] = [];
+  for (const c of ranked) {
+    if (out.length >= limit) break;
+    const toks = c.phrase.split(' ');
+    const tooClose = out.some((s) => {
+      const st = s.split(' ');
+      const [a, b] = toks.length <= st.length ? [toks, st] : [st, toks];
+      const setB = new Set(b);
+      const shared = a.filter((t) => setB.has(t)).length;
+      return a.length > 0 && shared / a.length >= 0.5;
+    });
+    if (tooClose) continue;
+    out.push(c.phrase);
+  }
+  return out;
 }
 
 /**
  * Pure heuristic enrichment over the Layer-1 skeleton. Adds:
  *   - Action verb phrases (regex) → ActionCandidate
- *   - Top-3 frequent ≥4-char words → top-level topics
+ *   - Top-3 noun phrases (trigram/bigram/unigram) → top-level topics
  *
  * Does NOT touch relations (role, companyHint, person.topics). Those are
  * Layer-3's job per locked decision #10.
@@ -265,32 +357,31 @@ export function applyHeuristics(
     // Attach whenHint if any date span's text appears in this body.
     const bodyLower = body.toLowerCase();
     const matchedDate = dateSpans.find((d) => bodyLower.includes(d.toLowerCase()));
+    const kind = mapVerbToKind(verb);
+    // "I met with X" is memory, not a calendar hold — skip undated meetings.
+    if (kind === 'meeting' && !matchedDate) continue;
     actions.push({
-      kind: mapVerbToKind(verb),
+      kind,
       body,
       whenHint: matchedDate ?? null,
       targetPersonName: null,
     });
   }
 
-  // ── Topics: top-3 unique ≥4-char words excluding stopwords ─────────
-  const tokens = transcript
-    .toLowerCase()
-    .split(/[\s.,;:!?"'()\[\]{}<>/\\]+/)
-    .filter((t) => t.length >= 4 && !STOPWORDS.has(t) && /^[a-z][a-z+#-]*$/.test(t));
-  const freq = new Map<string, number>();
-  for (const t of tokens) freq.set(t, (freq.get(t) ?? 0) + 1);
-  const ranked = [...freq.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 3)
-    .map(([word]) => word);
+  // ── Topics: noun phrases, then leftover unigrams ────────────────────
+  const blockedNames = [
+    ...skeleton.persons.flatMap((p) => cleanNameTokens(p.name)),
+    ...skeleton.companies.flatMap((c) => cleanNameTokens(c.name)),
+    ...skeleton.events.flatMap((e) => cleanNameTokens(e.name)),
+  ];
+  const ranked = extractTopicPhrases(transcript, blockedNames, 3);
 
   const topics = [...skeleton.topics];
-  const topicSet = new Set(topics);
+  const topicSet = new Set(topics.map((t) => t.toLowerCase()));
   for (const t of ranked) {
-    if (!topicSet.has(t)) {
+    if (!topicSet.has(t.toLowerCase())) {
       topics.push(t);
-      topicSet.add(t);
+      topicSet.add(t.toLowerCase());
     }
   }
 
@@ -322,20 +413,29 @@ Hard rules:
 3. Never invent. Unknown role/company/date → null. No fabricated emails,
    companies, or facts.
 4. Preserve the speaker's casing for names. Lowercase stays lowercase.
-5. Actions are things the speaker committed to (kind: email, reminder,
-   intro, todo, meeting). Set targetPersonName only when the transcript
-   names the target explicitly ("send Sarah the link" → target=Sarah).
+5. Actions are things the speaker committed to doing next (kind: email,
+   reminder, intro, todo, meeting). "I met with X" / "we discussed Y" is
+   NOT an action unless they named a follow-up. Set targetPersonName only
+   when the transcript names the target explicitly ("send Sarah the link"
+   → target=Sarah). One action per person per kind — do not emit both a
+   LinkedIn note and a meeting for the same person unless there is a
+   distinct whenHint for the meeting.
 6. whenHint: ISO 8601 for absolute dates, speaker phrase verbatim otherwise.
+   Meetings without a whenHint are omitted.
 7. Pre-detected entities (when provided) are hints to enrich — not a cage.
    Add real entities they missed; ignore any hint that violates rule 1.
 8. Known contacts (when provided) are people/companies already in the
    speaker's graph. If the transcript plausibly refers to one of them, reuse
    that exact stored name and put the spoken variant in aliases — do not
    mint a near-duplicate.
-9. topics are noun subjects worth remembering (e.g. "rust", "co-working",
-   "relocation"). NEVER verbs ("discussed", "met"), NEVER person or company
-   names already listed under persons/companies, NEVER single fragments of a
-   place name when the full place is already a topic. Prefer fewer topics.
+9. topics are noun phrases worth remembering (1–4 words), including subjects
+   discussed without a named conference ("merchant cash advance", "hiring",
+   "rust"). NEVER verbs ("discussed", "met"), NEVER person or company names
+   already listed under persons/companies, NEVER single fragments of a place
+   name when the full place is already a topic. Prefer phrases over unigrams.
+   Prefer fewer topics.
+10. events are named gatherings (RustConf, DevConnect, a Luma/Partiful
+    title). "I met with X" is NOT an event.
 
 Output the ExtractionResult JSON schema.`;
 
@@ -484,10 +584,12 @@ export function sanitizeTopics(
   },
 ): string[] {
   const entityNames = new Set<string>();
-  // Only single-token entity names suppress same-token topics ("lucas" ↔ Lucas).
-  // Multi-word entities (e.g. "Research Labs") must not erase independent subjects
-  // like "research" — exact-name + place-fragment filters still apply below.
+  // Only single-token *company/event* names suppress same-token topics
+  // ("lucas" ↔ Lucas). Multi-word orgs (e.g. "Research Labs") must not erase
+  // independent subjects like "research". Person first/last tokens do suppress
+  // unigram topics so "Jordan Lee" does not mint a "jordan" topic.
   const entityTokens = new Set<string>();
+  const personTokens = new Set<string>();
   for (const e of [...entities.persons, ...entities.companies, ...entities.events]) {
     const full = e.name.trim().toLowerCase();
     if (!full) continue;
@@ -496,6 +598,11 @@ export function sanitizeTopics(
     if (nameToks.length === 1) {
       const tok = nameToks[0]!;
       if (tok.length >= 2) entityTokens.add(tok);
+    }
+  }
+  for (const p of entities.persons) {
+    for (const tok of cleanNameTokens(p.name)) {
+      if (tok.length >= 2) personTokens.add(tok);
     }
   }
 
@@ -513,6 +620,7 @@ export function sanitizeTopics(
     // Single-token topics that echo a single-token entity name drop out.
     const tokens = cleanNameTokens(t);
     if (tokens.length === 1 && entityTokens.has(tokens[0]!)) continue;
+    if (tokens.length === 1 && personTokens.has(tokens[0]!)) continue;
     if (tokens.every((tok) => STOPWORDS.has(tok) || JUNK_NAMES.has(tok))) continue;
     seen.add(lower);
     out.push(t);

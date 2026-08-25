@@ -2,7 +2,7 @@
 
 /**
  * ChatEntityRail — desktop "in this thread" column.
- * Built from committed messages' graphResult (live only — no fixtures).
+ * Hidden below 1120px (`.desktop-pane`); chat is full-width on mobile.
  */
 
 import * as React from 'react';
@@ -34,16 +34,25 @@ function collectFromMessages(messages: ThreadMessage[]): {
 } {
   const people: RailPerson[] = [];
   const seenPerson = new Set<string>();
+  const seenExtracted = {
+    person: new Set<string>(),
+    company: new Set<string>(),
+    event: new Set<string>(),
+    concept: new Set<string>(),
+  };
   const extracted: RailExtracted = {
     person: [],
     company: [],
     event: [],
     concept: [],
   };
-  const pushUnique = (list: string[], value: string) => {
+  const pushUnique = (kind: keyof RailExtracted, value: string) => {
     const key = value.trim().toLowerCase();
-    if (!key || list.some((v) => v.toLowerCase() === key)) return;
-    list.push(value);
+    if (!key) return;
+    const seen = seenExtracted[kind];
+    if (seen.has(key)) return;
+    seen.add(key);
+    extracted[kind].push(value);
   };
 
   for (const m of messages) {
@@ -64,11 +73,11 @@ function collectFromMessages(messages: ThreadMessage[]): {
           followUp: ex.actions.length > 0,
         });
       }
-      pushUnique(extracted.person, p.name);
+      pushUnique('person', p.name);
     }
-    for (const c of ex.companies) pushUnique(extracted.company, c.name);
-    for (const e of ex.events) pushUnique(extracted.event, e.name);
-    for (const t of ex.topics) pushUnique(extracted.concept, t);
+    for (const c of ex.companies) pushUnique('company', c.name);
+    for (const e of ex.events) pushUnique('event', e.name);
+    for (const t of ex.topics) pushUnique('concept', t);
   }
 
   return { people, extracted };
@@ -91,7 +100,7 @@ export function ChatEntityRail() {
   if (!hasAnything) {
     return (
       <aside
-        className="surface-secondary"
+        className="desktop-pane entity-rail"
         data-testid="chat-entity-rail"
         data-empty="true"
         style={{
@@ -122,7 +131,7 @@ export function ChatEntityRail() {
 
   return (
     <aside
-      className="surface-secondary"
+      className="desktop-pane entity-rail"
       data-testid="chat-entity-rail"
       style={{
         padding: 20,

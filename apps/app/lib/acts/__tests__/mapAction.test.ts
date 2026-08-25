@@ -5,6 +5,7 @@ import {
   resolveIntroEntityIds,
   buildIcs,
   mailtoHref,
+  collapseActionsForCapture,
 } from '../mapAction';
 
 describe('toPendingAct', () => {
@@ -15,15 +16,31 @@ describe('toPendingAct', () => {
       whenHint: 'tomorrow',
       confidence: 88.4,
       targetName: 'Ada Lovelace',
+      hasEmail: true,
     });
     expect(pending.kind).toBe('email');
-    expect(pending.glyph).toBe('↗');
+    expect(pending.glyph).toBe('✉');
     expect(pending.name).toBe('Ada Lovelace');
-    expect(pending.why).toContain('send the deck');
-    expect(pending.why).toContain('tomorrow');
+    expect(pending.body).toContain('send the deck');
+    expect(pending.whenHint).toBe('tomorrow');
+    expect(pending.why).toBe('tomorrow');
     expect(pending.conf).toBe(88);
     expect(pending.actionKind).toBe('email');
     expect(pending.accent).toBe('amber');
+    expect(pending.channel).toBe('email');
+  });
+
+  it('maps email without an address to a linkedin note when a profile exists', () => {
+    const pending = toPendingAct({
+      kind: 'email',
+      body: 'talked rust at the booth',
+      confidence: 80,
+      targetName: 'Ada Lovelace',
+      hasLinkedin: true,
+    });
+    expect(pending.channel).toBe('linkedin');
+    expect(pending.kind).toBe('linkedin');
+    expect(pending.glyph).toBe('in');
   });
 
   it('formats intro names as target → secondary', () => {
@@ -46,7 +63,36 @@ describe('toPendingAct', () => {
       confidence: 200,
     });
     expect(pending.actionKind).toBe('todo');
+    expect(pending.channel).toBe('memo');
+    expect(pending.kind).toBe('memo');
     expect(pending.conf).toBe(100);
+    expect(pending.name).toBe('memo');
+  });
+});
+
+describe('collapseActionsForCapture', () => {
+  it('keeps one action per kind per person and skips undated meetings', () => {
+    const persons = [{ name: 'Sagar' }];
+    const collapsed = collapseActionsForCapture(
+      [
+        { kind: 'email', body: 'linkedin note one', whenHint: null, targetPersonName: 'Sagar' },
+        { kind: 'email', body: 'linkedin note two', whenHint: null, targetPersonName: 'Sagar' },
+        { kind: 'meeting', body: 'met with sagar', whenHint: null, targetPersonName: 'Sagar' },
+        { kind: 'meeting', body: 'follow-up friday', whenHint: 'Friday', targetPersonName: 'Sagar' },
+      ],
+      persons,
+    );
+    expect(collapsed).toHaveLength(2);
+    expect(collapsed.map((a) => a.kind).sort()).toEqual(['email', 'meeting']);
+    expect(collapsed.find((a) => a.kind === 'meeting')?.whenHint).toBe('Friday');
+  });
+
+  it('fills a missing target from the first extracted person', () => {
+    const collapsed = collapseActionsForCapture(
+      [{ kind: 'todo', body: 'send the deck', whenHint: null, targetPersonName: null }],
+      [{ name: 'Ada Lovelace' }],
+    );
+    expect(collapsed[0]?.targetPersonName).toBe('Ada Lovelace');
   });
 });
 

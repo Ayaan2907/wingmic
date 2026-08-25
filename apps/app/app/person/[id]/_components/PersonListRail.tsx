@@ -2,7 +2,7 @@
 
 /**
  * PersonListRail — desktop people list beside person detail.
- * Live `entity.listPeople` only — no fixture names.
+ * Hidden below 1120px (`.desktop-pane`); the person card is full-width on mobile.
  */
 
 import * as React from 'react';
@@ -21,7 +21,7 @@ export function PersonListRail() {
 
   return (
     <aside
-      className="surface-secondary"
+      className="desktop-pane people-rail"
       aria-label="people"
       data-testid="person-list-rail"
       style={{

@@ -34,7 +34,7 @@ describe('entity.detail', () => {
       CREATE TABLE entity_topic (id TEXT PRIMARY KEY, entity_id TEXT NOT NULL, topic_id TEXT NOT NULL, weight INTEGER DEFAULT 50, source_interaction_id TEXT, created_at INTEGER NOT NULL, source_deleted INTEGER DEFAULT 0 NOT NULL);
       CREATE TABLE entity_fact (id TEXT PRIMARY KEY, entity_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, source_interaction_id TEXT, confidence INTEGER DEFAULT 85, embedding F32_BLOB(1536), created_at INTEGER NOT NULL);
       CREATE TABLE company (id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL, domain TEXT, industry TEXT, observed_count INTEGER DEFAULT 1, promoted_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
-      CREATE TABLE event (id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL, date_range_start INTEGER, date_range_end INTEGER, location TEXT, url TEXT, observed_count INTEGER DEFAULT 1, promoted_at INTEGER, created_at INTEGER NOT NULL);
+      CREATE TABLE event (id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL, date_range_start INTEGER, date_range_end INTEGER, location TEXT, url TEXT, external_source TEXT, external_id TEXT, observed_count INTEGER DEFAULT 1, promoted_at INTEGER, created_at INTEGER NOT NULL);
       CREATE TABLE topic (id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL, aliases TEXT DEFAULT '[]', parent_id TEXT, created_at INTEGER NOT NULL);
       CREATE TABLE interaction (
         id TEXT PRIMARY KEY,
@@ -67,6 +67,25 @@ describe('entity.detail', () => {
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
+      CREATE TABLE interaction_attachment (
+        id TEXT PRIMARY KEY,
+        interaction_id TEXT NOT NULL,
+        entity_id TEXT,
+        event_id TEXT,
+        mime_type TEXT DEFAULT 'image/jpeg' NOT NULL,
+        jpeg_base64 TEXT NOT NULL,
+        byte_size INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE TABLE entity_merge (
+        id TEXT PRIMARY KEY,
+        source_entity_id TEXT NOT NULL,
+        target_entity_id TEXT NOT NULL,
+        merged_by_user_id TEXT,
+        merged_at INTEGER NOT NULL,
+        reversed_at INTEGER,
+        moves TEXT
+      );
     `);
 
     const now = Date.now();
@@ -88,7 +107,7 @@ describe('entity.detail', () => {
       args: [now, now],
     });
     await client.execute({
-      sql: `INSERT INTO event VALUES ('ev_dc', 'devconnect-26', 'DevConnect 26', ?, ?, 'sf', null, 1, null, ?)`,
+      sql: `INSERT INTO event VALUES ('ev_dc', 'devconnect-26', 'DevConnect 26', ?, ?, 'sf', null, null, null, 1, null, ?)`,
       args: [ts(8), ts(7), now],
     });
     await client.execute({
@@ -106,6 +125,7 @@ describe('entity.detail', () => {
     await insertEnt('en_sarah', 'Sarah Chen', userId);
     await insertEnt('en_marcus', 'Marcus Rivera', userId);
     await insertEnt('en_other', 'Other Person', otherUserId);
+    await insertEnt('en_priya', 'Priya Nair', userId);
 
     // Interactions
     await client.execute({
@@ -142,10 +162,34 @@ describe('entity.detail', () => {
       sql: `INSERT INTO entity_topic (id, entity_id, topic_id, weight, source_interaction_id, created_at, source_deleted) VALUES (?, ?, ?, 70, ?, ?, 0)`,
       args: ['et_2', 'en_marcus', 'tp_rust', 'it_2', now],
     });
+    await client.execute({
+      sql: `INSERT INTO entity_topic (id, entity_id, topic_id, weight, source_interaction_id, created_at, source_deleted) VALUES (?, ?, ?, 70, ?, ?, 0)`,
+      args: ['et_3', 'en_priya', 'tp_rust', 'it_1', now],
+    });
 
     await client.execute({
       sql: `INSERT INTO entity_fact (id, entity_id, key, value, source_interaction_id, confidence, created_at) VALUES (?, ?, ?, ?, ?, 80, ?)`,
       args: ['fact_1', 'en_sarah', 'note', 'said she would send repo', 'it_1', now],
+    });
+
+    await client.execute({
+      sql: `INSERT INTO interaction (id, user_id, transcript, captured_at, created_at, status) VALUES (?, ?, ?, ?, ?, 'committed')`,
+      args: ['it_photo', userId, 'attached a photo', ts(0), now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity_fact (id, entity_id, key, value, source_interaction_id, confidence, created_at) VALUES (?, ?, ?, ?, ?, 80, ?)`,
+      args: ['fact_photo', 'en_sarah', 'note', 'attached a photo', 'it_photo', now],
+    });
+    await client.execute({
+      sql: `INSERT INTO interaction_attachment (id, interaction_id, entity_id, event_id, mime_type, jpeg_base64, byte_size, created_at) VALUES (?, ?, ?, ?, 'image/jpeg', ?, 64, ?)`,
+      args: [
+        'att_1',
+        'it_photo',
+        'en_sarah',
+        'ev_dc',
+        'aGVsbG93aW5nbWljLXRlc3QtcGhvdG8tZGF0YQ==',
+        now,
+      ],
     });
   });
 
@@ -167,10 +211,38 @@ describe('entity.detail', () => {
     expect(res.stats).toHaveLength(3);
     expect(res.stats[0]!.value).toBe('3'); // 1 company + 1 event + 1 topic
     expect(res.captures.length).toBeGreaterThan(0);
-    expect(res.captures[0]!.transcript).toContain('sarah');
+    expect(res.captures.some((c) => c.transcript.includes('sarah'))).toBe(true);
     expect(res.related.some((r) => r.id === 'en_marcus')).toBe(true);
     expect(res.related.every((r) => r.id !== 'en_sarah')).toBe(true);
+    expect(res.related.every((r) => r.id !== 'en_priya')).toBe(true);
     expect(res.topics.map((t) => t.name)).toContain('rust');
+    expect((res as { publicProfile?: { linkedin: string | null } }).publicProfile).toEqual({
+      linkedin: null,
+      url: null,
+      sourceUrl: null,
+    });
+    expect((res as { possibleMatches?: unknown[] }).possibleMatches).toEqual([]);
+    const photo = res.captures.find((c) => c.interactionId === 'it_photo');
+    expect(photo?.transcript).toBe('attached a photo');
+    expect(photo?.jpegBase64).toBe('aGVsbG93aW5nbWljLXRlc3QtcGhvdG8tZGF0YQ==');
+  });
+
+  it('returns public profile facts and same-name cards', async () => {
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO entity_fact (id, entity_id, key, value, source_interaction_id, confidence, created_at) VALUES (?, ?, ?, ?, null, 70, ?)`,
+      args: ['fact_li', 'en_sarah', 'linkedin', 'https://www.linkedin.com/in/ada-lovelace', now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, created_at, updated_at) VALUES (?, ?, 'person', ?, '[]', ?, ?)`,
+      args: ['en_sarah_b', userId, 'Sarah', now, now],
+    });
+    const res = await caller().detail({ kind: 'person', id: 'en_sarah' });
+    expect((res as { publicProfile: { linkedin: string | null } }).publicProfile.linkedin).toBe(
+      'https://www.linkedin.com/in/ada-lovelace',
+    );
+    const matches = (res as { possibleMatches: Array<{ id: string }> }).possibleMatches;
+    expect(matches.some((m) => m.id === 'en_sarah_b')).toBe(true);
   });
 
   it('person detail 404s on cross-user access', async () => {
@@ -186,6 +258,9 @@ describe('entity.detail', () => {
     expect(res.related.length).toBe(2);
     expect(res.related.every((r) => r.kind === 'person')).toBe(true);
     expect(res.captures.length).toBeGreaterThan(0);
+    expect(res.captures.some((c) => c.jpegBase64 === 'aGVsbG93aW5nbWljLXRlc3QtcGhvdG8tZGF0YQ==')).toBe(
+      true,
+    );
   });
 
   it('event detail returns people met + topics', async () => {
@@ -197,11 +272,74 @@ describe('entity.detail', () => {
     expect(res.stats[0]!.value).toBe('2'); // people met
     expect(res.related.map((r) => r.id).sort()).toEqual(['en_marcus', 'en_sarah']);
     expect(res.topics.map((t) => t.name)).toContain('rust');
+    expect(res.captures.some((c) => c.jpegBase64 === 'aGVsbG93aW5nbWljLXRlc3QtcGhvdG8tZGF0YQ==')).toBe(
+      true,
+    );
+  });
+
+  it('event detail includes a public url when stored', async () => {
+    await client.execute({
+      sql: `UPDATE event SET url = ? WHERE id = 'ev_dc'`,
+      args: ['https://devconnect.example/2026'],
+    });
+    const res = await caller().detail({ kind: 'event', id: 'ev_dc' });
+    expect((res.sub as { url?: string | null }).url).toBe('https://devconnect.example/2026');
   });
 
   it('NOT_FOUND on missing ids', async () => {
     await expect(caller().detail({ kind: 'company', id: 'co_nope' })).rejects.toThrow();
     await expect(caller().detail({ kind: 'event', id: 'ev_nope' })).rejects.toThrow();
+    await expect(caller().detail({ kind: 'topic', id: 'tp_nope' })).rejects.toThrow();
+  });
+
+  it('topic detail returns people, companies, events, and captures', async () => {
+    const res = await caller().detail({ kind: 'topic', id: 'tp_rust' });
+    expect(res.kind).toBe('topic');
+    expect(res.name).toBe('rust');
+    expect(res.stats[0]!.value).toBe('3');
+    expect(res.related.some((r) => r.kind === 'person' && r.id === 'en_sarah')).toBe(true);
+    expect(res.related.some((r) => r.kind === 'company' && r.id === 'co_acme')).toBe(true);
+    expect(res.related.some((r) => r.kind === 'event' && r.id === 'ev_dc')).toBe(true);
+    expect(res.captures.length).toBeGreaterThan(0);
+    expect(res.stats.find((s) => s.key === 'commits')?.value).toBe(String(res.captures.length));
+    expect(res.captures[0]!.topics).toEqual(['rust']);
+  });
+
+  it('topic detail 404s when the user has no mentions', async () => {
+    await expect(caller(otherUserId).detail({ kind: 'topic', id: 'tp_rust' })).rejects.toThrow();
+  });
+
+  it('includes per-capture topic chips on person detail', async () => {
+    const res = await caller().detail({ kind: 'person', id: 'en_sarah' });
+    expect(res.captures.some((c) => c.topics?.includes('rust'))).toBe(true);
+  });
+
+  it('counts only owned, live interactions in detail commit stats', async () => {
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO interaction (id, user_id, transcript, captured_at, created_at, status) VALUES (?, ?, ?, ?, ?, 'committed')`,
+      args: ['it_other_photo', otherUserId, 'other user photo', now, now],
+    });
+    await client.execute({
+      sql: `INSERT INTO interaction (id, user_id, transcript, captured_at, created_at, status, deleted_at) VALUES (?, ?, ?, ?, ?, 'committed', ?)`,
+      args: ['it_deleted_photo', userId, 'deleted photo', now, now, now],
+    });
+    for (const interactionId of ['it_other_photo', 'it_deleted_photo']) {
+      await client.execute({
+        sql: `INSERT INTO interaction_attachment (id, interaction_id, entity_id, event_id, mime_type, jpeg_base64, byte_size, created_at) VALUES (?, ?, 'en_sarah', 'ev_dc', 'image/jpeg', 'jpeg', 4, ?)`,
+        args: [`att_${interactionId}`, interactionId, now],
+      });
+    }
+
+    const [person, company, event] = await Promise.all([
+      caller().detail({ kind: 'person', id: 'en_sarah' }),
+      caller().detail({ kind: 'company', id: 'co_acme' }),
+      caller().detail({ kind: 'event', id: 'ev_dc' }),
+    ]);
+
+    expect(person.stats.find((stat) => stat.key === 'commits')?.value).toBe('2');
+    expect(company.stats.find((stat) => stat.key === 'commits')?.value).toBe('3');
+    expect(event.stats.find((stat) => stat.key === 'commits')?.value).toBe('3');
   });
 
   it('respects soft-deleted entities (deletedAt)', async () => {

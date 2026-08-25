@@ -30,7 +30,8 @@ describe('settings router', () => {
         linker_model_override TEXT,
         preferred_mic_device_id TEXT,
         asr_language TEXT NOT NULL DEFAULT 'en-US',
-        acknowledged_privacy INTEGER NOT NULL DEFAULT 0
+        acknowledged_privacy INTEGER NOT NULL DEFAULT 0,
+        calendar_ics_url TEXT
       );
     `);
 
@@ -62,6 +63,31 @@ describe('settings router', () => {
     expect(res.acknowledgedPrivacy).toBe(false);
     expect(res.linkerModelOverride).toBeNull();
     expect(res.preferredMicDeviceId).toBeNull();
+    expect(res.calendarIcsUrl).toBeNull();
+  });
+
+  it('persists a public google calendar ics url and clears it', async () => {
+    const ics =
+      'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics';
+    await caller().update({ calendarIcsUrl: ics });
+    expect((await caller().get()).calendarIcsUrl).toBe(ics);
+    await caller().update({ calendarIcsUrl: null });
+    expect((await caller().get()).calendarIcsUrl).toBeNull();
+  });
+
+  it('rejects a secret private-token ics address', async () => {
+    await expect(
+      caller().update({
+        calendarIcsUrl:
+          'https://calendar.google.com/calendar/ical/ada%40example.com/private-abc/basic.ics',
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('rejects a non-ics calendar url', async () => {
+    await expect(
+      caller().update({ calendarIcsUrl: 'https://example.com/not-a-calendar' }),
+    ).rejects.toThrow();
   });
 
   it('update() persists a new audio retention mode, get() reflects it', async () => {

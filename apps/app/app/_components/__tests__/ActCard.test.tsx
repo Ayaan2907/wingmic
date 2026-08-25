@@ -7,38 +7,43 @@ import { ActCard, type PendingAct } from '../ActCard';
 afterEach(cleanup);
 
 const ACT: PendingAct = {
-  kind: 'check-in',
-  glyph: '↗',
+  kind: 'memo',
+  glyph: '✎',
   name: 'Ada Lovelace',
   why: '7d since meetup',
   conf: 92,
   accent: 'amber',
   color: '#FFC452',
+  actionKind: 'todo',
+  channel: 'memo',
+  subject: 'memo · Ada',
+  body: 'Ada asked for the rust deck at Analytical Engines.',
 };
 
 describe('ActCard', () => {
-  it('renders the act name, kind, confidence and why', () => {
+  it('renders the act name, kind, confidence and draft without edit', () => {
     render(<ActCard act={ACT} />);
     expect(screen.getByText('Ada Lovelace')).toBeTruthy();
-    expect(screen.getByText(/check-in/i)).toBeTruthy();
-    expect(screen.getByText(/7d since meetup/i)).toBeTruthy();
+    expect(screen.getByTestId('act-subject').textContent).toMatch(/memo · Ada/);
+    expect(screen.getByTestId('act-body').textContent).toMatch(/rust deck/);
+    expect(screen.queryByTestId('act-edit')).toBeNull();
   });
 
   it('disables send when there is no draft id', () => {
     render(<ActCard act={ACT} />);
-    const btn = screen.getByRole('button', { name: /send/i });
+    const btn = screen.getByRole('button', { name: /mark done/i });
     expect((btn as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('enables send and invokes onSent for todo drafts with an id', () => {
+  it('enables send and invokes onSent for memo drafts with an id', () => {
     const onSent = vi.fn();
     render(
       <ActCard
-        act={{ ...ACT, id: 'act_todo', actionKind: 'todo', body: 'ship the note' }}
+        act={{ ...ACT, id: 'act_todo', actionKind: 'todo', channel: 'memo', body: 'ship the note' }}
         onSent={onSent}
       />,
     );
-    const btn = screen.getByRole('button', { name: /send/i });
+    const btn = screen.getByRole('button', { name: /mark done/i });
     expect((btn as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(btn);
     expect(onSent).toHaveBeenCalledWith('act_todo');
@@ -56,5 +61,36 @@ describe('ActCard', () => {
     fireEvent.click(screen.getByRole('button', { name: /save/i }));
     expect(await screen.findByTestId('act-edit-error')).toBeTruthy();
     expect(screen.getByTestId('act-edit')).toBeTruthy();
+  });
+
+  it('copies a linkedin note and opens the profile without marking sent', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const open = vi.fn();
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    vi.stubGlobal('open', open);
+    const onSent = vi.fn();
+    render(
+      <ActCard
+        act={{
+          ...ACT,
+          id: 'act_li',
+          actionKind: 'email',
+          channel: 'linkedin',
+          kind: 'linkedin',
+          targetLinkedin: 'ada-lovelace',
+          body: 'hey Ada — rust at the booth',
+        }}
+        onSent={onSent}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /copy note/i }));
+    expect(writeText).toHaveBeenCalledWith('hey Ada — rust at the booth');
+    expect(open).toHaveBeenCalledWith(
+      'https://www.linkedin.com/in/ada-lovelace',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    expect(onSent).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

@@ -10,6 +10,8 @@
 
 import * as React from 'react';
 import { buildIcs, mailtoHref } from '@/lib/acts/mapAction';
+import { chooseActChannel, type ActChannel } from '@/lib/acts/chooseActChannel';
+import { linkedinProfileHref } from '@/lib/acts/linkedinHref';
 import { PersonAvatar } from './entity/EntityAvatar';
 
 const accent = '#FFC452';
@@ -26,11 +28,15 @@ export type PendingAct = {
   color: string;
   /** Underlying extractor/db kind for CTA routing. */
   actionKind?: 'reminder' | 'email' | 'meeting' | 'todo' | 'intro';
+  /** How this draft should be sent / completed. */
+  channel?: ActChannel;
   subject?: string | null;
   whenHint?: string | null;
   body?: string;
   /** Target person email when known from entity facts — required for mailto send. */
   targetEmail?: string | null;
+  /** Public LinkedIn URL when known — used for linkedin-note send. */
+  targetLinkedin?: string | null;
   status?: 'drafted' | 'snoozed' | 'sent' | 'dismissed';
 };
 
@@ -56,12 +62,21 @@ export function ActCard({
 }) {
   const canSend = Boolean(a.id);
   const actionKind = a.actionKind ?? 'todo';
-  const needsEmail = actionKind === 'email' || actionKind === 'intro';
+  const channel: ActChannel =
+    a.channel ??
+    chooseActChannel({
+      kind: actionKind,
+      hasEmail: Boolean(a.targetEmail?.trim()),
+      hasLinkedin: Boolean(a.targetLinkedin?.trim()),
+    });
+  const needsEmail = channel === 'email' || channel === 'intro';
   const hasEmail = Boolean(a.targetEmail?.trim());
   const emailBlocked = needsEmail && !hasEmail;
+  const draftBody = a.body ?? a.why;
   const [editing, setEditing] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [editError, setEditError] = React.useState<string | null>(null);
+  const [copyError, setCopyError] = React.useState<string | null>(null);
   const [editBody, setEditBody] = React.useState(a.body ?? a.why);
   const [editSubject, setEditSubject] = React.useState(a.subject ?? '');
 
@@ -73,8 +88,9 @@ export function ActCard({
 
   function handleSend() {
     if (!a.id) return;
-    const body = a.body ?? a.why;
-    switch (actionKind) {
+    setCopyError(null);
+    const body = draftBody;
+    switch (channel) {
       case 'email':
       case 'intro': {
         const to = a.targetEmail?.trim();
@@ -103,16 +119,36 @@ export function ActCard({
         setTimeout(() => URL.revokeObjectURL(url), 0);
         return;
       }
-      case 'todo': {
+      case 'linkedin': {
+        const href = linkedinProfileHref(a.targetLinkedin);
+        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+          void navigator.clipboard.writeText(body).then(
+            () => setCopyError(null),
+            () => setCopyError('could not copy — select the draft'),
+          );
+        }
+        if (href) window.open(href, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      case 'memo': {
         onSent?.(a.id);
         return;
       }
       default: {
-        const _exhaustive: never = actionKind;
+        const _exhaustive: never = channel;
         return _exhaustive;
       }
     }
   }
+
+  const sendLabel =
+    channel === 'linkedin'
+      ? 'copy note →'
+      : channel === 'memo'
+        ? 'mark done →'
+        : channel === 'reminder' || channel === 'meeting'
+          ? 'add to cal →'
+          : 'send →';
 
   return (
     <div
@@ -167,20 +203,6 @@ export function ActCard({
           >
             {a.name}
           </div>
-          {!editing ? (
-            <div
-              style={{
-                fontSize: 12,
-                lineHeight: 1.3,
-                color: 'var(--text-55)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {a.why}
-            </div>
-          ) : null}
         </div>
         <div
           style={{
@@ -203,10 +225,10 @@ export function ActCard({
             }
             aria-label={
               emailBlocked
-                ? `send ${a.kind} for ${a.name} — no email on file`
+                ? `${sendLabel} for ${a.name} — no email on file`
                 : canSend
-                  ? `send ${a.kind} for ${a.name}`
-                  : `send ${a.kind} for ${a.name} — unavailable`
+                  ? `${sendLabel.replace(' →', '')} ${a.kind} for ${a.name}`
+                  : `${sendLabel.replace(' →', '')} ${a.kind} for ${a.name} — unavailable`
             }
             onClick={handleSend}
             style={{
@@ -221,19 +243,72 @@ export function ActCard({
               opacity: canSend && !emailBlocked ? 1 : 0.85,
             }}
           >
-            send →
+            {sendLabel}
           </button>
-          {sendError ? (
+          {sendError || copyError ? (
             <span
               className="mono"
               role="alert"
               style={{ fontSize: 9, color: '#FF6B6B', letterSpacing: 0.3, textAlign: 'right' }}
             >
-              {sendError}
+              {sendError || copyError}
             </span>
           ) : null}
         </div>
       </div>
+
+      {!editing && (a.subject || draftBody) ? (
+        <div
+          data-testid="act-draft"
+          style={{
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: 'rgba(0,0,0,0.3)',
+            border: '1px solid rgba(255,255,255,0.05)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+          }}
+        >
+          {a.subject ? (
+            <div
+              className="mono"
+              data-testid="act-subject"
+              style={{
+                fontSize: 11,
+                color: 'var(--text-70, var(--text-55))',
+                paddingBottom: 6,
+                borderBottom: '1px solid rgba(255,255,255,0.06)',
+              }}
+            >
+              {a.subject}
+            </div>
+          ) : null}
+          <div
+            data-testid="act-body"
+            className="mono"
+            style={{
+              fontSize: 11,
+              lineHeight: 1.55,
+              color: 'var(--ink)',
+              whiteSpace: 'pre-wrap',
+              maxHeight: 220,
+              overflow: 'auto',
+            }}
+          >
+            {draftBody}
+          </div>
+          {a.whenHint ? (
+            <div className="mono" style={{ fontSize: 10, color: 'var(--text-40)' }}>
+              when · {a.whenHint}
+            </div>
+          ) : a.body && a.why ? (
+            <div className="mono" style={{ fontSize: 10, color: 'var(--text-40)' }}>
+              {a.why}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {editing ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }} data-testid="act-edit">

@@ -1,10 +1,155 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import { eq } from 'drizzle-orm';
 import * as schema from '@wingmic/db/schema';
 
 import { captureRouter } from './capture';
+import { DAILY_LIMITS, utcDay } from '@/lib/usage/dailyCap';
+
+function jpegBase64(byteLength = 32): string {
+  const bytes = Buffer.alloc(byteLength);
+  bytes.set([0xff, 0xd8, 0xff, 0xe0], 0);
+  bytes.set([0xff, 0xd9], byteLength - 2);
+  return bytes.toString('base64');
+}
+
+describe('capture.commit attachment retry', () => {
+  let db: ReturnType<typeof drizzle<typeof schema>>;
+  let client: ReturnType<typeof createClient>;
+  const userId = 'user_attachment';
+
+  beforeEach(async () => {
+    client = createClient({ url: ':memory:' });
+    db = drizzle(client, { schema });
+    await client.executeMultiple(`
+      CREATE TABLE interaction (
+        id TEXT PRIMARY KEY, user_id TEXT NOT NULL, transcript TEXT NOT NULL,
+        captured_at INTEGER NOT NULL, created_at INTEGER NOT NULL,
+        client_capture_id TEXT
+      );
+      CREATE TABLE entity_fact (
+        id TEXT PRIMARY KEY, entity_id TEXT NOT NULL, source_interaction_id TEXT
+      );
+      CREATE TABLE entity_topic (
+        id TEXT PRIMARY KEY, entity_id TEXT NOT NULL, source_interaction_id TEXT
+      );
+      CREATE TABLE interaction_attachment (
+        id TEXT PRIMARY KEY, interaction_id TEXT NOT NULL, entity_id TEXT,
+        event_id TEXT, mime_type TEXT DEFAULT 'image/jpeg' NOT NULL,
+        jpeg_base64 TEXT NOT NULL, byte_size INTEGER NOT NULL, created_at INTEGER NOT NULL
+      );
+      INSERT INTO interaction (
+        id, user_id, transcript, captured_at, created_at, client_capture_id
+      ) VALUES ('int_attachment', 'user_attachment', 'photo memo', 1, 1, 'capture_attachment');
+      INSERT INTO entity_fact (
+        id, entity_id, source_interaction_id
+      ) VALUES ('fact_attachment', 'entity_attachment', 'int_attachment');
+    `);
+  });
+
+  function caller() {
+    const ctx = {
+      db,
+      user: { id: userId },
+      session: { user: { id: userId } },
+    } as unknown as Parameters<typeof captureRouter.createCaller>[0];
+    return captureRouter.createCaller(ctx);
+  }
+
+  it('backfills one missing attachment on an idempotent retry', async () => {
+    const input = {
+      transcript: 'photo memo',
+      clientCaptureId: 'capture_attachment',
+      attachment: { jpegBase64: jpegBase64() },
+    };
+
+    const first = await caller().commit(input);
+    const second = await caller().commit(input);
+    const rows = await db.query.interactionAttachments.findMany();
+
+    expect(first.duplicate).toBe(true);
+    expect(first.attachments).toHaveLength(1);
+    expect(second.attachments).toEqual(first.attachments);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.interactionId).toBe('int_attachment');
+    expect(rows[0]?.entityId).toBe('entity_attachment');
+  });
+
+  it.each([
+    ['non-canonical base64', `${jpegBase64().slice(0, 4)}\n${jpegBase64().slice(4)}`],
+    ['non-JPEG bytes', Buffer.alloc(32).toString('base64')],
+    ['an oversized JPEG', jpegBase64(400_001)],
+  ])('rejects %s before retry persistence', async (_label, value) => {
+    await expect(
+      caller().commit({
+        transcript: 'photo memo',
+        clientCaptureId: 'capture_attachment',
+        attachment: { jpegBase64: value },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(await db.query.interactionAttachments.findMany()).toHaveLength(0);
+  });
+});
+
+describe('capture.commit daily caps', () => {
+  let db: ReturnType<typeof drizzle<typeof schema>>;
+  let client: ReturnType<typeof createClient>;
+  const userId = 'user_caps';
+
+  beforeEach(async () => {
+    client = createClient({ url: ':memory:' });
+    db = drizzle(client, { schema });
+    await client.executeMultiple(`
+      CREATE TABLE interaction (
+        id TEXT PRIMARY KEY, user_id TEXT NOT NULL, transcript TEXT NOT NULL,
+        captured_at INTEGER NOT NULL, created_at INTEGER NOT NULL,
+        client_capture_id TEXT
+      );
+      CREATE TABLE usage_daily (
+        user_id TEXT NOT NULL, day TEXT NOT NULL, kind TEXT NOT NULL,
+        count INTEGER DEFAULT 0 NOT NULL, PRIMARY KEY (user_id, day, kind)
+      );
+    `);
+  });
+
+  function caller() {
+    const ctx = {
+      db,
+      user: { id: userId },
+      session: { user: { id: userId } },
+    } as unknown as Parameters<typeof captureRouter.createCaller>[0];
+    return captureRouter.createCaller(ctx);
+  }
+
+  async function seedUsage(kind: string, count: number) {
+    await client.execute({
+      sql: 'INSERT INTO usage_daily (user_id, day, kind, count) VALUES (?, ?, ?, ?)',
+      args: [userId, utcDay(), kind, count],
+    });
+  }
+
+  it('rejects the 21st memo of the day before extraction runs', async () => {
+    await seedUsage('message', DAILY_LIMITS.message);
+    await expect(
+      caller().commit({ transcript: 'one memo too many', clientCaptureId: 'capture_over_cap' }),
+    ).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+    expect(await db.query.interactions.findMany({ columns: { id: true } })).toHaveLength(0);
+  });
+
+  it('rejects the 11th photo of the day even when the message budget remains', async () => {
+    await seedUsage('image', DAILY_LIMITS.image);
+    await expect(
+      caller().commit({
+        transcript: 'photo memo',
+        clientCaptureId: 'capture_photo_cap',
+        attachment: { jpegBase64: jpegBase64() },
+      }),
+    ).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+    expect(await db.query.interactions.findMany({ columns: { id: true } })).toHaveLength(0);
+  });
+});
 
 describe('capture.delete / restore', () => {
   let db: ReturnType<typeof drizzle<typeof schema>>;

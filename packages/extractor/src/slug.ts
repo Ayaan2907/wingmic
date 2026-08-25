@@ -13,6 +13,39 @@ export function slugify(input: string): string {
     .slice(0, 80);
 }
 
+/** Tokenize a display name for exact normalized matching. */
+export function personNameTokens(name: string): string[] {
+  return name
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .split(/\s+/)
+    .map((t) => t.replace(/[^\p{L}\p{N}\p{M}'-]/gu, ''))
+    .filter(Boolean);
+}
+
+/** Lowercase token-join form used for unique-name reuse (exact only). */
+export function normalizePersonName(name: string): string {
+  return personNameTokens(name).join(' ');
+}
+
+export function personNameEquals(a: string, b: string): boolean {
+  const ta = normalizePersonName(a);
+  const tb = normalizePersonName(b);
+  return ta.length > 0 && ta === tb;
+}
+
+export function entityMatchesPersonName(
+  candidateName: string,
+  entity: { name: string; aliases?: string[] | null },
+): boolean {
+  if (personNameEquals(candidateName, entity.name)) return true;
+  for (const alias of entity.aliases ?? []) {
+    if (personNameEquals(candidateName, alias)) return true;
+  }
+  return false;
+}
+
 /** Levenshtein-style similarity 0..1 (1 = identical). Cheap, no allocations beyond ASCII. */
 export function nameSimilarity(a: string, b: string): number {
   const sa = slugify(a);

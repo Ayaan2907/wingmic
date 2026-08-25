@@ -62,6 +62,13 @@ const detail = {
       transcript: 'devconnect day one, met sarah',
       eventName: 'DevConnect 26',
     },
+    {
+      interactionId: 'it_photo',
+      capturedAt: new Date('2026-08-20T17:24:00Z').toISOString(),
+      transcript: 'attached a photo',
+      eventName: 'DevConnect 26',
+      jpegBase64: 'aGVsbG93aW5nbWljLXRlc3QtcGhvdG8tZGF0YQ==',
+    },
   ],
   followups: [],
   related: [
@@ -85,8 +92,27 @@ describe('EventDetailClient', () => {
     expect(getByRole('heading', { level: 1 }).textContent).toBe('DevConnect 26');
     expect(getByTestId('entity-stats').textContent).toContain('4');
     expect(getAllByTestId('entity-capture').length).toBeGreaterThan(0);
+    const photo = getAllByTestId('entity-capture').find((el) =>
+      el.textContent?.includes('attached a photo'),
+    );
+    expect(photo?.querySelector('img[alt="attached photo"]')?.getAttribute('src')).toContain(
+      'data:image/jpeg;base64,aGVsbG93aW5nbWljLXRlc3QtcGhvdG8tZGF0YQ==',
+    );
     const rows = getAllByTestId('entity-related-row');
     expect(rows[0]!.getAttribute('data-related-href')).toBe('/person/en_sarah');
+  });
+
+  it('links a public event page when url is set', () => {
+    render(
+      <EventDetailClient
+        detail={{
+          ...detail,
+          sub: { ...detail.sub, url: 'https://devconnect.example/2026' },
+        }}
+      />,
+    );
+    const link = screen.getByTestId('event-public-url') as HTMLAnchorElement;
+    expect(link.href).toContain('https://devconnect.example/2026');
   });
 
   it('generate recap creates an act and routes to /acts', () => {

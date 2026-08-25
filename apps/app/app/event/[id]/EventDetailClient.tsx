@@ -10,13 +10,19 @@ import {
   type EntityStat,
 } from '@/app/_components/entity/EntityDetailScaffold';
 import { EventDiamond } from '@/app/_components/entity/EntityAvatar';
+import { accent } from '@/app/chat/_components/tokens';
 import { trpc } from '@/lib/trpc/client';
 
 export interface EventDetail {
   kind: 'event';
   id: string;
   name: string;
-  sub: { date: string | null; location: string | null; durationDays: number | null };
+  sub: {
+    date: string | null;
+    location: string | null;
+    durationDays: number | null;
+    url?: string | null;
+  };
   stats: EntityStat[];
   captures: EntityCapture[];
   followups: EntityFollowup[];
@@ -35,6 +41,17 @@ function fmtDate(iso: string | null): string | null {
   }
 }
 
+function safeEventUrl(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  try {
+    const u = new URL(raw.trim());
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 export default function EventDetailClient({ detail }: { detail: EventDetail }) {
   const router = useRouter();
   const createDraft = trpc.acts.createDraft.useMutation({
@@ -43,12 +60,32 @@ export default function EventDetailClient({ detail }: { detail: EventDetail }) {
     },
   });
 
-  const parts = [
-    fmtDate(detail.sub.date),
-    detail.sub.location,
-    detail.sub.durationDays ? `${detail.sub.durationDays} days` : null,
-  ].filter(Boolean) as string[];
-  const subText = parts.length ? parts.join(' · ') : 'date unknown';
+  const subText = React.useMemo(() => {
+    const parts = [
+      fmtDate(detail.sub.date),
+      detail.sub.location,
+      detail.sub.durationDays ? `${detail.sub.durationDays} days` : null,
+    ].filter(Boolean) as string[];
+    return parts.length ? parts.join(' · ') : 'date unknown';
+  }, [detail.sub.date, detail.sub.location, detail.sub.durationDays]);
+  const publicHref = React.useMemo(() => safeEventUrl(detail.sub.url), [detail.sub.url]);
+  const subNode = publicHref ? (
+    <>
+      {subText}
+      {' · '}
+      <a
+        href={publicHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-testid="event-public-url"
+        style={{ color: accent, textDecoration: 'none' }}
+      >
+        public page →
+      </a>
+    </>
+  ) : (
+    subText
+  );
 
   return (
     <EntityDetailScaffold
@@ -56,7 +93,7 @@ export default function EventDetailClient({ detail }: { detail: EventDetail }) {
       hero={<EventDiamond size={64} name={detail.name} />}
       eyebrow="◆ event"
       name={detail.name}
-      sub={subText}
+      sub={subNode}
       primaryCta={{
         label: 'generate recap →',
         pending: createDraft.isPending,

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { parseLinkedInCsv } from '../parseLinkedInCsv';
 import { parseVcard } from '../parseVcard';
 import { normalizeContactsFromFile } from '../normalizeContact';
-import { isLinkedInHost } from '../types';
+import { isLinkedInHost, normalizeLinkedInUrl } from '../types';
 
 const LINKEDIN_CSV = `First Name,Last Name,URL,Email Address,Company,Position,Connected On
 Ada,Lovelace,https://www.linkedin.com/in/ada-lovelace,ada@example.com,Analytical Engines,Mathematician,01 Jan 2024
@@ -92,6 +92,22 @@ describe('isLinkedInHost', () => {
     expect(isLinkedInHost('www.linkedin.com')).toBe(true);
     expect(isLinkedInHost('evillinkedin.com')).toBe(false);
     expect(isLinkedInHost('linkedin.com.evil.example')).toBe(false);
+  });
+});
+
+describe('normalizeLinkedInUrl', () => {
+  it('strips tracking and requires a linkedin.com host', () => {
+    expect(normalizeLinkedInUrl('https://www.linkedin.com/in/ada-lovelace?trk=share#x')).toBe(
+      'https://www.linkedin.com/in/ada-lovelace',
+    );
+    expect(normalizeLinkedInUrl('www.linkedin.com/in/ada-lovelace')).toBe(
+      'https://www.linkedin.com/in/ada-lovelace',
+    );
+    expect(normalizeLinkedInUrl('https://evillinkedin.com/in/ada')).toBeNull();
+    expect(normalizeLinkedInUrl('ftp://linkedin.com/in/ada-lovelace')).toBeNull();
+    expect(normalizeLinkedInUrl('javascript:linkedin.com/in/ada')).toBeNull();
+    expect(normalizeLinkedInUrl('https://user:secret@linkedin.com/in/ada-lovelace')).toBeNull();
+    expect(normalizeLinkedInUrl('')).toBeNull();
   });
 });
 

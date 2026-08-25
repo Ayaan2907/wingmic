@@ -105,10 +105,11 @@ describe('ActsClient', () => {
 
   it('renders live draft cards with enabled send CTAs', () => {
     render(<ActsClient />);
-    const sends = screen.getAllByRole('button', { name: /send/i });
+    const sends = screen.getAllByRole('button', { name: /add to cal/i });
     expect(sends.length).toBe(1);
     expect((sends[0] as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByText('Ada Lovelace')).toBeTruthy();
+    expect(screen.getByTestId('act-body').textContent).toMatch(/coffee mon/);
   });
 
   it('shows empty state when there are no drafts', () => {
@@ -155,7 +156,7 @@ describe('ActsClient', () => {
     const revokeObjectURL = vi.fn();
     vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
     render(<ActsClient />);
-    fireEvent.click(screen.getByRole('button', { name: /send/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add to cal/i }));
     expect(markSentMutate).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });

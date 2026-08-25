@@ -32,12 +32,17 @@ export default function CompanyDetailClient({ detail }: { detail: CompanyDetail 
     },
   });
 
-  const relatedPeople = detail.related.filter((r) => r.kind === 'person');
+  const relatedPeople = React.useMemo(
+    () => detail.related.filter((r) => r.kind === 'person'),
+    [detail.related],
+  );
   const primaryPerson = relatedPeople[0];
   const secondaryPerson = relatedPeople[1];
 
-  const subText =
-    [detail.sub.industry, detail.sub.domain].filter(Boolean).join(' · ') || 'unknown industry';
+  const subText = React.useMemo(
+    () => [detail.sub.industry, detail.sub.domain].filter(Boolean).join(' · ') || 'unknown industry',
+    [detail.sub.industry, detail.sub.domain],
+  );
 
   return (
     <EntityDetailScaffold

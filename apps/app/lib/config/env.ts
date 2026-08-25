@@ -14,6 +14,9 @@
  * Issue: https://github.com/Ayaan2907/wingmic/issues/12
  */
 import { z } from 'zod';
+import { resolveResendFrom } from './resend-from';
+
+export { DEFAULT_RESEND_FROM, resolveResendFrom } from './resend-from';
 
 // ── Server schema ───────────────────────────────────────────────────────
 // Validated on the server (process.env populated). On the client, this
@@ -35,7 +38,6 @@ const serverSchema = z.object({
 
   // ── Email (Resend) — magic link delivery ──────────────────────────────
   RESEND_API_KEY: z.string().optional(),
-  RESEND_FROM: z.string().default('wingmic <auth@wingmic.xyz>'),
 
   // ── Unified provider — OpenRouter (LLM + embeddings) ─────────────────
   // v0.1.1 "Hosted Capture" locked decision #9: OpenRouter is mandatory.
@@ -53,6 +55,12 @@ const serverSchema = z.object({
   EMBEDDING_MODEL: z.string().default('openai/text-embedding-3-small'),
   /** Mastra acts-draft agent model (OpenRouter id; openrouter/ prefix optional). */
   ACTS_DRAFT_MODEL: z.string().default('anthropic/claude-haiku-4.5'),
+
+  // ── Public web search (enrich / events / profile index) ───────────────
+  // Swap vendor without changing call sites: tavily today, exa when registered.
+  WEB_SEARCH_PROVIDER: z.enum(['tavily', 'exa', 'none']).default('tavily'),
+  TAVILY_API_KEY: z.string().min(1).optional(),
+  EXA_API_KEY: z.string().min(1).optional(),
 });
 
 // ── Client schema ───────────────────────────────────────────────────────
@@ -66,7 +74,8 @@ const clientSchema = z.object({
   NEXT_PUBLIC_BETTER_AUTH_URL: z.string().url().default('http://localhost:3211'),
 });
 
-type ServerEnv = z.infer<typeof serverSchema>;
+type ParsedServerEnv = z.infer<typeof serverSchema>;
+type ServerEnv = ParsedServerEnv & { RESEND_FROM: string };
 type ClientEnv = z.infer<typeof clientSchema>;
 export type Env = ServerEnv & ClientEnv;
 
@@ -111,8 +120,13 @@ function loadEnv(): Env {
         NEXT_PUBLIC_BETTER_AUTH_URL: process.env.NEXT_PUBLIC_BETTER_AUTH_URL,
       }),
     );
-    return {
+    const nodeEnv = result.data.NODE_ENV;
+    const serverEnv: ServerEnv = {
       ...result.data,
+      RESEND_FROM: resolveResendFrom(nodeEnv, process.env.RESEND_FROM),
+    };
+    return {
+      ...serverEnv,
       ...(clientResult.success ? clientResult.data : ({} as ClientEnv)),
     };
   }
