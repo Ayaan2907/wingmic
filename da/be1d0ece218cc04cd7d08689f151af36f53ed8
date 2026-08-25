@@ -1,0 +1,20 @@
+apps/web/app/contribute/ContributeClient.tsx
+  s_b1ca2a8cd512ee::t_590c095712cc2e 37,40
+  s_b1ca2a8cd512ee::t_09d7cd534389b7 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "dabe1d0ece218cc04cd7d08689f151af36f53ed8",
+  "prompts": {},
+  "sessions": {
+    "s_b1ca2a8cd512ee": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3c54c2c7-249d-4d20-b355-0a201c106bca",
+        "model": "claude-fable-5"
+      },
+      "human_author": "Ayaan Kaifullah <ayaanansari7921@outlook.com>"
+    }
+  }
+}
