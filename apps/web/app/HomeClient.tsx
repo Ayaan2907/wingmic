@@ -371,10 +371,10 @@ function App() {
                   <div className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: 2, textTransform: 'uppercase' }}>query</div>
                 </div>
                 <h3 style={{ fontSize: 38, fontWeight: 800, letterSpacing: '-0.025em', lineHeight: 1.05, marginBottom: 16 }}>
-                  Ask in plain English. From anywhere.
+                  Ask in plain English. In the app.
                 </h3>
                 <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, maxWidth: 460 }}>
-                  Mobile app, REST API, MCP server, Slack bot. Same graph. Ranked answers with conversation context, not just names.
+                  NL recall runs in the web app today — same graph you built from voice, ranked answers with conversation context. CLI and MCP query are on the roadmap, not v1.0.
                 </p>
               </div>
               <div style={{
@@ -382,28 +382,26 @@ function App() {
                 background: '#08080d', border: '1px solid rgba(255,255,255,0.08)'
               }}>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>terminal · zsh</span>
-                  <span className="mono" style={{ fontSize: 10, color: '#86efac' }}>● connected</span>
+                  <span className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>app.wingmic.xyz · recall</span>
+                  <span className="mono" style={{ fontSize: 10, color: accent }}>live in v1.0</span>
                 </div>
-                <div className="mono" style={{ padding: 22, fontSize: 13, lineHeight: 1.85 }}>
-                  <div><span style={{ color: accent }}>›</span> <span style={{ color: '#fff' }}>wingmic</span> <span style={{ color: '#86efac' }}>"who do I know that ships rust?"</span></div>
-                  <div style={{ color: 'rgba(255,255,255,0.4)', marginTop: 8 }}>↪ found 4 matches in 0.3s:</div>
-                  <div style={{ marginTop: 8, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <div style={{ color: 'rgba(255,255,255,0.85)' }}>
-                      <span style={{ color: accent }}>0.91</span> Sarah Chen <span style={{ color: 'rgba(255,255,255,0.4)' }}>· Acme Corp · met DevConnect</span>
-                    </div>
-                    <div style={{ color: 'rgba(255,255,255,0.85)' }}>
-                      <span style={{ color: accent }}>0.84</span> Marcus Lee <span style={{ color: 'rgba(255,255,255,0.4)' }}>· solo · met JS Conf</span>
-                    </div>
-                    <div style={{ color: 'rgba(255,255,255,0.85)' }}>
-                      <span style={{ color: accent }}>0.72</span> Yuki Tanaka <span style={{ color: 'rgba(255,255,255,0.4)' }}>· Cloudflare · referred by Lina</span>
-                    </div>
-                    <div style={{ color: 'rgba(255,255,255,0.85)' }}>
-                      <span style={{ color: accent }}>0.68</span> Devansh Rao <span style={{ color: 'rgba(255,255,255,0.4)' }}>· Vercel · met online</span>
-                    </div>
+                <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ alignSelf: 'flex-end', maxWidth: '88%', padding: '10px 14px', borderRadius: '12px 12px 2px 12px', background: 'rgba(255,255,255,0.06)', fontSize: 13.5, color: 'rgba(255,255,255,0.85)' }}>
+                    who do I know that ships rust?
                   </div>
-                  <div style={{ marginTop: 12 }}>
-                    <span style={{ color: accent }}>›</span> <span style={{ display: 'inline-block', width: 7, height: 14, background: accent, verticalAlign: 'middle', marginLeft: 4, animation: 'blink 0.7s infinite' }} />
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>↪ 4 matches · 0.3s</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {[
+                      { score: '0.91', name: 'Sarah Chen', meta: 'Acme Corp · met DevConnect' },
+                      { score: '0.84', name: 'Marcus Lee', meta: 'solo · met JS Conf' },
+                      { score: '0.72', name: 'Yuki Tanaka', meta: 'Cloudflare · referred by Lina' },
+                    ].map((row) =>
+                      <div key={row.name} style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>
+                        <span style={{ color: accent, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{row.score}</span>
+                        {' '}{row.name}
+                        <span style={{ color: 'rgba(255,255,255,0.4)' }}> · {row.meta}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -429,29 +427,19 @@ function App() {
           <div className="wm-stack" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 60, alignItems: 'center', position: 'relative' }}>
             <div>
               <div className="mono" style={{ fontSize: 11, color: '#A78BFA', marginBottom: 16, letterSpacing: 2, textTransform: 'uppercase' }}>
-                ◆ MCP · Model Context Protocol
+                ◆ Coming next · MCP · Model Context Protocol
               </div>
               <h2 className="wm-section-h2" style={{
                 fontSize: 'clamp(36px, 5vw, 64px)', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 24
               }}>
-                Your agent already <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: '#A78BFA' }}>knows</span> your network.
+                Your agent will <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: '#A78BFA' }}>know</span> your network.
               </h2>
               <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, maxWidth: 520, marginBottom: 28 }}>
-                Wingmic ships an MCP server. Plug it into Claude Desktop, Cursor, Zed, or your own agent — every prompt now has access to your relationship graph.
+                On the roadmap: an MCP server so Claude Desktop, Cursor, Zed, or your own agent can query your relationship graph. Not live in v1.0 — capture and recall run in the app today.
               </p>
 
-              <div className="mono" style={{
-                padding: '16px 20px', borderRadius: 10, marginBottom: 24, display: 'inline-block',
-                background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(167,139,250,0.3)',
-                fontSize: 14, color: 'rgba(255,255,255,0.85)'
-              }}>
-                <span style={{ color: '#A78BFA', opacity: 0.7 }}>$ </span>
-                claude mcp add wingmic
-                <span style={{ display: 'inline-block', width: 8, height: 16, background: '#A78BFA', verticalAlign: 'middle', marginLeft: 6, animation: 'blink 0.7s infinite' }} />
-              </div>
-
               <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
-                <div className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: 1.5, textTransform: 'uppercase' }}>works with</div>
+                <div className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: 1.5, textTransform: 'uppercase' }}>planned for</div>
                 {['Claude Desktop', 'Cursor', 'Zed', 'Continue', 'Cline'].map((c) =>
                 <span key={c} className="mono" style={{
                   fontSize: 12, color: '#fff', padding: '5px 10px', borderRadius: 6,
@@ -471,7 +459,7 @@ function App() {
               <div style={{ padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 22, height: 22, borderRadius: 6, background: '#cc785c', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff' }}>C</div>
                 <span style={{ fontSize: 13, fontWeight: 600 }}>Claude</span>
-                <span className="mono" style={{ fontSize: 10, color: '#A78BFA', marginLeft: 'auto' }}>● wingmic mcp</span>
+                <span className="mono" style={{ fontSize: 10, color: '#A78BFA', marginLeft: 'auto' }}>preview · not live</span>
               </div>
               <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ alignSelf: 'flex-end', maxWidth: '85%', padding: '10px 14px', borderRadius: '12px 12px 2px 12px', background: 'rgba(255,255,255,0.06)', fontSize: 13.5 }}>
@@ -501,7 +489,7 @@ function App() {
             {/* Left — pitch */}
             <div className="wm-imports-sticky" style={{ position: 'sticky', top: 100 }}>
               <div className="mono" style={{ fontSize: 11, color: accent, marginBottom: 16, letterSpacing: 2, textTransform: 'uppercase' }}>
-                ◆ Connect everything
+                ◆ Coming next · contact imports
               </div>
               <h2 className="wm-section-h2" style={{
                 fontSize: 'clamp(40px, 5.5vw, 72px)', fontWeight: 900, letterSpacing: '-0.035em', lineHeight: 0.95, marginBottom: 24,
@@ -510,7 +498,7 @@ function App() {
                 Bring your <span style={{ fontFamily: 'Instrument Serif, serif', fontStyle: 'italic', fontWeight: 400, color: accent }}>existing</span> contacts.
               </h2>
               <p style={{ fontSize: 19, color: 'rgba(255,255,255,0.65)', lineHeight: 1.55, marginBottom: 24, maxWidth: 480 }}>
-                Connect a source once. Wingmic dedupes, enriches, and weaves it into your graph — queryable in plain English from day one.
+                Planned: connect LinkedIn, Gmail, and other sources once. Wingmic dedupes, enriches, and weaves imports into your graph. v1.0 is voice capture + recall — no OAuth connectors yet.
               </p>
               <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px', display: 'grid', gap: 10 }}>
                 {[
@@ -525,16 +513,11 @@ function App() {
                   </li>
                 ))}
               </ul>
-              <a href={APP_URL} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 8,
-                padding: '14px 22px', borderRadius: 10,
-                background: accent, color: '#000',
-                fontSize: 15, fontWeight: 700, textDecoration: 'none',
-                boxShadow: '3px 3px 0 #000', border: '1.5px solid #000',
-              }}>
-                Get started
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7h12m0 0L8 2m5 5l-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-              </a>
+              <p className="mono" style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', letterSpacing: 0.5, maxWidth: 420 }}>
+                v1.0 today: speak after you meet someone at{' '}
+                <a href={APP_URL} style={{ color: accent, fontWeight: 600 }}>app.wingmic.xyz</a>
+                {' '}— magic-link sign-in, no waitlist.
+              </p>
             </div>
 
             {/* Right — source grid */}
@@ -545,13 +528,13 @@ function App() {
                   group: 'Identity & Network',
                   blurb: 'Who you already know professionally.',
                   sources: [
-                    { name: 'LinkedIn',     status: 'live',    desc: '1st-degree, mutual intros, roles, tenure',
+                    { name: 'LinkedIn',     status: 'planned', desc: '1st-degree, mutual intros, roles, tenure',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#0A66C2"/><path d="M7 9.5h2.4v8H7v-8zM8.2 6a1.4 1.4 0 110 2.8 1.4 1.4 0 010-2.8zM11 9.5h2.3v1.1c.4-.7 1.4-1.3 2.7-1.3 2.1 0 2.7 1.3 2.7 3.2v5h-2.4v-4.4c0-.9-.3-1.6-1.4-1.6-1 0-1.5.7-1.5 1.6v4.4H11v-8z" fill="#fff"/></svg> },
-                    { name: 'X (Twitter)',  status: 'live',    desc: 'Followers, following, bios, mutual replies',
+                    { name: 'X (Twitter)',  status: 'planned', desc: 'Followers, following, bios, mutual replies',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#000"/><path d="M16.5 6h2.3l-5 5.7L20 18h-4.6l-3.6-4.7L7.6 18H5.3l5.4-6.1L5 6h4.7l3.3 4.3L16.5 6zm-.8 10.6h1.3L8.4 7.3H7l8.7 9.3z" fill="#fff"/></svg> },
-                    { name: 'GitHub',       status: 'live',    desc: 'Followers, contributors, co-stargazers',
+                    { name: 'GitHub',       status: 'planned', desc: 'Followers, contributors, co-stargazers',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#1a1a1a"/><path d="M12 5a7 7 0 00-2.2 13.6c.35.06.48-.16.48-.34v-1.2c-1.95.43-2.36-.94-2.36-.94-.32-.81-.78-1.03-.78-1.03-.64-.44.05-.43.05-.43.7.05 1.07.73 1.07.73.62 1.07 1.64.76 2.04.58.06-.45.24-.76.44-.94-1.55-.18-3.19-.78-3.19-3.46 0-.77.27-1.39.72-1.88-.07-.18-.31-.9.07-1.87 0 0 .59-.19 1.93.71a6.7 6.7 0 013.5 0c1.34-.9 1.93-.71 1.93-.71.38.97.14 1.69.07 1.87.45.49.72 1.11.72 1.88 0 2.69-1.64 3.28-3.2 3.45.25.22.47.65.47 1.31v1.95c0 .18.13.41.49.34A7 7 0 0012 5z" fill="#fff"/></svg> },
-                    { name: 'Luma',         status: 'live',    desc: 'Event RSVPs, hosts, attendees',
+                    { name: 'Luma',         status: 'planned', desc: 'Event RSVPs, hosts, attendees',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#FFC452"/><path d="M7 7h10v3H7V7zm0 5h10v3H7v-3zm0 5h6v2H7v-2z" fill="#000"/></svg> },
                   ]
                 },
@@ -559,11 +542,11 @@ function App() {
                   group: 'Email & Calendar',
                   blurb: 'People you actually talk to.',
                   sources: [
-                    { name: 'Gmail',        status: 'live',    desc: 'Threads, signatures, contact frequency',
+                    { name: 'Gmail',        status: 'planned', desc: 'Threads, signatures, contact frequency',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#fff"/><path d="M5 8l7 5 7-5v9H5V8z" fill="#EA4335"/><path d="M5 8l7 5 7-5v1.5l-7 5-7-5V8z" fill="#C5221F" opacity="0.6"/></svg> },
-                    { name: 'Outlook',      status: 'live',    desc: 'Exchange contacts + meeting attendees',
+                    { name: 'Outlook',      status: 'planned', desc: 'Exchange contacts + meeting attendees',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#0078D4"/><circle cx="9" cy="12" r="3.5" fill="#fff"/><path d="M14 8h5v8h-5V8z" fill="#fff" opacity="0.5"/></svg> },
-                    { name: 'Google Cal',   status: 'live',    desc: 'Meeting invitees, recurring 1:1s',
+                    { name: 'Google Cal',   status: 'planned', desc: 'Meeting invitees, recurring 1:1s',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#fff"/><rect x="6" y="7" width="12" height="11" rx="1" fill="#4285F4"/><text x="12" y="16" textAnchor="middle" fill="#fff" fontSize="8" fontWeight="700" fontFamily="system-ui">31</text></svg> },
                     { name: 'Cal.com',      status: 'soon',    desc: 'Booked meetings + types',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#1a1a1a"/><circle cx="12" cy="12" r="5" fill="none" stroke="#fff" strokeWidth="1.5"/><path d="M12 9v3l2 2" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/></svg> },
@@ -573,7 +556,7 @@ function App() {
                   group: 'Phone & Messaging',
                   blurb: 'The people in your pocket.',
                   sources: [
-                    { name: 'iCloud',       status: 'live',    desc: 'Phone contacts + groups',
+                    { name: 'iCloud',       status: 'planned', desc: 'Phone contacts + groups',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#1a1a1a"/><path d="M16.5 12.5c0-1.7-1.3-3-3-3-.4 0-.8.1-1.2.2-.5-1.5-2-2.7-3.7-2.7-2.1 0-3.9 1.7-3.9 3.9 0 .2 0 .3.1.5C3.5 11.7 3 12.6 3 13.7 3 15 4 16 5.3 16h11c1.4 0 2.5-1.1 2.5-2.5 0-1-.7-1.9-1.6-2.3.2-.2.3-.4.3-.7z" fill="#fff"/></svg> },
                     { name: 'WhatsApp',     status: 'soon',    desc: 'Chat history (read-only export)',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#25D366"/><path d="M12 6a6 6 0 00-5.2 9l-.8 3 3-.8a6 6 0 105-7.2v-4z" fill="#fff" opacity="0.95"/></svg> },
@@ -587,9 +570,9 @@ function App() {
                   group: 'Work & Community',
                   blurb: 'Coworkers, collaborators, members.',
                   sources: [
-                    { name: 'Slack',        status: 'live',    desc: 'Workspace members + DMs',
+                    { name: 'Slack',        status: 'planned', desc: 'Workspace members + DMs',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#fff"/><rect x="6" y="10" width="6" height="2" rx="1" fill="#E01E5A"/><rect x="12" y="10" width="2" height="6" rx="1" fill="#36C5F0"/><rect x="10" y="12" width="6" height="2" rx="1" fill="#2EB67D"/><rect x="8" y="6" width="2" height="6" rx="1" fill="#ECB22E"/></svg> },
-                    { name: 'Discord',      status: 'live',    desc: 'Server members + DMs',
+                    { name: 'Discord',      status: 'planned', desc: 'Server members + DMs',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#5865F2"/><path d="M16.4 8.2c-1-.5-2-.8-3.1-1l-.2.3c1 .2 2 .6 2.8 1.1-1-.5-2.2-.8-3.4-.9-.4 0-.7-.1-1-.1-1.6 0-3 .3-4.4.9.8-.5 1.7-.9 2.8-1.1l-.2-.3c-1 .1-2.1.5-3.1 1-1.1 2-1.4 3.9-1.3 5.8.6.8 1.5 1.4 2.5 1.6.2-.3.4-.7.6-1-.6-.2-1.2-.5-1.7-.9.1-.1.3-.2.4-.3 2.5 1.2 5.3 1.2 7.8 0 .1.1.3.2.4.3-.5.4-1.1.7-1.7.9.2.4.4.7.6 1 1-.2 1.9-.8 2.5-1.6.2-2.1-.5-4-1.3-5.7zM10.2 13c-.7 0-1.2-.7-1.2-1.5s.5-1.5 1.2-1.5 1.2.7 1.2 1.5-.5 1.5-1.2 1.5zm3.6 0c-.7 0-1.2-.7-1.2-1.5s.5-1.5 1.2-1.5 1.2.7 1.2 1.5-.5 1.5-1.2 1.5z" fill="#fff"/></svg> },
                     { name: 'Notion',       status: 'soon',    desc: 'Workspace members + page authors',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#fff"/><path d="M7 6h7l4 4v10H7V6z" fill="#000"/><path d="M9 9h5l3 3v6H9V9z" fill="#fff"/></svg> },
@@ -601,11 +584,11 @@ function App() {
                   group: 'Manual & Custom',
                   blurb: 'Power-user escape hatches.',
                   sources: [
-                    { name: 'CSV / vCard',  status: 'live',    desc: 'Drop a file, get edges',
+                    { name: 'CSV / vCard',  status: 'planned', desc: 'Drop a file, get edges',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#FF8FAB"/><path d="M9 6h4l3 3v9H8V6h1z" fill="#000" opacity="0.85"/><path d="M10 12h4M10 14h3" stroke="#FF8FAB" strokeWidth="1" strokeLinecap="round"/></svg> },
-                    { name: 'API / Webhook',status: 'live',    desc: 'POST events from your stack',
+                    { name: 'API / Webhook',status: 'planned', desc: 'POST events from your stack',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#86efac"/><path d="M8 9l-3 3 3 3M16 9l3 3-3 3M14 7l-4 10" stroke="#000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg> },
-                    { name: 'MCP server',   status: 'live',    desc: 'Pipe Claude conversations in',
+                    { name: 'MCP server',   status: 'planned', desc: 'Query graph from Claude / Cursor',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#1a1a1a"/><circle cx="8" cy="8" r="2" fill="#FFC452"/><circle cx="16" cy="8" r="2" fill="#FFC452"/><circle cx="12" cy="16" r="2" fill="#FFC452"/><path d="M8 8L12 16M16 8L12 16" stroke="#FFC452" strokeWidth="1"/></svg> },
                     { name: 'Zapier',       status: 'soon',    desc: '5000+ apps via Zapier',
                       icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#FF4A00"/><path d="M12 5v3.5m0 7V19M5 12h3.5m7 0H19M7.5 7.5l2.5 2.5m4 4l2.5 2.5m0-9l-2.5 2.5m-4 4l-2.5 2.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/></svg> },
@@ -619,20 +602,17 @@ function App() {
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
                     {sources.map(src => {
-                      const isLive = src.status === 'live';
                       const isSoon = src.status === 'soon';
-                      const statusColor = isLive ? '#86efac' : isSoon ? accent : 'rgba(255,255,255,0.3)';
-                      const statusLabel = isLive ? 'Connect' : isSoon ? 'Coming soon' : 'Planned';
+                      const statusColor = isSoon ? accent : 'rgba(255,255,255,0.3)';
+                      const statusLabel = isSoon ? 'Coming next' : 'Planned';
                       return (
                         <div key={src.name} style={{
                           padding: '14px 16px', borderRadius: 12,
-                          background: isLive ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.015)',
-                          border: `1px solid ${isLive ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)'}`,
-                          opacity: isLive ? 1 : 0.78,
+                          background: 'rgba(255,255,255,0.015)',
+                          border: '1px solid rgba(255,255,255,0.05)',
+                          opacity: 0.78,
                           display: 'grid', gridTemplateColumns: 'auto 1fr', gridTemplateRows: 'auto auto', gap: '2px 12px',
                           alignItems: 'center',
-                          transition: 'transform 0.15s, border-color 0.15s',
-                          cursor: isLive ? 'pointer' : 'default',
                         }}>
                           <div style={{ gridRow: '1 / 3' }}>{src.icon}</div>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -667,7 +647,7 @@ function App() {
                   ◆ Don't see yours?
                 </span>
                 <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>
-                  Wingmic ships an open import spec — write a 30-line adapter and we'll merge it.
+                  On the roadmap: an open import spec so contributors can write a 30-line adapter when imports ship.
                 </span>
                 <a href="/contribute" style={{ marginLeft: 'auto', fontSize: 13, color: accent, fontWeight: 600 }}>
                   See spec →
@@ -691,7 +671,7 @@ function App() {
             <div style={{ maxWidth: 720 }}>
               <div className="mono" style={{ fontSize: 11, color: third, marginBottom: 16, letterSpacing: 2, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: third, animation: 'pulse-d 1.5s infinite' }} />
-                ◆ It's not just memory.
+                ◆ Coming next · Acts agent
               </div>
               <h2 className="wm-section-h2" style={{
                 fontSize: 'clamp(48px, 6.5vw, 88px)', fontWeight: 900,
@@ -709,8 +689,8 @@ function App() {
                 {' '}for you.
               </h2>
               <p style={{ fontSize: 19, color: 'rgba(255,255,255,0.65)', lineHeight: 1.55, maxWidth: 620 }}>
-                With your permission, Wingmic doesn't just remember — it{' '}
-                <span style={{ color: '#fff', fontWeight: 700 }}>follows up</span>. Drafts the warm intro. Schedules the reminder. Sends the "great meeting you" email at the right moment.
+                On the roadmap: with your permission, Wingmic won't just remember — it will{' '}
+                <span style={{ color: '#fff', fontWeight: 700 }}>follow up</span>. Draft the warm intro. Schedule the reminder. Send the "great meeting you" email at the right moment. Preview only — not live in v1.0.
               </p>
             </div>
             <div style={{
@@ -741,7 +721,7 @@ function App() {
                 background: accent, color: '#000',
                 fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700,
                 letterSpacing: 1.5, textTransform: 'uppercase',
-              }}>● Drafting now</div>
+              }}>Preview · not live</div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, marginTop: 28 }}>
                 <div style={{
@@ -796,28 +776,28 @@ function App() {
               </div>
 
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <button style={{
+                <div style={{
                   padding: '11px 20px', borderRadius: 10,
-                  background: accent, color: '#000', border: '1.5px solid #000',
+                  background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.45)',
                   fontSize: 13.5, fontWeight: 700, fontFamily: 'system-ui',
-                  cursor: 'pointer', boxShadow: '3px 3px 0 #000',
+                  border: '1.5px solid rgba(255,255,255,0.12)',
                   display: 'inline-flex', alignItems: 'center', gap: 8,
                 }}>
                   Send via Gmail
-                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M1 7h12m0 0L8 2m5 5l-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
-                </button>
-                <button style={{
+                  <span className="mono" style={{ fontSize: 9, letterSpacing: 1, textTransform: 'uppercase' }}>coming next</span>
+                </div>
+                <div style={{
                   padding: '11px 18px', borderRadius: 10,
-                  background: 'transparent', color: '#fff',
-                  border: '1.5px solid rgba(255,255,255,0.2)',
-                  fontSize: 13.5, fontWeight: 600, fontFamily: 'system-ui', cursor: 'pointer',
-                }}>Edit draft</button>
-                <button style={{
-                  padding: '11px 18px', borderRadius: 10,
-                  background: 'transparent', color: 'rgba(255,255,255,0.5)',
+                  background: 'transparent', color: 'rgba(255,255,255,0.35)',
                   border: '1.5px solid rgba(255,255,255,0.1)',
-                  fontSize: 13.5, fontWeight: 500, fontFamily: 'system-ui', cursor: 'pointer',
-                }}>Skip</button>
+                  fontSize: 13.5, fontWeight: 600, fontFamily: 'system-ui',
+                }}>Edit draft</div>
+                <div style={{
+                  padding: '11px 18px', borderRadius: 10,
+                  background: 'transparent', color: 'rgba(255,255,255,0.25)',
+                  border: '1.5px solid rgba(255,255,255,0.08)',
+                  fontSize: 13.5, fontWeight: 500, fontFamily: 'system-ui',
+                }}>Skip</div>
               </div>
             </div>
 
@@ -860,17 +840,18 @@ function App() {
                 Reply-thank with mention of the founder you connected with there
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button style={{
+                <div style={{
                   flex: 1, padding: '10px 12px', borderRadius: 8,
-                  background: third, color: '#000', border: 'none',
-                  fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
-                }}>Draft reply</button>
-                <button style={{
+                  background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)',
+                  fontSize: 12.5, fontWeight: 700, textAlign: 'center',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                }}>Draft reply · coming next</div>
+                <div style={{
                   padding: '10px 12px', borderRadius: 8,
-                  background: 'transparent', color: 'rgba(255,255,255,0.6)',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  fontSize: 12.5, fontWeight: 500, cursor: 'pointer',
-                }}>+1d</button>
+                  background: 'transparent', color: 'rgba(255,255,255,0.25)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  fontSize: 12.5, fontWeight: 500,
+                }}>+1d</div>
               </div>
             </div>
           </div>
@@ -880,7 +861,7 @@ function App() {
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 24, flexWrap: 'wrap' }}>
               <h3 style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em' }}>What it can do</h3>
               <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)' }}>
-                — say it once, Wingmic handles the rest
+                — on the roadmap; v1.0 is speak · extract · query
               </span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
@@ -898,11 +879,7 @@ function App() {
                   padding: 18, borderRadius: 12,
                   background: 'rgba(255,255,255,0.025)',
                   border: '1px solid rgba(255,255,255,0.08)',
-                  transition: 'all 0.15s',
-                  cursor: 'pointer',
                 }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = item.color + '50'; e.currentTarget.style.background = item.color + '08'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.background = 'rgba(255,255,255,0.025)'; }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                     <div style={{
@@ -951,32 +928,35 @@ function App() {
         </div>
       </section>
 
-      {/* ─────────────────── LIVE FEED + BIG NUMBERS ─────────────────── */}
+      {/* ─────────────────── WHAT'S LIVE IN V1 ─────────────────── */}
       <section className="wm-section" style={{ padding: '120px 32px', background: '#06060a', borderTop: `2px solid ${accent}30` }}>
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
           <div className="wm-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'center' }}>
             <div>
               <div className="mono" style={{ fontSize: 11, color: accent, marginBottom: 16, letterSpacing: 2, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, animation: 'pulse-d 1.5s infinite' }} />
-                Live · last 24h
+                v1.0 · shipped Aug 25
               </div>
               <h2 className="wm-section-h2" style={{
                 fontSize: 'clamp(36px, 5vw, 60px)', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 24
               }}>
-                v1 is <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: accent }}>live</span>.
+                Speak. Extract. <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: accent }}>Query.</span>
               </h2>
+              <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, maxWidth: 480, marginBottom: 28 }}>
+                Voice capture, entity extraction, and NL recall are live at app.wingmic.xyz. Magic-link sign-in — no password, no waitlist. MCP, OAuth imports, and Acts follow-ups are on the roadmap.
+              </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginTop: 20 }}>
                 <div>
-                  <div style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>45+</div>
-                  <div className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1.5 }}>early users</div>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: accent, letterSpacing: '-0.02em' }}>01</div>
+                  <div className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1.5 }}>speak · live</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>32K</div>
-                  <div className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1.5 }}>nodes in graph</div>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: accent, letterSpacing: '-0.02em' }}>02</div>
+                  <div className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1.5 }}>extract · live</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 36, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>91%</div>
-                  <div className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1.5 }}>follow-up rate</div>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: accent, letterSpacing: '-0.02em' }}>03</div>
+                  <div className="mono" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1.5 }}>query · live</div>
                 </div>
               </div>
             </div>
@@ -1057,7 +1037,7 @@ function App() {
             </p>
           </div>
           {[
-          { h: 'Product', items: ['App', 'API', 'MCP', 'Changelog'] },
+          { h: 'Product', items: ['App', 'Roadmap', 'Changelog'] },
           { h: 'Build', items: ['Docs', 'OpenAPI', 'SDK', 'GitHub'] },
           { h: 'Wingmic', items: ['Manifesto', 'Privacy', 'X / Twitter', 'Status'] }].
           map((col) =>
@@ -1065,10 +1045,11 @@ function App() {
               <div className="mono" style={{ fontSize: 11, color: accent, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1.5 }}>{col.h}</div>
               {col.items.map((it) => {
               const external = it === 'X / Twitter' ? 'https://x.com/wingmicxyz' : it === 'App' ? APP_URL : null;
+              const href = it === 'Roadmap' ? '#mcp' : external ?? '#';
               return (
                 <a
                   key={it}
-                  href={external ?? '#'}
+                  href={href}
                   {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
                   style={{ display: 'block', fontSize: 13, color: 'rgba(255,255,255,0.6)', padding: '4px 0' }}
                 >{it}</a>
