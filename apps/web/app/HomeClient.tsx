@@ -371,10 +371,10 @@ function App() {
                   <div className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: 2, textTransform: 'uppercase' }}>query</div>
                 </div>
                 <h3 style={{ fontSize: 38, fontWeight: 800, letterSpacing: '-0.025em', lineHeight: 1.05, marginBottom: 16 }}>
-                  Ask in plain English. From anywhere.
+                  Ask in plain English. In the app.
                 </h3>
                 <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, maxWidth: 460 }}>
-                  Open the app, ask in plain English. Same graph you built from voice — ranked answers with conversation context, not just names.
+                  NL recall runs in the web app today — same graph you built from voice, ranked answers with conversation context. CLI and MCP query are on the roadmap, not v1.0.
                 </p>
               </div>
               <div style={{
@@ -382,28 +382,26 @@ function App() {
                 background: '#08080d', border: '1px solid rgba(255,255,255,0.08)'
               }}>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>terminal · zsh</span>
-                  <span className="mono" style={{ fontSize: 10, color: '#86efac' }}>● connected</span>
+                  <span className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>app.wingmic.xyz · recall</span>
+                  <span className="mono" style={{ fontSize: 10, color: accent }}>live in v1.0</span>
                 </div>
-                <div className="mono" style={{ padding: 22, fontSize: 13, lineHeight: 1.85 }}>
-                  <div><span style={{ color: accent }}>›</span> <span style={{ color: '#fff' }}>wingmic</span> <span style={{ color: '#86efac' }}>"who do I know that ships rust?"</span></div>
-                  <div style={{ color: 'rgba(255,255,255,0.4)', marginTop: 8 }}>↪ found 4 matches in 0.3s:</div>
-                  <div style={{ marginTop: 8, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <div style={{ color: 'rgba(255,255,255,0.85)' }}>
-                      <span style={{ color: accent }}>0.91</span> Sarah Chen <span style={{ color: 'rgba(255,255,255,0.4)' }}>· Acme Corp · met DevConnect</span>
-                    </div>
-                    <div style={{ color: 'rgba(255,255,255,0.85)' }}>
-                      <span style={{ color: accent }}>0.84</span> Marcus Lee <span style={{ color: 'rgba(255,255,255,0.4)' }}>· solo · met JS Conf</span>
-                    </div>
-                    <div style={{ color: 'rgba(255,255,255,0.85)' }}>
-                      <span style={{ color: accent }}>0.72</span> Yuki Tanaka <span style={{ color: 'rgba(255,255,255,0.4)' }}>· Cloudflare · referred by Lina</span>
-                    </div>
-                    <div style={{ color: 'rgba(255,255,255,0.85)' }}>
-                      <span style={{ color: accent }}>0.68</span> Devansh Rao <span style={{ color: 'rgba(255,255,255,0.4)' }}>· Vercel · met online</span>
-                    </div>
+                <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ alignSelf: 'flex-end', maxWidth: '88%', padding: '10px 14px', borderRadius: '12px 12px 2px 12px', background: 'rgba(255,255,255,0.06)', fontSize: 13.5, color: 'rgba(255,255,255,0.85)' }}>
+                    who do I know that ships rust?
                   </div>
-                  <div style={{ marginTop: 12 }}>
-                    <span style={{ color: accent }}>›</span> <span style={{ display: 'inline-block', width: 7, height: 14, background: accent, verticalAlign: 'middle', marginLeft: 4, animation: 'blink 0.7s infinite' }} />
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>↪ 4 matches · 0.3s</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {[
+                      { score: '0.91', name: 'Sarah Chen', meta: 'Acme Corp · met DevConnect' },
+                      { score: '0.84', name: 'Marcus Lee', meta: 'solo · met JS Conf' },
+                      { score: '0.72', name: 'Yuki Tanaka', meta: 'Cloudflare · referred by Lina' },
+                    ].map((row) =>
+                      <div key={row.name} style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>
+                        <span style={{ color: accent, fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>{row.score}</span>
+                        {' '}{row.name}
+                        <span style={{ color: 'rgba(255,255,255,0.4)' }}> · {row.meta}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -649,7 +647,7 @@ function App() {
                   ◆ Don't see yours?
                 </span>
                 <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>
-                  Wingmic ships an open import spec — write a 30-line adapter and we'll merge it.
+                  On the roadmap: an open import spec so contributors can write a 30-line adapter when imports ship.
                 </span>
                 <a href="/contribute" style={{ marginLeft: 'auto', fontSize: 13, color: accent, fontWeight: 600 }}>
                   See spec →
@@ -1039,7 +1037,7 @@ function App() {
             </p>
           </div>
           {[
-          { h: 'Product', items: ['App', 'API', 'MCP', 'Changelog'] },
+          { h: 'Product', items: ['App', 'Roadmap', 'Changelog'] },
           { h: 'Build', items: ['Docs', 'OpenAPI', 'SDK', 'GitHub'] },
           { h: 'Wingmic', items: ['Manifesto', 'Privacy', 'X / Twitter', 'Status'] }].
           map((col) =>
@@ -1047,10 +1045,11 @@ function App() {
               <div className="mono" style={{ fontSize: 11, color: accent, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1.5 }}>{col.h}</div>
               {col.items.map((it) => {
               const external = it === 'X / Twitter' ? 'https://x.com/wingmicxyz' : it === 'App' ? APP_URL : null;
+              const href = it === 'Roadmap' ? '#mcp' : external ?? '#';
               return (
                 <a
                   key={it}
-                  href={external ?? '#'}
+                  href={href}
                   {...(external ? { target: '_blank', rel: 'noreferrer' } : {})}
                   style={{ display: 'block', fontSize: 13, color: 'rgba(255,255,255,0.6)', padding: '4px 0' }}
                 >{it}</a>
