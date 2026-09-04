@@ -100,7 +100,7 @@ That's the whole product. Hold a button. Talk for twenty seconds. Ask anything l
 | v1.4 | self-host — Docker Compose + BYO API keys | 📋 planned |
 
 <div align="center">
-  <img src="design/screenshots/07-acts-agent.png" alt="v0.3 preview — Wingmic acts for you. Drafts the warm intro. Schedules the reminder. Sends the great-meeting-you email at the right moment. Permission-first." width="720" />
+  <img src="design/screenshots/07-acts-agent.png" alt="v1.2 preview — Acts agent mockup, not live. Permission-first drafts only: warm intro, reminder, follow-up email — you review and click send." width="720" />
   <p><em>v1.2 preview — Acts agent drafts the email, you click send. Not live yet.</em></p>
 </div>
 
