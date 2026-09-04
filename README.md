@@ -11,12 +11,13 @@
 Stop forgetting. *Start building.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-FFC452.svg?style=flat-square)](LICENSE)
-[![Status](https://img.shields.io/badge/status-v0.1--beta-FFC452.svg?style=flat-square)](https://github.com/Ayaan2907/wingmic/releases)
+[![Status](https://img.shields.io/badge/status-v1.0.0-FFC452.svg?style=flat-square)](https://github.com/Ayaan2907/wingmic/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-86efac.svg?style=flat-square)](CONTRIBUTING.md)
 [![Live](https://img.shields.io/badge/wingmic.xyz-live-7DD3FC.svg?style=flat-square)](https://wingmic.xyz)
 [![CI](https://github.com/Ayaan2907/wingmic/actions/workflows/ci.yml/badge.svg)](https://github.com/Ayaan2907/wingmic/actions/workflows/ci.yml)
 
 [Live site](https://wingmic.xyz) ·
+[App](https://app.wingmic.xyz) ·
 [Roadmap](#roadmap) ·
 [Self-host](#self-host) ·
 [Contribute](CONTRIBUTING.md) ·
@@ -69,7 +70,7 @@ you, three weeks later:
 That's the whole product. Hold a button. Talk for twenty seconds. Ask anything later, in plain English, get an answer.
 
 <div align="center">
-  <img src="design/screenshots/04-recall.png" alt="Ask in plain English. From anywhere. Mobile app, REST API, MCP server, Slack bot. Same graph." width="720" />
+  <img src="design/screenshots/04-recall.png" alt="Ask in plain English. Voice capture builds your graph — recall answers in the app." width="720" />
 </div>
 
 ---
@@ -92,15 +93,15 @@ That's the whole product. Hold a button. Talk for twenty seconds. Ask anything l
 
 | version | what ships | status |
 |---|---|---|
-| **v0.1.1** | voice capture + NL recall (Approach B narrowed) | 🟡 wiring complete, awaiting first deploy |
-| v0.2 | contact imports — LinkedIn export, Google Contacts, vCard | 📋 [#10 epic](https://github.com/Ayaan2907/wingmic/issues/10) |
-| v0.3 | Acts agent — drafts emails / check-ins / intros, **permission-first**, Inngest durability | 📋 [#11 epic](https://github.com/Ayaan2907/wingmic/issues/11) |
-| v0.4 | MCP server — query your network from Claude / ChatGPT directly | 📋 deferred |
-| v0.5 | self-host — Docker Compose + BYO API keys | 📋 deferred |
+| **v1.0.0** | speak · extract · query — voice capture, NL recall, magic-link sign-in at [app.wingmic.xyz](https://app.wingmic.xyz) | ✅ shipped Aug 25, 2026 |
+| v1.1 | contact imports — LinkedIn export, Google Contacts, vCard, OAuth connectors | 📋 coming next · [#10 epic](https://github.com/Ayaan2907/wingmic/issues/10) |
+| v1.2 | Acts agent — drafts emails / check-ins / intros, **permission-first** | 📋 coming next · [#11 epic](https://github.com/Ayaan2907/wingmic/issues/11) |
+| v1.3 | MCP server + Slack bot — query your network from Claude / ChatGPT / Slack | 📋 coming next |
+| v1.4 | self-host — Docker Compose + BYO API keys | 📋 planned |
 
 <div align="center">
   <img src="design/screenshots/07-acts-agent.png" alt="v0.3 preview — Wingmic acts for you. Drafts the warm intro. Schedules the reminder. Sends the great-meeting-you email at the right moment. Permission-first." width="720" />
-  <p><em>v0.3 preview — Acts agent drafts the email, you click send.</em></p>
+  <p><em>v1.2 preview — Acts agent drafts the email, you click send. Not live yet.</em></p>
 </div>
 
 Roadmap and milestone progress live on the [project board](https://github.com/Ayaan2907/wingmic/projects).
@@ -277,8 +278,8 @@ Wingmic is fully open source. You can run the entire stack on your own infra wit
 
 Status:
 
-- **v0.1.1** — manual self-host works today (clone, fill env, deploy to your provider). Documented in [docs/deploy.md](docs/deploy.md).
-- **v0.5** — single-command `docker-compose up` with BYO API keys is on the roadmap.
+- **v1.0.0** — manual self-host works today (clone, fill env, deploy to your provider). Documented in [docs/deploy.md](docs/deploy.md).
+- **v1.4** — single-command `docker-compose up` with BYO API keys is on the roadmap.
 
 From the workspace root:
 
