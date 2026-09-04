@@ -192,12 +192,12 @@ function CodeBlock({ filename, lines, accent }) {
 // ─────────────────── Live "now happening" feed ───────────────────
 function LiveFeed({ accent }) {
   const events = [
-  { who: 'devansh.eth', what: 'captured', detail: '"Coffee w/ Marcus — talked indexers"', t: 'now' },
-  { who: 'lina_b', what: 'queried', detail: '"who knows about ZK proofs?"', t: '12s' },
-  { who: 'jamie_p', what: 'follow-up done', detail: 'Sent intro to Sarah → Eli', t: '34s' },
-  { who: 'alex.rs', what: 'graph grew', detail: '+3 nodes, +5 edges from DevConnect', t: '1m' },
-  { who: 'priya', what: 'captured', detail: '"Met Yuki, eng @ Cloudflare"', t: '2m' },
-  { who: 'marc', what: 'queried via MCP', detail: 'Claude pulled 12 contacts for cold email', t: '3m' }];
+  { who: 'you', what: 'speak', detail: '"Met Sarah at Acme — edge runtime lead"', t: 'now' },
+  { who: 'wingmic', what: 'extract', detail: 'person · company · topic · follow-up', t: '2s' },
+  { who: 'you', what: 'query', detail: '"who at acme works on rust?"', t: '12s' },
+  { who: 'wingmic', what: 'recall', detail: 'Sarah Chen · Lead · Edge runtime · Acme', t: '12s' },
+  { who: 'you', what: 'speak', detail: '"Coffee w/ Marcus — talked indexers"', t: '1m' },
+  { who: 'you', what: 'query', detail: '"who knows about ZK proofs?"', t: '2m' }];
 
   const [pos, setPos] = useState(0);
   useEffect(() => {
