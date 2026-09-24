@@ -4,6 +4,12 @@ export type ParsedIcsEvent = {
   url: string | null;
   dateRangeStart: Date | null;
   dateRangeEnd: Date | null;
+  /**
+   * VALUE=DATE event. ICS all-day DTEND is exclusive; parseIcsEvents
+   * normalizes it to the inclusive last-day midnight, so window matching
+   * shifts one day back out (see icsEventWindow).
+   */
+  allDay: boolean;
 };
 
 function unfoldIcs(raw: string): string {
@@ -101,12 +107,14 @@ export function parseIcsEvents(raw: string): ParsedIcsEvent[] {
     const block = chunk.split(/END:VEVENT/i)[0] ?? '';
     const summary = field(block, 'SUMMARY');
     if (!summary) continue;
+    const dtstart = parsedField(block, 'DTSTART');
     events.push({
       summary,
       location: field(block, 'LOCATION'),
       url: field(block, 'URL'),
-      dateRangeStart: icsDate(parsedField(block, 'DTSTART')),
+      dateRangeStart: icsDate(dtstart),
       dateRangeEnd: icsDate(parsedField(block, 'DTEND'), true),
+      allDay: dtstart?.params.get('VALUE')?.toUpperCase() === 'DATE',
     });
   }
   return events;
