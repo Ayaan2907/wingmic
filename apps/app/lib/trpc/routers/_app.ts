@@ -30,6 +30,7 @@ export const appRouter = router({
   acts: actsRouter,
   imports: importsRouter,
   apiKeys: apiKeysRouter,
+  events: eventsRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -312,6 +312,10 @@ function MessageBubble(props: MessageBubbleProps) {
               />
             );
           })()}
+          {m.boundEvent && (m.status === 'linking' || m.status === 'committed') ? (
+            <BoundEventChip event={m.boundEvent} />
+          ) : null}
+          <EnrichmentBadgeSlot message={m} />
           {showLinkSweep && (
             <div
               aria-hidden="true"
@@ -435,7 +439,7 @@ function BubbleHeader({ m, onDelete }: { m: ThreadMessage; onDelete: () => void 
         textTransform: 'uppercase',
       }}
     >
-      <span>{m.status === 'committed' ? time : meta}</span>
+      <span data-testid="bubble-stage">{m.status === 'committed' ? time : meta}</span>
       {m.status === 'committed' && (
         <button
           type="button"
@@ -1074,4 +1078,41 @@ export function UndoChip() {
       </button>
     </div>
   );
+}
+
+/** The event this capture was bound to — frozen at handoff (D2 visual half). */
+function BoundEventChip({ event }: { event: { eventId: string; name: string } }) {
+  return (
+    <div
+      data-testid="bubble-bound-event"
+      className="mono"
+      style={{
+        alignSelf: 'flex-start',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '4px 10px',
+        borderRadius: 999,
+        background: 'rgba(0,0,0,0.22)',
+        color: '#fff',
+        fontSize: 10,
+        letterSpacing: 0.5,
+      }}
+    >
+      → at{' '}
+      <span className="serif" style={{ fontStyle: 'italic', fontSize: 11 }}>
+        {event.name.toLowerCase()}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * D3 hook point: person/company enrichment states render here once the
+ * visible-enrichment PR wires them (spec D3). Passive by design — renders
+ * nothing until then, never a placeholder box.
+ */
+function EnrichmentBadgeSlot({ message }: { message: ThreadMessage }) {
+  void message;
+  return null;
 }
