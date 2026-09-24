@@ -153,6 +153,10 @@ export async function markInteractionActsFailed(args: {
  * past the grace window the queue that owned them is gone, so they can only
  * fail — the inbox then renders an honest retry. Deliberately unthrottled:
  * the WHERE clause makes a healthy sweep a single no-op indexed update.
+ *
+ * Staleness runs on updatedAt — every path that (re)starts drafting (capture
+ * placeholder insert, retryDraft's failed→drafting claim) sets it — so an
+ * in-flight retry of an old row is never swept while its polish runs.
  */
 const STALE_GRACE_MS = 10 * 60 * 1000;
 
@@ -161,7 +165,7 @@ export async function sweepStaleDrafting(db: DB, graceMs = STALE_GRACE_MS): Prom
   const recovered = await db
     .update(schema.acts)
     .set({ status: 'failed', updatedAt: new Date() })
-    .where(and(eq(schema.acts.status, 'drafting'), lt(schema.acts.createdAt, cutoff)))
+    .where(and(eq(schema.acts.status, 'drafting'), lt(schema.acts.updatedAt, cutoff)))
     .returning({ id: schema.acts.id });
   if (recovered.length > 0) {
     console.warn('[acts] recovered stale drafting rows as failed', {

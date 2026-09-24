@@ -101,6 +101,7 @@ describe('acts router', () => {
       source?: string | null;
       kind?: string;
       createdAtMs?: number;
+      updatedAtMs?: number;
     } = {},
   ) {
     await client.execute({
@@ -115,10 +116,10 @@ describe('acts router', () => {
         opts.status ?? 'drafted',
         opts.target === undefined ? 'e_ada' : opts.target,
         opts.source ?? null,
-        // drizzle mode:'timestamp' columns store seconds (list self-heal test
-        // compares createdAt through drizzle date math).
+        // drizzle mode:'timestamp' columns store seconds (the list self-heal
+        // test compares updatedAt through drizzle date math).
         Math.floor((opts.createdAtMs ?? now) / 1000),
-        now,
+        Math.floor((opts.updatedAtMs ?? opts.createdAtMs ?? now) / 1000),
       ],
     });
   }

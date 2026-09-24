@@ -89,6 +89,7 @@ describe('scheduleActDrafting (deferred acts drafting, spec D2)', () => {
       kind?: string;
       body?: string;
       createdAtMs?: number;
+      updatedAtMs?: number;
     } = {},
   ) {
     await client.execute({
@@ -102,9 +103,9 @@ describe('scheduleActDrafting (deferred acts drafting, spec D2)', () => {
         opts.target === undefined ? 'e_ada' : opts.target,
         opts.source ?? 'int_1',
         // drizzle mode:'timestamp' columns store seconds; the sweep's
-        // createdAt comparison runs through drizzle date math.
+        // updatedAt comparison runs through drizzle date math.
         Math.floor((opts.createdAtMs ?? now) / 1000),
-        now,
+        Math.floor((opts.updatedAtMs ?? opts.createdAtMs ?? now) / 1000),
       ],
     });
   }
@@ -235,5 +236,20 @@ describe('scheduleActDrafting (deferred acts drafting, spec D2)', () => {
     const row = await actById('act_stale_seed');
     expect(row?.status).toBe('failed');
     expect(row?.body).toBe('send the deck');
+  });
+
+  it('a retry-claimed row (old createdAt, fresh updatedAt) survives the sweep', async () => {
+    // retryDraft claims failed→drafting and bumps only updatedAt; the sweep
+    // must judge staleness on updatedAt so an in-flight retry of an old act
+    // is never flipped back to failed mid-polish.
+    await seedAct('act_retry_claimed', {
+      createdAtMs: now - 60 * 60_000,
+      updatedAtMs: now - 5_000,
+    });
+
+    const recovered = await sweepStaleDrafting(db);
+
+    expect(recovered).toBe(0);
+    expect((await actById('act_retry_claimed'))?.status).toBe('drafting');
   });
 });
