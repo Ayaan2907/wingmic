@@ -15,6 +15,10 @@ export const DAILY_LIMITS = {
   recording: 10,
   message: 20,
   image: 10,
+  // Assistant turns (chat capture conversation) — bounded above by the
+  // capture caps (a turn fires at most once per committed capture) but
+  // capped on its own so the same interactionId cannot be replayed forever.
+  assistant: 50,
 } as const;
 
 export type UsageKind = keyof typeof DAILY_LIMITS;

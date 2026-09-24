@@ -478,6 +478,144 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     },
     [patch, utils],
   );
+
+  /** Interaction ids that already fired an assistant turn — duplicate/retry
+   *  commits must not produce a second assistant reply for one capture. */
+  const assistantFiredRef = useRef<Set<string>>(new Set());
+
+  /**
+   * The assistant turn of the capture conversation (spec art_LkglG0Xb):
+   * after a committed memo turn, stream the Mastra assistant reply from
+   * /api/chat/assistant. Best-effort by design — a stalled or failed
+   * assistant stream never fails the capture that already landed; the
+   * bubble just settles with whatever streamed.
+   */
+  const startAssistantTurn = useCallback(
+    async (interactionId: string) => {
+      const assistantId = uid();
+      const controller = new AbortController();
+      pipelineControllersRef.current.set(assistantId, controller);
+      const cleanupAssistantController = () => {
+        if (pipelineControllersRef.current.get(assistantId) === controller) {
+          pipelineControllersRef.current.delete(assistantId);
+        }
+      };
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantId,
+          status: 'committed',
+          audioBlob: null,
+          transcript: null,
+          duration: 0,
+          transcribeMs: null,
+          commitMs: null,
+          graphResult: null,
+          error: null,
+          createdAt: new Date(),
+          transcribingStartedAt: null,
+          fromPaste: false,
+          role: 'assistant',
+          streamText: '',
+          streamDone: false,
+          followUp: null,
+        },
+      ]);
+      try {
+        const res = await fetch('/api/chat/assistant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ interactionId }),
+          signal: controller.signal,
+        });
+        if (!res.ok || !res.body) {
+          throw new Error(`assistant turn failed (${res.status})`);
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let streamed = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          // SSE frames are "data: {json}\n\n" — parse complete frames only.
+          let frameEnd = buffer.indexOf('\n\n');
+          while (frameEnd >= 0) {
+            const frame = buffer.slice(0, frameEnd);
+            buffer = buffer.slice(frameEnd + 2);
+            frameEnd = buffer.indexOf('\n\n');
+            if (!frame.startsWith('data: ')) continue;
+            const event = JSON.parse(frame.slice(6)) as
+              | { type: 'token'; text: string }
+              | {
+                  type: 'done';
+                  source: 'llm' | 'fallback';
+                  followUp: { question: string; about: string } | null;
+                }
+              | { type: 'error'; message: string };
+            if (event.type === 'token') {
+              streamed += event.text;
+              patch(assistantId, { streamText: streamed });
+            } else if (event.type === 'done') {
+              patch(assistantId, {
+                streamDone: true,
+                followUp: event.followUp?.question ?? null,
+              });
+            } else {
+              patch(assistantId, { streamDone: true });
+            }
+          }
+        }
+        // Stream closed without a done frame (aborted upstream) — settle.
+        patch(assistantId, { streamDone: true });
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        // The capture landed — an assistant hiccup must never fail the turn.
+        console.error('[chat-assistant] client stream failed', err);
+        patch(assistantId, { streamDone: true });
+      } finally {
+        cleanupAssistantController();
+      }
+    },
+    [patch],
+  );
+
+  /**
+   * Shared commit-success handling for every capture path (voice, paste,
+   * text, retry, ask→memo): patch the bubble, advance photo/event targets,
+   * clear the consumed attachment, and fire the assistant turn for the
+   * committed interaction. `previewJpegBase64: undefined` leaves any bubble
+   * preview untouched (text/ask-memo paths seed it when the bubble is born).
+   */
+  const applyCommitSuccess = useCallback(
+    (
+      id: string,
+      result: GraphResult,
+      commitMs: number,
+      attachment: PendingAttachment | null,
+      previewJpegBase64?: string | null,
+    ) => {
+      patch(id, {
+        status: 'committed',
+        commitMs,
+        graphResult: result,
+        ...(previewJpegBase64 !== undefined ? { previewJpegBase64 } : {}),
+      });
+      advanceOpenTarget(result);
+      // Event-session adoption happens at each call site after this handler
+      // (#182 replaced the older advanceOpenEvent flow with adoptEventFromResult).
+      clearPendingAttachment(attachment);
+      // Ask bubbles stay answers, not conversation turns. Duplicate/retry
+      // commits of the same interaction get exactly one assistant reply.
+      const bubble = messagesRef.current.find((m) => m.id === id);
+      if (bubble?.intent === 'ask') return;
+      if (assistantFiredRef.current.has(result.interactionId)) return;
+      assistantFiredRef.current.add(result.interactionId);
+      void startAssistantTurn(result.interactionId);
+    },
+    [patch, startAssistantTurn],
+  );
   useEffect(() => {
     const timers = undoTimersRef.current;
     const controllers = pipelineControllersRef.current;
@@ -608,15 +746,14 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           cleanupController();
           return;
         }
-        patch(id, {
-          status: 'committed',
-          commitMs: Math.round(performance.now() - c0),
-          graphResult: result as GraphResult,
-          previewJpegBase64: commitContext.attachment?.jpegBase64 ?? null,
-        });
-        advanceOpenTarget(result as GraphResult);
+        applyCommitSuccess(
+          id,
+          result as GraphResult,
+          Math.round(performance.now() - c0),
+          commitContext.attachment,
+          commitContext.attachment?.jpegBase64 ?? null,
+        );
         adoptEventFromResult(result as GraphResult);
-        clearPendingAttachment(commitContext.attachment);
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
           cleanupController();
@@ -632,7 +769,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         cleanupController();
       }
     },
-    [patch, commitMutation, runAskPipeline],
+    [patch, commitMutation, runAskPipeline, applyCommitSuccess],
   );
 
   // Pathname is stale-closure-prone inside the status effect (recorder.status
@@ -816,15 +953,14 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       const c0 = performance.now();
       try {
         const result = await commitMutation.mutateAsync(captureCommitInput(text, id, commitContext));
-        patch(id, {
-          status: 'committed',
-          commitMs: Math.round(performance.now() - c0),
-          graphResult: result as GraphResult,
-          previewJpegBase64: commitContext.attachment?.jpegBase64 ?? null,
-        });
-        advanceOpenTarget(result as GraphResult);
+        applyCommitSuccess(
+          id,
+          result as GraphResult,
+          Math.round(performance.now() - c0),
+          commitContext.attachment,
+          commitContext.attachment?.jpegBase64 ?? null,
+        );
         adoptEventFromResult(result as GraphResult);
-        clearPendingAttachment(commitContext.attachment);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'commit failed.';
         patch(id, {
@@ -834,7 +970,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         });
       }
     },
-    [pasteDraft, photoBindChoices, patch, commitMutation],
+    [pasteDraft, photoBindChoices, patch, commitMutation, applyCommitSuccess],
   );
 
   const retryBubble = useCallback(
@@ -865,15 +1001,14 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           const result = await commitMutation.mutateAsync(
             captureCommitInput(msg.transcript, id, commitContext),
           );
-          patch(id, {
-            status: 'committed',
-            commitMs: Math.round(performance.now() - c0),
-            graphResult: result as GraphResult,
-            previewJpegBase64: commitContext.attachment?.jpegBase64 ?? null,
-          });
-          advanceOpenTarget(result as GraphResult);
+          applyCommitSuccess(
+            id,
+            result as GraphResult,
+            Math.round(performance.now() - c0),
+            commitContext.attachment,
+            commitContext.attachment?.jpegBase64 ?? null,
+          );
           adoptEventFromResult(result as GraphResult);
-          clearPendingAttachment(commitContext.attachment);
         } catch (err) {
           const message = err instanceof Error ? err.message : 'commit failed.';
           patch(id, {
@@ -884,7 +1019,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [messages, patch, commitMutation, runCapturePipeline, runAskPipeline],
+    [messages, patch, commitMutation, runCapturePipeline, runAskPipeline, applyCommitSuccess],
   );
 
   const submitText = useCallback(
@@ -953,14 +1088,13 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         const result = await commitMutation.mutateAsync(
           captureCommitInput(transcript, id, commitContext),
         );
-        patch(id, {
-          status: 'committed',
-          commitMs: Math.round(performance.now() - c0),
-          graphResult: result as GraphResult,
-        });
-        advanceOpenTarget(result as GraphResult);
+        applyCommitSuccess(
+          id,
+          result as GraphResult,
+          Math.round(performance.now() - c0),
+          commitContext.attachment,
+        );
         adoptEventFromResult(result as GraphResult);
-        clearPendingAttachment(commitContext.attachment);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'commit failed.';
         patch(id, {
@@ -972,7 +1106,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         textSubmissionRef.current = false;
       }
     },
-    [commitMutation, patch, photoBindChoices, runAskPipeline],
+    [commitMutation, patch, photoBindChoices, runAskPipeline, applyCommitSuccess],
   );
 
   const saveAskAsMemo = useCallback(
@@ -986,14 +1120,13 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         const result = await commitMutation.mutateAsync(
           captureCommitInput(msg.transcript, id, commitContext),
         );
-        patch(id, {
-          status: 'committed',
-          commitMs: Math.round(performance.now() - c0),
-          graphResult: result as GraphResult,
-        });
-        advanceOpenTarget(result as GraphResult);
+        applyCommitSuccess(
+          id,
+          result as GraphResult,
+          Math.round(performance.now() - c0),
+          commitContext.attachment,
+        );
         adoptEventFromResult(result as GraphResult);
-        clearPendingAttachment(commitContext.attachment);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'commit failed.';
         patch(id, {
@@ -1003,7 +1136,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         });
       }
     },
-    [messages, patch, commitMutation],
+    [messages, patch, commitMutation, applyCommitSuccess],
   );
 
   const discardBubble = useCallback((id: string) => {

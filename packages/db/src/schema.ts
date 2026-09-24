@@ -473,7 +473,7 @@ export const usageDaily = sqliteTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     /** UTC calendar day, YYYY-MM-DD. */
     day: text('day').notNull(),
-    kind: text('kind', { enum: ['recording', 'message', 'image'] }).notNull(),
+    kind: text('kind', { enum: ['recording', 'message', 'image', 'assistant'] }).notNull(),
     count: integer('count').notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.userId, t.day, t.kind] })],
