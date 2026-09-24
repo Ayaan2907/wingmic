@@ -47,6 +47,17 @@ export interface EntityPublicProfile {
   sourceUrl: string | null;
 }
 
+/** Why the last enrichment attempt produced nothing — drives the honest
+ * "not enriched" copy on the person card. 'empty' = search ran, nothing
+ * usable came back. */
+export type EntityEnrichReason = 'no_provider' | 'failed' | 'empty';
+
+export interface EntityEnrichState {
+  pending?: boolean;
+  providerConfigured?: boolean;
+  lastReason?: EntityEnrichReason | null;
+}
+
 export interface EntityPossibleMatch {
   id: string;
   name: string;
@@ -82,6 +93,9 @@ export interface EntityDetailScaffoldProps {
   related: EntityRelated[];
   topics?: Array<{ id: string; name: string }>;
   publicProfile?: EntityPublicProfile | null;
+  /** D3: enrichment visibility — person cards only. */
+  enrich?: EntityEnrichState;
+  onEnrich?: () => void;
   possibleMatches?: EntityPossibleMatch[];
   onMergePossibleMatch?: (sourceId: string) => void;
   mergePendingId?: string | null;
@@ -111,6 +125,8 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
     related,
     topics,
     publicProfile,
+    enrich,
+    onEnrich,
     possibleMatches,
     onMergePossibleMatch,
     mergePendingId,
@@ -224,6 +240,8 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
               name={name}
               sub={sub}
               entityId={entityId}
+              enrich={enrich}
+              onEnrich={onEnrich}
             />
           </Section>
         )}
@@ -814,11 +832,15 @@ function PublicProfileCard({
   name,
   sub,
   entityId,
+  enrich,
+  onEnrich,
 }: {
   profile: EntityPublicProfile | null;
   name: string;
   sub: React.ReactNode;
   entityId?: string;
+  enrich?: EntityEnrichState;
+  onEnrich?: () => void;
 }) {
   const linkedin = safeHref(profile?.linkedin);
   const url = safeHref(profile?.url);
@@ -826,8 +848,32 @@ function PublicProfileCard({
   const pressUrl =
     url && url !== linkedin ? url : sourceUrl && sourceUrl !== linkedin ? sourceUrl : null;
 
+  // Quiet in-flight state — enrichment runs on the server, the card just
+  // says so. Never blocks or replaces existing links once facts exist.
+  if (enrich?.pending && !linkedin && !pressUrl) {
+    return (
+      <div
+        data-testid="entity-enriching"
+        className="mono"
+        style={{
+          padding: 14,
+          borderRadius: 12,
+          background: 'var(--surface-1, rgba(255,255,255,0.02))',
+          border: '1px dashed var(--border-mid, rgba(255,255,255,0.12))',
+          color: 'var(--text-55)',
+          fontSize: 12,
+          minHeight: 44,
+          display: 'flex',
+          alignItems: 'center',
+        }}
+      >
+        enriching…
+      </div>
+    );
+  }
+
   if (!linkedin && !pressUrl) {
-    return <EmptyCard>no public sources yet.</EmptyCard>;
+    return <NotEnrichedCard enrich={enrich} onEnrich={onEnrich} />;
   }
 
   if (linkedin) {
@@ -912,6 +958,73 @@ function PublicProfileCard({
       >
         press mention → {hostLabel(pressUrl!)}
       </a>
+    </div>
+  );
+}
+
+// Honest empty state: enrichment produced nothing (or never ran). One tap
+// re-runs the same fetch the commit path uses — retry stays available even
+// with no provider configured (the mutation answers no_provider, spending
+// nothing) so the affordance never lies about reachability.
+function NotEnrichedCard({
+  enrich,
+  onEnrich,
+}: {
+  enrich?: EntityEnrichState;
+  onEnrich?: () => void;
+}) {
+  const reason = enrich?.lastReason ?? null;
+  const configured = enrich?.providerConfigured ?? true;
+
+  const line = !configured
+    ? 'not enriched — web search isn’t configured.'
+    : reason === 'failed'
+      ? 'not enriched — the web fetch failed.'
+      : reason === 'empty'
+        ? 'not enriched — nothing solid found on the web.'
+        : 'not enriched yet.';
+
+  const attempted = reason === 'failed' || reason === 'empty' || reason === 'no_provider';
+
+  return (
+    <div
+      data-testid="entity-not-enriched"
+      style={{
+        padding: 14,
+        borderRadius: 12,
+        background: 'var(--surface-1, rgba(255,255,255,0.02))',
+        border: '1px dashed var(--border-mid, rgba(255,255,255,0.12))',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 10,
+      }}
+    >
+      <span className="mono" style={{ color: 'var(--text-55)', fontSize: 12 }}>
+        {line}
+      </span>
+      {onEnrich ? (
+        <button
+          type="button"
+          data-testid="entity-enrich-retry"
+          disabled={enrich?.pending}
+          onClick={onEnrich}
+          className="mono"
+          style={{
+            minHeight: 44,
+            padding: '10px 14px',
+            borderRadius: 8,
+            background: 'transparent',
+            border: '1px solid var(--border-mid, rgba(255,255,255,0.22))',
+            color: accent,
+            fontSize: 11,
+            cursor: enrich?.pending ? 'wait' : 'pointer',
+          }}
+        >
+          {attempted ? 'retry →' : 'fetch from the web →'}
+        </button>
+      ) : null}
     </div>
   );
 }

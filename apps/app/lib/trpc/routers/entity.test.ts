@@ -1,21 +1,14 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
+import { eq } from 'drizzle-orm';
 import * as schema from '@wingmic/db/schema';
+import type { WebSearchProvider } from '@/lib/web-search';
 
 import { entityRouter } from './entity';
 
-describe('entity.detail', () => {
-  let db: ReturnType<typeof drizzle<typeof schema>>;
-  let client: ReturnType<typeof createClient>;
-  const userId = 'user_e2';
-  const otherUserId = 'user_other';
-
-  beforeAll(async () => {
-    client = createClient({ url: ':memory:' });
-    db = drizzle(client, { schema });
-
-    await client.executeMultiple(`
+// Shared in-memory DDL for entity router tests (entity.detail + entity.enrich).
+const ENTITY_TEST_DDL = `
       CREATE TABLE user (id TEXT PRIMARY KEY, email TEXT NOT NULL, email_verified INTEGER DEFAULT 0, name TEXT, image TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
       CREATE TABLE entity (
         id TEXT PRIMARY KEY,
@@ -86,7 +79,19 @@ describe('entity.detail', () => {
         reversed_at INTEGER,
         moves TEXT
       );
-    `);
+    `;
+
+describe('entity.detail', () => {
+  let db: ReturnType<typeof drizzle<typeof schema>>;
+  let client: ReturnType<typeof createClient>;
+  const userId = 'user_e2';
+  const otherUserId = 'user_other';
+
+  beforeAll(async () => {
+    client = createClient({ url: ':memory:' });
+    db = drizzle(client, { schema });
+
+    await client.executeMultiple(ENTITY_TEST_DDL);
 
     const now = Date.now();
     const ts = (offsetDays = 0) => now - offsetDays * 86_400_000;
@@ -357,5 +362,220 @@ describe('entity.detail', () => {
       sql: `UPDATE entity SET deleted_at = null WHERE id = 'en_marcus'`,
       args: [],
     });
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// entity.enrich (D3 — visible, retryable enrichment)
+// ────────────────────────────────────────────────────────────────────
+
+// Partial barrel mock: keep the REAL query building / blocked-url logic that
+// the enrich path uses, and only stub the env provider factory so each test
+// controls what "the provider" is — including the none case.
+const providerState = vi.hoisted(() => ({
+  provider: null as WebSearchProvider | null,
+}));
+
+vi.mock('@/lib/web-search', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/web-search')>();
+  return {
+    ...actual,
+    webSearchProviderFromEnv: () => providerState.provider,
+  };
+});
+
+describe('entity.enrich', () => {
+  let db: ReturnType<typeof drizzle<typeof schema>>;
+  let client: ReturnType<typeof createClient>;
+  const userId = 'user_e2';
+  const otherUserId = 'user_other';
+
+  beforeAll(async () => {
+    client = createClient({ url: ':memory:' });
+    db = drizzle(client, { schema });
+
+    await client.executeMultiple(ENTITY_TEST_DDL);
+
+    const now = Date.now();
+    for (const id of [userId, otherUserId]) {
+      await client.execute({
+        sql: `INSERT INTO user VALUES (?, ?, 0, null, null, ?, ?)`,
+        args: [id, `${id}@t`, now, now],
+      });
+    }
+    await client.execute({
+      sql: `INSERT INTO company VALUES ('co_glow', 'glow-labs', 'Glow Labs', 'glowlabs.dev', '[]', 1, null, ?, ?)`,
+      args: [now, now],
+    });
+    const insertPerson = async (id: string, name: string, owner: string, withCompany = false) => {
+      await client.execute({
+        sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, created_at, updated_at) VALUES (?, ?, 'person', ?, '[]', ?, ?)`,
+        args: [id, owner, name, now, now],
+      });
+      if (withCompany) {
+        await client.execute({
+          sql: `INSERT INTO entity_company (id, entity_id, company_id, role, created_at, source_deleted) VALUES (?, ?, ?, null, ?, 0)`,
+          args: [`ec_${id}`, id, 'co_glow', now],
+        });
+      }
+    };
+    await insertPerson('en_nadia', 'Nadia Rahman', userId, true);
+    await insertPerson('en_omar', 'Omar Haddad', userId);
+    await client.execute({
+      sql: `INSERT INTO entity_fact (id, entity_id, key, value, source_interaction_id, confidence, created_at) VALUES ('fact_omar_li', 'en_omar', 'linkedin', 'https://www.linkedin.com/in/omarhaddad', null, 80, ?)`,
+      args: [now],
+    });
+  });
+
+  afterEach(async () => {
+    providerState.provider = null;
+    // tests share one in-memory DB — facts written by an earlier test would
+    // break later blank-fact / empty-state assertions
+    await client.execute('DELETE FROM entity_fact');
+  });
+
+  function mockProvider(opts: { hits?: Array<{ title: string; url: string; snippet: string }>; searchError?: Error }) {
+    return {
+      id: 'tavily' as const,
+      search: vi.fn(async (_query: { intent: string; q: string }) => {
+        if (opts.searchError) throw opts.searchError;
+        return opts.hits ?? [];
+      }),
+      extract: vi.fn(async () => []),
+    };
+  }
+
+  function caller(uid = userId) {
+    const ctx = {
+      db,
+      user: { id: uid },
+      session: { user: { id: uid } },
+    } as unknown as Parameters<typeof entityRouter.createCaller>[0];
+    return entityRouter.createCaller(ctx);
+  }
+
+  async function factRows(entityId: string) {
+    return db.query.entityFacts.findMany({
+      where: eq(schema.entityFacts.entityId, entityId),
+    });
+  }
+
+  it('fetches the web for an owned person and writes source facts at confidence 70', async () => {
+    const provider = mockProvider({
+      hits: [
+        {
+          title: 'Nadia Rahman — Glow Labs',
+          url: 'https://glowlabs.dev/people/nadia',
+          snippet: 'engineer at glow labs',
+        },
+      ],
+    });
+    providerState.provider = provider;
+
+    const res = await caller().enrich({ entityId: 'en_nadia' });
+    if (!res.ok) throw new Error('expected enrich to succeed');
+
+    // reuses the enrich path: same query shape the commit path builds
+    expect(provider.search).toHaveBeenCalledTimes(1);
+    expect(provider.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intent: 'person',
+        q: expect.stringContaining('Nadia Rahman'),
+      }),
+    );
+    expect(provider.search.mock.calls[0]![0]!.q).toContain('Glow Labs');
+    // extract step of the shared path runs on the top source
+    expect(provider.extract).toHaveBeenCalledWith(
+      expect.objectContaining({ urls: ['https://glowlabs.dev/people/nadia'] }),
+    );
+
+    const facts = await factRows('en_nadia');
+    const sourceUrl = facts.find((f) => f.key === 'source_url');
+    expect(sourceUrl?.value).toBe('https://glowlabs.dev/people/nadia');
+    expect(sourceUrl?.confidence).toBe(70);
+    expect(facts.find((f) => f.key === 'url')?.value).toBe('https://glowlabs.dev/people/nadia');
+    // card-initiated retry has no interaction to attribute
+    expect(sourceUrl?.sourceInteractionId).toBeNull();
+  });
+
+  it('uses the profile intent when the person already has a linkedin fact', async () => {
+    // facts are wiped between tests — seed inline
+    await client.execute({
+      sql: `INSERT INTO entity_fact (id, entity_id, key, value, source_interaction_id, confidence, created_at) VALUES ('fact_omar_li', 'en_omar', 'linkedin', 'https://www.linkedin.com/in/omarhaddad', null, 80, ?)`,
+      args: [Date.now()],
+    });
+    const provider = mockProvider({ hits: [] });
+    providerState.provider = provider;
+
+    await caller().enrich({ entityId: 'en_omar' });
+
+    expect(provider.search).toHaveBeenCalledWith(
+      expect.objectContaining({ intent: 'profile' }),
+    );
+  });
+
+  it('propagates provider failure as an honest failed result, writing nothing', async () => {
+    providerState.provider = mockProvider({ searchError: new Error('tavily down') });
+
+    const res = await caller().enrich({ entityId: 'en_nadia' });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.reason).toBe('failed');
+      expect(res.message).toBe('tavily down');
+    }
+    expect((await factRows('en_nadia')).filter((f) => f.key !== 'linkedin')).toHaveLength(0);
+  });
+
+  it('no-ops without calling anything when no provider is configured', async () => {
+    providerState.provider = null;
+
+    const res = await caller().enrich({ entityId: 'en_nadia' });
+
+    expect(res).toEqual({ ok: false, reason: 'no_provider' });
+    expect(await factRows('en_nadia')).toHaveLength(0);
+  });
+
+  it('throws NOT_FOUND for an entity the user does not own', async () => {
+    providerState.provider = mockProvider({ hits: [] });
+
+    await expect(
+      caller(otherUserId).enrich({ entityId: 'en_nadia' }),
+    ).rejects.toThrow('entity not found');
+  });
+
+  it('never duplicates existing facts (blank-fact semantics)', async () => {
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO entity_fact (id, entity_id, key, value, source_interaction_id, confidence, created_at) VALUES ('fact_nadia_pre', 'en_nadia', 'source_url', 'https://stale.example.com', null, 70, ?)`,
+      args: [now],
+    });
+    providerState.provider = mockProvider({
+      hits: [
+        {
+          title: 'Nadia Rahman — Glow Labs',
+          url: 'https://glowlabs.dev/people/nadia',
+          snippet: 'engineer',
+        },
+      ],
+    });
+
+    const res = await caller().enrich({ entityId: 'en_nadia' });
+    if (!res.ok) throw new Error('expected enrich to succeed');
+
+    expect(res.wroteFactKeys).not.toContain('source_url');
+    const rows = (await factRows('en_nadia')).filter((f) => f.key === 'source_url');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.value).toBe('https://stale.example.com');
+  });
+
+  it('detail reports webSearchConfigured from the provider factory', async () => {
+    providerState.provider = mockProvider({ hits: [] });
+    const configured = await caller().detail({ kind: 'person', id: 'en_nadia' });
+    expect((configured as { webSearchConfigured?: boolean }).webSearchConfigured).toBe(true);
+
+    providerState.provider = null;
+    const notConfigured = await caller().detail({ kind: 'person', id: 'en_nadia' });
+    expect((notConfigured as { webSearchConfigured?: boolean }).webSearchConfigured).toBe(false);
   });
 });
