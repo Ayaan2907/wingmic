@@ -400,7 +400,7 @@ function App() {
                   <div style={{ alignSelf: 'flex-end', maxWidth: '88%', padding: '10px 14px', borderRadius: '12px 12px 2px 12px', background: 'rgba(255,255,255,0.06)', fontSize: 13.5, color: 'rgba(255,255,255,0.85)' }}>
                     who do I know that ships rust?
                   </div>
-                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>↪ 4 matches · 0.3s</div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>↪ 3 matches · 0.3s</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {[
                       { score: '0.91', name: 'Sarah Chen', meta: 'Acme Corp · met DevConnect' },
@@ -614,7 +614,9 @@ function App() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
                     {sources.map(src => {
                       const isSoon = src.status === 'soon';
-                      const statusColor = isSoon ? accent : 'rgba(255,255,255,0.3)';
+                      // Hex before the `15`/`40` alpha suffixes — rgba() + hex suffix is invalid CSS.
+                      const statusColor = isSoon ? accent : '#ffffff';
+                      const statusTextColor = isSoon ? accent : 'rgba(255,255,255,0.3)';
                       const statusLabel = isSoon ? 'Coming next' : 'Planned';
                       return (
                         <div key={src.name} style={{
@@ -631,7 +633,7 @@ function App() {
                             <span style={{
                               fontSize: 9.5, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700,
                               letterSpacing: 1, textTransform: 'uppercase',
-                              color: statusColor,
+                              color: statusTextColor,
                               padding: '2px 7px', borderRadius: 4,
                               background: `${statusColor}15`,
                               border: `1px solid ${statusColor}40`,
@@ -954,7 +956,7 @@ function App() {
                 Speak. Extract. <span className="serif" style={{ fontStyle: 'italic', fontWeight: 400, color: accent }}>Query.</span>
               </h2>
               <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, maxWidth: 480, marginBottom: 28 }}>
-                Voice capture, entity extraction, and NL recall are live at app.wingmic.xyz. Magic-link sign-in — no password, no waitlist. MCP, OAuth imports, and Acts follow-ups are on the roadmap.
+                Voice capture, entity extraction, and NL recall are live at app.wingmic.xyz. Magic-link sign-in — no password, no waitlist. MCP and OAuth imports are on the roadmap. Acts follow-up drafts are live today — you review, edit, and send yourself; nothing auto-sends.
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginTop: 20 }}>
                 <div>
