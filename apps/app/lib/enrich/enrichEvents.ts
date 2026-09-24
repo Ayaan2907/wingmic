@@ -129,7 +129,17 @@ export async function enrichEventsAfterCommit(opts: {
       }
     }
 
-    if (Object.keys(patch).length === 0) continue;
+    if (Object.keys(patch).length === 0) {
+      // The unit ran (ICS/provider work completed) but found nothing to
+      // patch — emit ok/fields:0 so a degraded non-throwing provider stays
+      // visible in the error-share widget, symmetric with the person path.
+      trackAnalyticsEvent(opts.userId, ANALYTICS_EVENTS.enrichmentRun, {
+        kind: 'event',
+        status: 'ok',
+        fields: 0,
+      });
+      continue;
+    }
     await db.update(schema.events).set(patch).where(eq(schema.events.id, event.id));
     trackAnalyticsEvent(opts.userId, ANALYTICS_EVENTS.enrichmentRun, {
       kind: 'event',

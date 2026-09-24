@@ -16,6 +16,7 @@ const mockEnv = vi.hoisted(() => ({
 const ph = vi.hoisted(() => ({
   instances: 0,
   calls: [] as Array<{ distinctId: string; event: string; properties?: Record<string, unknown> }>,
+  options: [] as Array<Record<string, unknown> | undefined>,
   failCapture: false,
 }));
 
@@ -42,8 +43,12 @@ vi.mock('@/lib/config/env', async (importOriginal) => {
 
 vi.mock('posthog-node', () => ({
   PostHog: class {
-    constructor() {
+    constructor(
+      _key: string,
+      options?: Record<string, unknown>,
+    ) {
       ph.instances += 1;
+      ph.options.push(options);
     }
     capture(evt: { distinctId: string; event: string; properties?: Record<string, unknown> }) {
       if (ph.failCapture) throw new Error('ingest down');
@@ -58,6 +63,7 @@ import { ANALYTICS_EVENTS } from '../events';
 describe('analytics server module', () => {
   beforeEach(() => {
     ph.calls.length = 0;
+    ph.options.length = 0;
     ph.instances = 0;
     ph.failCapture = false;
     mockEnv.POSTHOG_KEY = undefined;
@@ -84,6 +90,16 @@ describe('analytics server module', () => {
       event: 'signup',
       properties: { method: 'magic_link' },
     });
+  });
+
+  it('constructs the client with flushAt: 1 (no buffered events can die at SIGTERM)', () => {
+    // Unique key: the client is a module-level singleton keyed by key — a
+    // fresh key forces construction so the constructor options are observed.
+    mockEnv.POSTHOG_KEY = 'phc_flush_key';
+    trackAnalyticsEvent('user_1', ANALYTICS_EVENTS.signup, { method: 'magic_link' });
+
+    expect(ph.instances).toBe(1);
+    expect(ph.options[0]).toMatchObject({ flushAt: 1 });
   });
 
   it('falls back to NEXT_PUBLIC_POSTHOG_KEY when the server key is unset', () => {

@@ -42,6 +42,11 @@ function analyticsClient(): PostHog | null {
   if (!client || clientKey !== key) {
     client = new PostHog(key, {
       host: env.POSTHOG_HOST ?? DEFAULT_POSTHOG_HOST,
+      // Deliver every event immediately: posthog-node otherwise batches in
+      // memory (5s interval) and trailing events die on SIGTERM at deploy
+      // restart. One HTTP request per event is negligible at current volume
+      // and removes the loss window entirely.
+      flushAt: 1,
     });
     clientKey = key;
   }

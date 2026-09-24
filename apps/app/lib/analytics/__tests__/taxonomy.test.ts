@@ -447,6 +447,37 @@ describe('analytics taxonomy (spec art_LkglG0Xb)', () => {
     expect((ph.calls[0]!.properties!.fields as number) > 0).toBe(true);
   });
 
+  it('event enrichment with an empty patch still fires enrichment_run(ok, fields: 0)', async () => {
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO event (id, slug, name, observed_count, created_at)
+            VALUES ('ev_dud', 'unfindable', 'Unfindable Meetup', 1, ?)`,
+      args: [now],
+    });
+
+    // Provider completes without throwing but finds nothing — a degraded
+    // non-throwing failure mode the error-share widget must still see.
+    const provider: WebSearchProvider = {
+      id: 'tavily',
+      search: vi.fn(async () => []),
+      extract: vi.fn(async () => []),
+    };
+    await enrichEventsAfterCommit({
+      db: db as DB,
+      userId: USER_ID,
+      eventIds: ['ev_dud'],
+      capturedAt: new Date('2026-08-20T00:00:00Z'),
+      provider,
+    });
+
+    expect(events()).toEqual(['enrichment_run']);
+    expect(ph.calls[0]!.properties).toMatchObject({
+      kind: 'event',
+      status: 'ok',
+      fields: 0,
+    });
+  });
+
   it('BetterAuth user creation fires signup with the magic-link method', async () => {
     const hooks = (auth as unknown as {
       options: {
