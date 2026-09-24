@@ -89,7 +89,7 @@ function loadServiceWorker({ cached }: { cached?: Record<string, FakeResponse> }
   const caches = {
     open: vi.fn(async () => ({ addAll, put })),
     match,
-    keys: vi.fn(async () => ['wingmic-static-v1', 'old-cache']),
+    keys: vi.fn(async () => ['wingmic-static-v1-abc1234', 'old-cache']),
     delete: vi.fn(async () => true),
   };
   for (const [url, response] of Object.entries(cached ?? {})) {
@@ -131,7 +131,12 @@ describe('service worker caching contract (AC1)', () => {
 
     await runLifecycleHandler(listeners.install);
 
-    expect(caches.open).toHaveBeenCalledWith('wingmic-static-v1');
+    // The prebuild copy step substitutes the deploy hash; the raw source the
+    // sandbox evaluates still carries the __BUILD_ID__ placeholder, so match
+    // the versioned prefix rather than one exact name.
+    expect(caches.open).toHaveBeenCalledWith(
+      expect.stringMatching(/^wingmic-static-v1-/),
+    );
     expect(addAll).toHaveBeenCalledWith([
       '/',
       '/manifest.webmanifest',

@@ -34,6 +34,7 @@ export const metadata: Metadata = {
   title: { default: 'wingmic', template: '%s · wingmic' },
   description: 'your social RAM, on disk.',
   manifest: '/manifest.webmanifest', // PWA installability — copied to public/ by prebuild
+  icons: { apple: '/apple-touch-icon.png' }, // iOS Safari ignores manifest icons for A2HS
   robots: { index: false, follow: false }, // product app not indexed
 };
 

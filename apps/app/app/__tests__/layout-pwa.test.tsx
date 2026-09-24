@@ -22,6 +22,14 @@ describe('root layout PWA metadata (AC1)', () => {
     expect(metadata.manifest).toBe('/manifest.webmanifest');
   });
 
+  it('declares the apple touch icon so iOS installs get the real mark', () => {
+    const icons = metadata.icons;
+    if (!icons || Array.isArray(icons) || typeof icons === 'string') {
+      throw new Error('metadata.icons should describe specific icon files');
+    }
+    expect('apple' in icons ? icons.apple : undefined).toBe('/apple-touch-icon.png');
+  });
+
   it('keeps the existing theme color and no-index robots', () => {
     expect(viewport.themeColor).toBe('#0a0a0a');
     expect(metadata.robots).toEqual({ index: false, follow: false });

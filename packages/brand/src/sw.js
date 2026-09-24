@@ -4,7 +4,13 @@
 // capture traffic must always hit the network so recordings never read stale.
 // Static assets are hashed by Next (immutable) and are safe to cache-first;
 // navigations fall back to the cached root shell only when offline.
-const CACHE = 'wingmic-static-v1';
+//
+// The cache name is rotated per deploy: the prebuild/predev copy step
+// substitutes __BUILD_ID__ with the current git SHA. Each deploy installs
+// into a fresh cache and the activate purge deletes the old one wholesale —
+// non-hashed assets (manifest, icons) refresh every deploy instead of going
+// stale, and old hashed chunks can't accumulate as entries.
+const CACHE = 'wingmic-static-v1-__BUILD_ID__';
 const SHELL = ['/', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
