@@ -6,7 +6,7 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { DB } from '@wingmic/db';
 import * as schema from '@wingmic/db/schema';
-import type { GraphResult } from '@/app/chat/_components/types';
+import type { FieldProvenance, GraphResult } from '@/app/chat/_components/types';
 
 export type HydratedThreadItem = {
   id: string;
@@ -37,6 +37,7 @@ export async function hydrateThreadItems(
         entityId: schema.entityFacts.entityId,
         key: schema.entityFacts.key,
         value: schema.entityFacts.value,
+        confidence: schema.entityFacts.confidence,
       })
       .from(schema.entityFacts)
       .where(inArray(schema.entityFacts.sourceInteractionId, interactionIds)),
@@ -172,6 +173,29 @@ export async function hydrateThreadItems(
       }
     }
 
+    /**
+     * entity_fact confidence → provenance source. 70 = WEB_CONFIDENCE
+     * (lib/enrich enrichment facts); 80 = inferred, 95 = explicit
+     * (resolution.ts user-captured facts). Best-confidence fact per field wins.
+     */
+    const provenanceByField = new Map<string, Map<string, FieldProvenance>>();
+    for (const f of facts) {
+      if (f.key !== 'role' && f.key !== 'company' && f.key !== 'linkedin') continue;
+      let byField = provenanceByField.get(f.entityId);
+      if (!byField) {
+        byField = new Map();
+        provenanceByField.set(f.entityId, byField);
+      }
+      const field = f.key === 'company' ? 'companyHint' : f.key;
+      const existing = byField.get(field);
+      if (!existing || f.confidence > existing.confidence) {
+        byField.set(field, {
+          source: f.confidence >= 80 ? 'user' : 'enrichment',
+          confidence: f.confidence,
+        });
+      }
+    }
+
     const topicsByEntity = new Map<string, string[]>();
     const allTopicNames = new Set<string>();
     for (const t of topicEdges) {
@@ -189,12 +213,14 @@ export async function hydrateThreadItems(
       const companyName = companyEdge
         ? (companyById.get(companyEdge.companyId)?.name ?? null)
         : (companyHintByEntity.get(id) ?? null);
+      const byField = provenanceByField.get(id);
       return {
         name: ent.name,
         role: roleByEntity.get(id) ?? companyEdge?.role ?? null,
         companyHint: companyName,
         topics: topicsByEntity.get(id) ?? [],
         linkedin: linkedinByEntity.get(id) ?? null,
+        fieldProvenance: byField && byField.size > 0 ? Object.fromEntries(byField) : undefined,
       };
     });
 

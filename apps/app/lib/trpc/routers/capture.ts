@@ -23,6 +23,15 @@ export type CaptureAttachment = {
   jpegBase64: string;
 };
 
+/**
+ * resolution.ts writes user-captured facts at confidence 80 (inferred role /
+ * company / topics) and 95 (explicit email / linkedin); enrichment facts land
+ * at 70 (WEB_CONFIDENCE in lib/enrich). Live captures are 'user' by
+ * definition — the per-field confidences surface from entity_fact via
+ * hydrateThread on prefetch.
+ */
+const FACT_CONFIDENCE_INFERRED = 80;
+
 type ValidatedCaptureAttachment = {
   jpegBase64: string;
   byteSize: number;
@@ -455,7 +464,23 @@ export const captureRouter = router({
 
         // actsPending: drafting rows queued for background polish — the
         // bubble can turn committed now; drafts land in /acts as they finish.
-        return { extracted, ...result, attachments, actsPending };
+        return {
+          extracted,
+          ...result,
+          attachments,
+          actsPending,
+          // Per-entity provenance for the conversation surface (spec: every
+          // entity carries provenance). Enrichment-sourced fields surface
+          // later from entity_fact with their own confidence (hydrateThread).
+          provenance: {
+            source: 'user' as const,
+            persons: result.persons.map((p) => ({
+              entityId: p.entityId,
+              created: p.created,
+              confidence: FACT_CONFIDENCE_INFERRED,
+            })),
+          },
+        };
       } catch (err) {
         if (err instanceof ExtractionError) {
           throw new TRPCError({
