@@ -222,20 +222,31 @@ function SheetFrame({
 }) {
   const sheetRef = React.useRef<HTMLDivElement | null>(null);
 
+  // Latest-dispatcher ref: the keydown/focus setup below runs exactly once per
+  // mount. Re-subscribing per render (deps on onDismiss) would bounce focus
+  // back to the sheet on every background re-render — a keyboard user tabbing
+  // through the sheet's actions loses their position on the next poll.
+  const onDismissRef = React.useRef(onDismiss);
+  React.useEffect(() => {
+    onDismissRef.current = onDismiss;
+  });
+
   // Modal semantics need the behavior to match: Escape dismisses, focus moves
   // into the sheet on mount and returns where it came from on unmount.
   React.useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
     sheetRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onDismiss();
+      if (event.key === 'Escape') onDismissRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
       previouslyFocused?.focus?.();
     };
-  }, [onDismiss]);
+    // Mount-only: the effect owns the listener + focus lifecycle once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <>
