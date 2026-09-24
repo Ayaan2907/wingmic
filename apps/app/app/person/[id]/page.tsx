@@ -38,7 +38,10 @@ export default async function Page({
   try {
     const detail = await caller.detail({ kind: 'person', id });
     if (detail.kind !== 'person') notFound();
-    return <PersonDetailClient detail={detail} />;
+    // key: client-side rail navigation stays inside /person/[id], so without
+    // it the component instance (and its tRPC mutation state) persists and
+    // person B's card would show person A's enrich result.
+    return <PersonDetailClient key={detail.id} detail={detail} />;
   } catch (err) {
     if (err instanceof TRPCError && err.code === 'NOT_FOUND') notFound();
     throw err;

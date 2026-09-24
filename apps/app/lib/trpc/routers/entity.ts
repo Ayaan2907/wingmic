@@ -7,6 +7,25 @@ import * as schema from '@wingmic/db/schema';
 import { linkedinProfileHref } from '@/lib/acts/linkedinHref';
 import { namesOverlap } from '@/lib/entity/namesOverlap';
 import { mergePersonEntities, undoPersonMerge } from '@/lib/entity/mergePerson';
+import { webSearchProviderFromEnv } from '@/lib/web-search';
+import { WebSearchConfigError } from '@/lib/web-search/types';
+import {
+  enrichPersonFacts,
+  getPersonEnrichInput,
+} from '@/lib/enrich/enrichPersons';
+
+/** env → provider, but a configured-but-unwired vendor ('exa' until its
+ * adapter lands) counts as "not configured": the factory throws
+ * WebSearchConfigError for those, and a throw at detail-query time would 500
+ * every person page. Anything else still propagates. */
+function webSearchProviderOrNone() {
+  try {
+    return webSearchProviderFromEnv();
+  } catch (e) {
+    if (e instanceof WebSearchConfigError) return null;
+    throw e;
+  }
+}
 
 // entity.detail — single procedure powering /person/[id], /company/[id],
 // /event/[id], /topic/[id]. Source of truth: docs/superpowers/plans/2026-05-23-...md §18
@@ -151,6 +170,45 @@ export const entityRouter = router({
           importSource: p.importSource,
         })),
       };
+    }),
+
+  /**
+   * D3 (spec art_T0S63rV8): reachable web enrichment for one person.
+   * Runs the same enrichPersonsAfterCommit core against the entity's graph
+   * data (name + primary company + linkedin fact). Env-gated like the
+   * post-commit path: with no provider configured this is an honest no-op —
+   * nothing is fetched, nothing is spent. Never throws for vendor failures;
+   * the card renders them as a retryable "not enriched" state.
+   */
+  enrich: protectedProcedure
+    .input(z.object({ entityId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const provider = webSearchProviderOrNone();
+      if (!provider) {
+        return { ok: false as const, reason: 'no_provider' as const };
+      }
+
+      const person = await getPersonEnrichInput(ctx.db, ctx.user.id, input.entityId);
+      if (!person) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'entity not found' });
+      }
+
+      try {
+        const { wroteFactKeys } = await enrichPersonFacts({
+          db: ctx.db,
+          entityId: input.entityId,
+          person,
+          provider,
+          sourceInteractionId: null,
+        });
+        return { ok: true as const, wroteFactKeys };
+      } catch (e) {
+        return {
+          ok: false as const,
+          reason: 'failed' as const,
+          message: e instanceof Error ? e.message : 'web fetch failed',
+        };
+      }
     }),
 });
 
@@ -306,6 +364,9 @@ async function loadPerson(
     related,
     topics: topics.map((t: any) => ({ id: t.id, name: t.name })),
     publicProfile,
+    // D3: lets the card distinguish "not enriched, web search off" from
+    // "not enriched, fetch failed" without an extra round-trip.
+    webSearchConfigured: webSearchProviderOrNone() != null,
     possibleMatches,
   };
 }

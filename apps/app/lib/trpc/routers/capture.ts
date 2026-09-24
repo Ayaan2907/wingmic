@@ -5,9 +5,7 @@ import { extractHybrid, commit, ExtractionError, EmbeddingError } from '@wingmic
 import { TRPCError } from '@trpc/server';
 import { transcribeEntities } from '@/lib/capture/transcribe-entities';
 import { resolveIntroEntityIds, collapseActionsForCapture } from '@/lib/acts/mapAction';
-import { polishDraft } from '@/lib/acts/draftAgent';
-import { chooseActChannel, hasUsableIdentityValue, intentForChannel } from '@/lib/acts/chooseActChannel';
-import { linkedinProfileHref } from '@/lib/acts/linkedinHref';
+import { scheduleActDrafting } from '@/lib/acts/scheduleActDrafting';
 import { webSearchProviderFromEnv } from '@/lib/web-search';
 import { enrichPersonsAfterCommit } from '@/lib/enrich/enrichPersons';
 import { enrichEventsAfterCommit } from '@/lib/enrich/enrichEvents';
@@ -176,6 +174,7 @@ export const captureRouter = router({
               entityIds,
               duplicate: true as const,
               attachments: attachmentRows,
+              actsPending: 0,
             };
           }
         }
@@ -348,10 +347,14 @@ export const captureRouter = router({
           attachment,
         });
 
-        // Acts insert is best-effort after commit() — graph already persisted.
-        // Soft-catch so a draft failure does not 500 a successful capture (retry
-        // would duplicate the interaction). Full tx merge deferred.
+        // Acts leave the request path (spec D2): rows are inserted as
+        // 'drafting' placeholders — no LLM calls here — and polish runs in
+        // the background via scheduleActDrafting. Queue failures mark the
+        // rows 'failed' (visible + retryable in /acts), never swallowed. The
+        // insert itself stays best-effort: the graph write already succeeded
+        // and a throw here would 500 a capture that actually committed.
         const captureActions = collapseActionsForCapture(extracted.actions, extracted.persons);
+        let actsPending = 0;
         if (captureActions.length > 0) {
           try {
             const existingActs = await ctx.db.query.acts.findMany({
@@ -372,88 +375,50 @@ export const captureRouter = router({
                 ).map((e) => e.id),
               );
 
-              const committedIds = result.entityIds.filter((id) => ownedEntityIds.has(id));
-              const committedFacts =
-                committedIds.length > 0
-                  ? await ctx.db.query.entityFacts.findMany({
-                      where: and(
-                        inArray(schema.entityFacts.entityId, committedIds),
-                        inArray(schema.entityFacts.key, ['email', 'linkedin']),
-                      ),
-                      columns: { entityId: true, key: true, value: true },
-                    })
-                  : [];
-              const emailByCommitted = new Set(
-                committedFacts
-                  .filter((f) => f.key === 'email' && hasUsableIdentityValue(f.value))
-                  .map((f) => f.entityId),
-              );
-              const linkedinByCommitted = new Set(
-                committedFacts
-                  .filter((f) => f.key === 'linkedin' && Boolean(linkedinProfileHref(f.value)))
-                  .map((f) => f.entityId),
-              );
-
-              const actRows = await Promise.all(
-                captureActions.map(async (action) => {
-                  const { targetEntityId, secondaryEntityId } = resolveIntroEntityIds(
-                    action,
-                    extracted.persons,
-                    result.entityIds,
-                  );
-                  const ownedTarget =
-                    targetEntityId && ownedEntityIds.has(targetEntityId) ? targetEntityId : null;
-                  // Intro secondary only when we have an owned target (avoids "there → Alice").
-                  const ownedSecondary =
-                    ownedTarget &&
-                    secondaryEntityId &&
-                    ownedEntityIds.has(secondaryEntityId)
-                      ? secondaryEntityId
-                      : null;
-                  const targetName =
-                    ownedTarget != null
-                      ? extracted.persons.find((_, i) => result.entityIds[i] === ownedTarget)?.name
-                      : action.targetPersonName;
-                  const targetPerson = extracted.persons.find(
-                    (_, i) => result.entityIds[i] === ownedTarget,
-                  );
-                  const channel = chooseActChannel({
-                    kind: action.kind,
-                    hasEmail: Boolean(ownedTarget && emailByCommitted.has(ownedTarget)),
-                    hasLinkedin: Boolean(ownedTarget && linkedinByCommitted.has(ownedTarget)),
-                  });
-                  const polished = await polishDraft({
-                    kind: action.kind,
-                    intent: intentForChannel(channel),
-                    channel,
-                    targetName: targetName ?? null,
-                    secondaryName:
-                      ownedSecondary != null
-                        ? extracted.persons.find((_, i) => result.entityIds[i] === ownedSecondary)
-                            ?.name ?? null
-                        : null,
-                    contextName: targetPerson?.companyHint ?? null,
-                    seedBody: action.body,
-                    transcript,
-                  });
-                  return {
-                    userId: ctx.user.id,
-                    kind: action.kind,
-                    status: 'drafted' as const,
-                    body: polished.body,
-                    subject: polished.subject,
-                    whenHint: action.whenHint,
-                    targetEntityId: ownedTarget,
-                    secondaryEntityId: ownedSecondary,
-                    sourceInteractionId: result.interactionId,
-                    confidence: 80,
-                  };
-                }),
-              );
-              await ctx.db.insert(schema.acts).values(actRows);
+              const actRows = captureActions.map((action) => {
+                const { targetEntityId, secondaryEntityId } = resolveIntroEntityIds(
+                  action,
+                  extracted.persons,
+                  result.entityIds,
+                );
+                const ownedTarget =
+                  targetEntityId && ownedEntityIds.has(targetEntityId) ? targetEntityId : null;
+                // Intro secondary only when we have an owned target (avoids "there → Alice").
+                const ownedSecondary =
+                  ownedTarget &&
+                  secondaryEntityId &&
+                  ownedEntityIds.has(secondaryEntityId)
+                    ? secondaryEntityId
+                    : null;
+                return {
+                  userId: ctx.user.id,
+                  kind: action.kind,
+                  // Extractor seed doubles as the placeholder body until the
+                  // background polish replaces it with a real draft.
+                  status: 'drafting' as const,
+                  body: action.body,
+                  subject: null,
+                  whenHint: action.whenHint,
+                  targetEntityId: ownedTarget,
+                  secondaryEntityId: ownedSecondary,
+                  sourceInteractionId: result.interactionId,
+                  confidence: 80,
+                };
+              });
+              const insertedActs = await ctx.db
+                .insert(schema.acts)
+                .values(actRows)
+                .returning({ id: schema.acts.id });
+              actsPending = insertedActs.length;
+              scheduleActDrafting({
+                db: ctx.db,
+                userId: ctx.user.id,
+                interactionId: result.interactionId,
+                transcript,
+              });
             }
-          } catch {
-            // Capture committed; drafts can be created later via entity CTAs.
+          } catch (err) {
+            console.error('[acts] placeholder insert failed — capture still committed', err);
           }
         }
 
@@ -488,7 +453,9 @@ export const captureRouter = router({
           });
         }
 
-        return { extracted, ...result, attachments };
+        // actsPending: drafting rows queued for background polish — the
+        // bubble can turn committed now; drafts land in /acts as they finish.
+        return { extracted, ...result, attachments, actsPending };
       } catch (err) {
         if (err instanceof ExtractionError) {
           throw new TRPCError({

@@ -15,13 +15,23 @@ vi.mock('next/link', () => ({
 }));
 
 const routerPush = vi.fn();
+const routerRefresh = vi.fn();
 const createDraftMutate = vi.fn();
 const mergeMutate = vi.fn();
 const undoMergeMutate = vi.fn();
+const enrichMutate = vi.fn();
 const invalidateDetail = vi.fn();
 
+// Mutable hook state the trpc mock reads per render — lets each test pick the
+// enrich mutation's pending/data/error shape.
+const enrichHook = vi.hoisted(() => ({
+  isPending: false,
+  data: undefined as Record<string, unknown> | undefined,
+  error: undefined as unknown,
+}));
+
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: routerPush, replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: routerPush, replace: vi.fn(), refresh: routerRefresh }),
   usePathname: () => '/person/en_sarah',
   useParams: () => ({ id: 'en_sarah' }),
 }));
@@ -72,6 +82,19 @@ vi.mock('@/lib/trpc/client', () => ({
           isPending: false,
         }),
       },
+      enrich: {
+        useMutation: (opts?: { onSuccess?: (r: unknown) => void }) => ({
+          mutate: (input: unknown) => {
+            enrichMutate(input);
+            // server resolution: hand the (test-controlled) result back so
+            // the client's conditional refresh logic runs as in prod
+            if (enrichHook.data) opts?.onSuccess?.(enrichHook.data);
+          },
+          isPending: enrichHook.isPending,
+          data: enrichHook.data,
+          error: enrichHook.error,
+        }),
+      },
     },
   },
 }));
@@ -114,7 +137,13 @@ const detail = {
 describe('PersonDetailClient', () => {
   beforeEach(() => {
     routerPush.mockClear();
+    routerRefresh.mockClear();
     createDraftMutate.mockClear();
+    enrichMutate.mockClear();
+    invalidateDetail.mockClear();
+    enrichHook.isPending = false;
+    enrichHook.data = undefined;
+    enrichHook.error = undefined;
   });
 
   it('renders the person hero, stats, captures, related rows', () => {
@@ -141,7 +170,7 @@ describe('PersonDetailClient', () => {
     expect(rows.length).toBe(2);
     expect(rows[0]!.getAttribute('data-related-href')).toBe('/person/en_marcus');
     expect(rows[1]!.getAttribute('data-related-href')).toBe('/company/co_acme');
-    expect(getByTestId('entity-public-profile').textContent).toMatch(/no public sources yet/i);
+    expect(getByTestId('entity-not-enriched').textContent).toMatch(/not enriched yet/i);
   });
 
   it('renders possible-match cards so the user can pick who they met', () => {
@@ -189,5 +218,83 @@ describe('PersonDetailClient', () => {
     );
     const tags = screen.getByTestId('entity-tags');
     expect(tags.textContent?.toLowerCase()).toContain('linkedin');
+  });
+
+  it('offers a one-tap web fetch on the not-enriched card', () => {
+    render(<PersonDetailClient detail={detail} />);
+    const btn = screen.getByTestId('entity-enrich-retry');
+    expect(btn.textContent).toMatch(/fetch from the web/i);
+    fireEvent.click(btn);
+    expect(enrichMutate).toHaveBeenCalledWith({ entityId: 'en_sarah' });
+  });
+
+  it('keeps the retry affordance in the honest no-provider state', () => {
+    render(<PersonDetailClient detail={{ ...detail, webSearchConfigured: false }} />);
+    const state = screen.getByTestId('entity-not-enriched');
+    expect(state.textContent).toMatch(/not enriched — web search isn.t configured/i);
+    expect(screen.getByTestId('entity-enrich-retry')).toBeTruthy();
+  });
+
+  it('shows quiet enriching… while the fetch runs', () => {
+    enrichHook.isPending = true;
+    render(<PersonDetailClient detail={detail} />);
+    expect(screen.queryByTestId('entity-not-enriched')).toBeNull();
+    expect(screen.getByTestId('entity-enriching').textContent).toMatch(/enriching…/);
+  });
+
+  it('shows the empty-search result on the honest card and keeps retry', () => {
+    enrichHook.data = { ok: true, wroteFactKeys: [] };
+    render(<PersonDetailClient detail={detail} />);
+    const state = screen.getByTestId('entity-not-enriched');
+    expect(state.textContent).toMatch(/nothing solid found/i);
+    expect(screen.getByTestId('entity-enrich-retry').textContent).toMatch(/retry/i);
+  });
+
+  it('shows the failure reason and relabels the button to retry after a failed fetch', () => {
+    enrichHook.data = { ok: false, reason: 'failed', message: 'tavily down' };
+    render(<PersonDetailClient detail={{ ...detail, webSearchConfigured: true }} />);
+    const state = screen.getByTestId('entity-not-enriched');
+    expect(state.textContent).toMatch(/not enriched — the web fetch failed/i);
+    const btn = screen.getByTestId('entity-enrich-retry');
+    expect(btn.textContent).toMatch(/retry →/);
+    fireEvent.click(btn);
+    expect(enrichMutate).toHaveBeenCalledWith({ entityId: 'en_sarah' });
+  });
+
+  it('does not refetch the page when the retry lands nothing new', () => {
+    enrichHook.data = { ok: false, reason: 'no_provider' };
+    render(<PersonDetailClient detail={detail} />);
+    fireEvent.click(screen.getByTestId('entity-enrich-retry'));
+    expect(invalidateDetail).not.toHaveBeenCalled();
+    expect(routerRefresh).not.toHaveBeenCalled();
+  });
+
+  it('invalidates the detail and refreshes when enrichment writes facts', () => {
+    enrichHook.data = { ok: true, wroteFactKeys: ['source_url', 'url'] };
+    render(<PersonDetailClient detail={detail} />);
+    fireEvent.click(screen.getByTestId('entity-enrich-retry'));
+    expect(invalidateDetail).toHaveBeenCalledWith({ kind: 'person', id: 'en_sarah' });
+    expect(routerRefresh).toHaveBeenCalled();
+  });
+
+  it('renders fetched source links on the enriched card (no retry shown)', () => {
+    render(
+      <PersonDetailClient
+        detail={{
+          ...detail,
+          publicProfile: {
+            linkedin: null,
+            url: 'https://glowlabs.dev/people/nadia',
+            sourceUrl: 'https://glowlabs.dev/people/nadia',
+          },
+          webSearchConfigured: true,
+        }}
+      />,
+    );
+    expect(screen.getByTestId('entity-public-profile-links').textContent).toMatch(
+      /press mention → glowlabs\.dev/i,
+    );
+    expect(screen.queryByTestId('entity-not-enriched')).toBeNull();
+    expect(screen.queryByTestId('entity-enrich-retry')).toBeNull();
   });
 });

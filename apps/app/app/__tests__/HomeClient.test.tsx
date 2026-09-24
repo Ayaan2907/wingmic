@@ -9,6 +9,7 @@ type ActsListState = {
 
 let listState: ActsListState = { data: undefined, isLoading: false };
 const markSentMutate = vi.fn();
+const retryDraftMutate = vi.fn();
 const invalidateMock = vi.fn();
 
 vi.mock('@/lib/trpc/client', () => ({
@@ -19,6 +20,9 @@ vi.mock('@/lib/trpc/client', () => ({
       },
       markSent: {
         useMutation: () => ({ mutate: markSentMutate, isPending: false }),
+      },
+      retryDraft: {
+        useMutation: () => ({ mutate: retryDraftMutate, isPending: false, variables: undefined }),
       },
     },
     useUtils: () => ({
@@ -78,6 +82,7 @@ describe('HomeClient', () => {
   beforeEach(() => {
     listState = { data: { acts: [sampleAct] }, isLoading: false };
     markSentMutate.mockClear();
+    retryDraftMutate.mockClear();
     invalidateMock.mockClear();
   });
   afterEach(() => {
@@ -149,5 +154,18 @@ describe('HomeClient', () => {
     expect(screen.getByTestId('home-greeting').textContent).toMatch(/hey,\s*you/i);
     expect(screen.getByTestId('home-activity-empty').textContent).toMatch(/tap the mic/);
     expect(screen.getByTestId('home-acts-empty').textContent).toMatch(/no drafts yet/);
+  });
+
+  it('wires retry on failed home cards (review: HomeActsPanel onRetry)', () => {
+    listState = {
+      data: { acts: [{ ...sampleAct, id: 'act_failed_home', status: 'failed' }] },
+      isLoading: false,
+    };
+    render(<HomeClient userName="ayaan" initialData={sampleData} />);
+    const acts = screen.getByTestId('home-acts');
+    const retry = within(acts).getByTestId('act-retry') as HTMLButtonElement;
+    expect(retry.disabled).toBe(false);
+    fireEvent.click(retry);
+    expect(retryDraftMutate).toHaveBeenCalledWith({ id: 'act_failed_home' });
   });
 });
