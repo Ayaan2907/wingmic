@@ -58,8 +58,10 @@ export function deserializeIcsEvents(payload: schema.IcsSnapshotEvent[]): Parsed
     dateRangeEnd: event.dateRangeEnd ? new Date(event.dateRangeEnd) : null,
     allDay: event.allDay,
     // The fallback payload predates recurrence support and doesn't persist
-    // RRULE — fallback rows match on their base occurrence only.
+    // RRULE/EXDATE/RDATE — fallback rows match on their base occurrence only.
     rrule: null,
+    exdates: [],
+    rdates: [],
   }));
 }
 

@@ -24,6 +24,8 @@ function ics(overrides: Partial<ParsedIcsEvent>): ParsedIcsEvent {
     dateRangeEnd: null,
     allDay: false,
     rrule: null,
+    exdates: [],
+    rdates: [],
     ...overrides,
   };
 }

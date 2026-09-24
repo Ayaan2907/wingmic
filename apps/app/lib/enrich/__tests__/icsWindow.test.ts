@@ -15,6 +15,8 @@ function ics(overrides: Partial<ParsedIcsEvent> = {}): ParsedIcsEvent {
     dateRangeEnd: null,
     allDay: false,
     rrule: null,
+    exdates: [],
+    rdates: [],
     ...overrides,
   };
 }
@@ -466,6 +468,59 @@ END:VCALENDAR`);
     // Sep 3, Sep 17, Oct 1 … — the second Thursday is in window.
     const result = matchIcsWindow(feed, new Date(Date.UTC(2026, 8, 17, 17, 30)), opts);
     expect(result.ongoing.map((e) => e.summary)).toEqual(['Biweekly thursday']);
+  });
+
+  it('excludes EXDATE instances from recurring expansion', () => {
+    const feed = parseIcsEvents(`BEGIN:VCALENDAR
+BEGIN:VEVENT
+SUMMARY:Weekly sync
+DTSTART:20260903T170000Z
+DTEND:20260903T180000Z
+RRULE:FREQ=WEEKLY
+EXDATE:20260910T170000Z
+END:VEVENT
+END:VCALENDAR`);
+
+    // The second Thursday is cancelled — it must not bind the session.
+    const deleted = matchIcsWindow(feed, new Date(Date.UTC(2026, 8, 10, 17, 30)), opts);
+    expect(deleted.ongoing).toHaveLength(0);
+
+    // The third Thursday proceeds.
+    const kept = matchIcsWindow(feed, new Date(Date.UTC(2026, 8, 17, 17, 30)), opts);
+    expect(kept.ongoing.map((e) => e.summary)).toEqual(['Weekly sync']);
+  });
+
+  it('adds RDATE occurrences outside the rule', () => {
+    const feed = parseIcsEvents(`BEGIN:VCALENDAR
+BEGIN:VEVENT
+SUMMARY:Weekly sync
+DTSTART:20260903T170000Z
+DTEND:20260903T180000Z
+RRULE:FREQ=WEEKLY
+RDATE:20260923T170000Z
+END:VEVENT
+END:VCALENDAR`);
+
+    // A Wednesday add-on from a Thursday-only series.
+    const added = matchIcsWindow(feed, new Date(Date.UTC(2026, 8, 23, 17, 30)), opts);
+    expect(added.ongoing.map((e) => e.summary)).toEqual(['Weekly sync']);
+  });
+
+  it('degrades to the base occurrence when EXDATE values are unsupported', () => {
+    const feed = parseIcsEvents(`BEGIN:VCALENDAR
+BEGIN:VEVENT
+SUMMARY:Weekly sync
+DTSTART:20260903T170000Z
+DTEND:20260903T180000Z
+RRULE:FREQ=WEEKLY
+EXDATE:19970101T180000Z/PT1H
+END:VEVENT
+END:VCALENDAR`);
+
+    // A PERIOD-form value cannot be canonicalized — expansion drops so a
+    // cancelled meeting can never silently bind again.
+    const result = matchIcsWindow(feed, new Date(Date.UTC(2026, 8, 17, 17, 30)), opts);
+    expect(result.ongoing).toHaveLength(0);
   });
 
   it('expands recurring all-day events within their UTC day window', () => {

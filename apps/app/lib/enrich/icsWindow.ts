@@ -154,6 +154,7 @@ function expandOccurrences(
 
   const untilMs = rule.until?.getTime() ?? null;
   const out: ParsedIcsEvent[] = [];
+  const exdateSet = new Set(event.exdates);
   let emitted = 0; // rule occurrences seen so far, DTSTART's included
   let capHit = false;
   // Returns false once no further occurrence can matter.
@@ -161,6 +162,10 @@ function expandOccurrences(
     if (occStartMs < startMs) return true; // pre-DTSTART pad in BYDAY weeks
     emitted += 1;
     if (rule.count !== null && emitted > rule.count) return false;
+    // EXDATE removes the instance after it consumed its COUNT slot (RFC
+    // gathers rule + RDATEs, then subtracts EXDATEs) — exact-instant match
+    // against the feed's canonicalized EXDATE values.
+    if (exdateSet.has(occStartMs)) return true;
     if (untilMs !== null && occStartMs > untilMs) return false;
     if (occStartMs > horizonEndMs) return false;
     if (occStartMs + durationMs >= horizonStartMs) out.push(synth(occStartMs));
@@ -224,6 +229,15 @@ function expandOccurrences(
       }
     }
     capHit = monthIndex >= MAX_RULE_ITERATIONS;
+  }
+
+  // RDATE adds concrete occurrences outside the rule (EXDATE never
+  // excludes them); unsupported RDATE forms already degraded in
+  // parseIcsEvents. Cap-hit degrades the whole event to its base
+  // occurrence, so added instants share that fate by construction.
+  for (const rdateMs of event.rdates) {
+    if (rdateMs > horizonEndMs || rdateMs + durationMs < horizonStartMs) continue;
+    out.push(synth(rdateMs));
   }
 
   return capHit ? [event] : out;

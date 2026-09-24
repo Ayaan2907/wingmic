@@ -16,6 +16,10 @@ export type ParsedIcsEvent = {
    * icsWindow.ts; other consumers see the base occurrence only.
    */
   rrule: string | null;
+  /** Deleted-occurrence start instants (UTC ms) — EXDATE. Empty unless set. */
+  exdates: number[];
+  /** Added-occurrence start instants (UTC ms) — RDATE. Empty unless set. */
+  rdates: number[];
 };
 
 function unfoldIcs(raw: string): string {
@@ -87,22 +91,53 @@ function icsDate(fieldValue: IcsField | null, inclusiveDateEnd = false): Date | 
 }
 
 function parsedField(block: string, key: string): IcsField | null {
-  const re = new RegExp(`^${key}((?:;[^:]*)?):(.+)$`, 'im');
-  const match = block.match(re);
-  const value = match?.[2]?.trim();
-  if (!value) return null;
-  const params = new Map<string, string>();
-  for (const entry of (match?.[1] ?? '').split(';').filter(Boolean)) {
-    const separator = entry.indexOf('=');
-    if (separator > 0) {
-      params.set(entry.slice(0, separator).toUpperCase(), entry.slice(separator + 1));
+  return fieldValues(block, key)[0] ?? null;
+}
+
+/** All occurrences of a property line — EXDATE/RDATE repeat and carry comma lists. */
+function fieldValues(block: string, key: string): IcsField[] {
+  const re = new RegExp(`^${key}((?:;[^:]*)?):(.+)$`, 'gim');
+  const fields: IcsField[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(block)) !== null) {
+    const value = match[2]?.trim();
+    if (!value) continue;
+    const params = new Map<string, string>();
+    for (const entry of (match[1] ?? '').split(';').filter(Boolean)) {
+      const separator = entry.indexOf('=');
+      if (separator > 0) {
+        params.set(entry.slice(0, separator).toUpperCase(), entry.slice(separator + 1));
+      }
     }
+    fields.push({ value, params });
   }
-  return { value, params };
+  return fields;
 }
 
 function field(block: string, key: string): string | null {
   return parsedField(block, key)?.value ?? null;
+}
+
+/**
+ * EXDATE/RDATE instants, canonicalized exactly like DTSTART (same TZID /
+ * floating / Z semantics — the feed repeats its own DTSTART form on these
+ * lines). Any value form we cannot canonicalize — unknown TZID, RDATE
+ * PERIOD ("start/duration"), malformed dates — marks the list unsupported:
+ * silently ignoring it would re-bind cancelled meetings, so the event
+ * degrades to its base occurrence instead.
+ */
+function icsDateList(block: string, key: string): { dates: number[]; supported: boolean } {
+  const fields = fieldValues(block, key);
+  if (fields.length === 0) return { dates: [], supported: true };
+  const dates: number[] = [];
+  for (const fieldValue of fields) {
+    for (const piece of fieldValue.value.split(',')) {
+      const date = icsDate({ value: piece, params: fieldValue.params });
+      if (!date) return { dates: [], supported: false };
+      dates.push(date.getTime());
+    }
+  }
+  return { dates, supported: true };
 }
 
 export function parseIcsEvents(raw: string): ParsedIcsEvent[] {
@@ -114,6 +149,10 @@ export function parseIcsEvents(raw: string): ParsedIcsEvent[] {
     const summary = field(block, 'SUMMARY');
     if (!summary) continue;
     const dtstart = parsedField(block, 'DTSTART');
+    const rrule = field(block, 'RRULE');
+    const exdates = icsDateList(block, 'EXDATE');
+    const rdates = icsDateList(block, 'RDATE');
+    const datesSupported = exdates.supported && rdates.supported;
     events.push({
       summary,
       location: field(block, 'LOCATION'),
@@ -121,7 +160,11 @@ export function parseIcsEvents(raw: string): ParsedIcsEvent[] {
       dateRangeStart: icsDate(dtstart),
       dateRangeEnd: icsDate(parsedField(block, 'DTEND'), true),
       allDay: dtstart?.params.get('VALUE')?.toUpperCase() === 'DATE',
-      rrule: field(block, 'RRULE'),
+      // Expansion that ignored EXDATE/RDATE would bind cancelled meetings,
+      // so an unsupported list drops the rule to the base occurrence.
+      rrule: datesSupported ? rrule : null,
+      exdates: datesSupported ? exdates.dates : [],
+      rdates: datesSupported ? rdates.dates : [],
     });
   }
   return events;
