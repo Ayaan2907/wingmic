@@ -17,7 +17,9 @@ import {
   type ImportContactDraft,
   type ImportSourceKind,
 } from '@/lib/imports';
-import { accent } from '@/app/chat/_components/tokens';
+import { colors, shadows } from '@wingmic/design-tokens';
+
+const accent = colors.accent;
 
 type Phase = 'idle' | 'parsing' | 'ready' | 'uploading' | 'done' | 'error' | 'undone';
 
@@ -264,16 +266,17 @@ export function ImportsClient() {
 
       <section
         style={{
-          padding: '16px clamp(14px, 4vw, 20px) 36px',
+          padding: '20px clamp(14px, 4vw, 20px) 40px',
           maxWidth: 680,
           width: '100%',
           margin: '0 auto',
           boxSizing: 'border-box',
+          animation: 'wm-fade 420ms var(--ease-relaxed, ease-out) both',
         }}
       >
         <p
           className="mono"
-          style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--text-55)', margin: '0 0 16px' }}
+          style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--text-55)', margin: '0 0 20px' }}
         >
           drop a LinkedIn <em style={{ fontStyle: 'italic', fontFamily: 'serif' }}>Connections.csv</em>{' '}
           or a <em style={{ fontStyle: 'italic', fontFamily: 'serif' }}>.vcf</em> — contacts stay
@@ -296,15 +299,16 @@ export function ImportsClient() {
             if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click();
           }}
           style={{
-            minHeight: 132,
-            padding: '24px clamp(14px, 4vw, 20px)',
-            borderRadius: 14,
-            border: `1.5px dashed ${accent}66`,
-            background: `${accent}0d`,
+            minHeight: 148,
+            padding: '28px clamp(14px, 4vw, 20px)',
+            borderRadius: 20,
+            border: `1px dashed ${accent}59`,
+            background: `${accent}0a`,
             textAlign: 'center',
             cursor: busyUploading ? 'not-allowed' : 'pointer',
             marginBottom: 16,
             opacity: busyUploading ? 0.6 : 1,
+            transition: 'border-color 240ms var(--ease-relaxed, ease-out), opacity 240ms var(--ease-relaxed, ease-out)',
           }}
         >
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
@@ -347,9 +351,9 @@ export function ImportsClient() {
               marginBottom: 16,
               minHeight: 44,
               padding: 12,
-              borderRadius: 10,
+              borderRadius: 14,
               border: '1px solid var(--border-soft)',
-              background: 'var(--surface-1)',
+              background: 'var(--surface-2)',
               color: 'var(--ink)',
               font: '600 13px Inter, system-ui, sans-serif',
               cursor: busyUploading ? 'not-allowed' : 'pointer',
@@ -365,7 +369,7 @@ export function ImportsClient() {
             role="alert"
             data-testid="imports-error"
             className="mono"
-            style={{ fontSize: 12, color: '#FF6B6B', marginBottom: 12 }}
+            style={{ fontSize: 12, color: colors.alarm, marginBottom: 12 }}
           >
             {error}
           </p>
@@ -375,10 +379,11 @@ export function ImportsClient() {
           <div
             data-testid="imports-preview"
             style={{
-              padding: 14,
-              borderRadius: 12,
+              padding: 16,
+              borderRadius: 18,
               border: '1px solid var(--border-soft)',
               background: 'var(--surface-1)',
+              boxShadow: shadows.card,
               marginBottom: 12,
             }}
           >
@@ -426,7 +431,7 @@ export function ImportsClient() {
               >
                 <p
                   className="mono"
-                  style={{ fontSize: 12, color: '#FF6B6B', margin: '0 0 10px' }}
+                  style={{ fontSize: 12, color: colors.alarm, margin: '0 0 10px' }}
                 >
                   could not match contacts — check your connection and retry
                 </p>
@@ -435,8 +440,9 @@ export function ImportsClient() {
                   data-testid="imports-preview-retry"
                   onClick={() => void preview.refetch()}
                   style={{
-                    padding: '8px 12px',
-                    borderRadius: 8,
+                    padding: '10px 14px',
+                    minHeight: 40,
+                    borderRadius: 12,
                     border: '1px solid var(--border-soft)',
                     background: 'var(--bg-page)',
                     color: 'var(--ink)',
@@ -500,10 +506,10 @@ export function ImportsClient() {
                             width: '100%',
                             marginTop: 4,
                             minHeight: 40,
-                            padding: '8px 10px',
-                            borderRadius: 8,
+                            padding: '8px 12px',
+                            borderRadius: 12,
                             border: '1px solid var(--border-soft)',
-                            background: 'var(--bg-page)',
+                            background: 'var(--surface-2)',
                             color: 'var(--ink)',
                             font: '12px Inter, system-ui, sans-serif',
                           }}
@@ -530,16 +536,16 @@ export function ImportsClient() {
               style={{
                 marginTop: 14,
                 width: '100%',
-                minHeight: 44,
-                padding: 12,
-                borderRadius: 10,
+                minHeight: 48,
+                padding: 14,
+                borderRadius: 999,
                 background: accent,
                 color: '#000',
-                border: '1.5px solid #000',
-                boxShadow: '3px 3px 0 #000',
-                font: '700 13px Inter, system-ui, sans-serif',
+                boxShadow: shadows.button,
+                font: '700 14px Inter, system-ui, sans-serif',
                 cursor: commitBlocked ? 'not-allowed' : 'pointer',
                 opacity: commitBlocked ? 0.7 : 1,
+                transition: 'box-shadow var(--dur-fast, 150ms) var(--ease-relaxed, ease-out)',
               }}
             >
               {busyUploading
@@ -557,10 +563,10 @@ export function ImportsClient() {
           <div
             data-testid="imports-result"
             style={{
-              padding: 16,
-              borderRadius: 14,
-              border: `1px solid ${accent}4d`,
-              background: `${accent}14`,
+              padding: 18,
+              borderRadius: 18,
+              border: `1px solid ${accent}38`,
+              background: `${accent}0f`,
             }}
           >
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>import complete</div>
@@ -582,8 +588,9 @@ export function ImportsClient() {
                     color: 'var(--text-55)',
                     background: 'transparent',
                     border: '1px solid var(--border-soft)',
-                    borderRadius: 8,
-                    padding: '8px 10px',
+                    borderRadius: 12,
+                    padding: '10px 14px',
+                    minHeight: 40,
                     cursor: undo.isPending ? 'not-allowed' : 'pointer',
                   }}
                 >
@@ -611,8 +618,8 @@ export function ImportsClient() {
           <div
             data-testid="imports-undone"
             style={{
-              padding: 16,
-              borderRadius: 14,
+              padding: 18,
+              borderRadius: 18,
               border: '1px solid var(--border-soft)',
               background: 'var(--surface-1)',
               marginBottom: 12,
@@ -629,12 +636,12 @@ export function ImportsClient() {
           <div
             data-testid="imports-empty"
             style={{
-              padding: 16,
-              borderRadius: 14,
+              padding: 18,
+              borderRadius: 18,
               border: '1px dashed var(--border-soft)',
               color: 'var(--text-55)',
               fontSize: 13.5,
-              lineHeight: 1.55,
+              lineHeight: 1.6,
             }}
           >
             tip: LinkedIn → Settings → Data privacy → Get a copy of your data → Connections.

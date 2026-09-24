@@ -21,8 +21,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signOut } from '@/lib/auth-client';
 import { trpc } from '@/lib/trpc/client';
-import { accent } from '@/app/chat/_components/tokens';
+import { colors, shadows } from '@wingmic/design-tokens';
 import { parseCalendarIcsUrl } from '@/lib/enrich/parseIcs';
+
+const accent = colors.accent;
 
 type RetentionMode = '24h' | '7d' | 'forever' | 'never';
 
@@ -53,17 +55,18 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <section
       style={{
-        marginBottom: 20,
-        padding: '14px 14px 12px',
-        borderRadius: 14,
+        marginBottom: 24,
+        padding: '18px 18px 16px',
+        borderRadius: 18,
         border: '1px solid var(--border-soft)',
         background: 'var(--surface-1)',
+        boxShadow: shadows.card,
       }}
     >
-      <h2 className="mono" style={{ ...labelStyle, margin: '0 0 12px' }}>
+      <h2 className="mono" style={{ ...labelStyle, margin: '0 0 14px' }}>
         {title}
       </h2>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{children}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>{children}</div>
     </section>
   );
 }
@@ -75,11 +78,11 @@ const fieldRow: React.CSSProperties = {
 };
 
 const textInput: React.CSSProperties = {
-  background: 'var(--bg-elev, rgba(255,255,255,0.04))',
+  background: 'var(--surface-2)',
   border: '1px solid var(--border-soft)',
-  borderRadius: 12,
+  borderRadius: 14,
   minHeight: 44,
-  padding: '10px 12px',
+  padding: '12px 14px',
   color: 'var(--ink)',
   fontSize: 14,
   fontFamily: 'inherit',
@@ -180,9 +183,10 @@ export default function SettingsClient({
       <div
         className="surface-wrap surface-wrap-compact"
         style={{
-          paddingTop: 18,
-          paddingBottom: 64,
+          paddingTop: 20,
+          paddingBottom: 80,
           boxSizing: 'border-box',
+          animation: 'wm-fade 420ms var(--ease-relaxed, ease-out) both',
         }}
       >
         {/* account ───────────────────────────────────────────── */}
@@ -236,11 +240,12 @@ export default function SettingsClient({
                     alignItems: 'center',
                     gap: 12,
                     minHeight: 48,
-                    padding: '12px 14px',
-                    borderRadius: 12,
+                    padding: '12px 16px',
+                    borderRadius: 14,
                     cursor: 'pointer',
-                    border: `1px solid ${checked ? `${accent}66` : 'var(--border-soft)'}`,
-                    background: checked ? `${accent}14` : 'transparent',
+                    border: `1px solid ${checked ? `${accent}59` : 'var(--border-soft)'}`,
+                    background: checked ? `${accent}0f` : 'transparent',
+                    transition: 'border-color 240ms var(--ease-relaxed, ease-out), background 240ms var(--ease-relaxed, ease-out)',
                   }}
                 >
                   <input
@@ -397,7 +402,7 @@ export default function SettingsClient({
                 <p
                   role="alert"
                   className="mono"
-                  style={{ fontSize: 11, color: '#ff8b8b', margin: 0, lineHeight: 1.5 }}
+                  style={{ fontSize: 11, color: colors.alarm, margin: 0, lineHeight: 1.5 }}
                 >
                   {calendarError}
                 </p>
@@ -432,10 +437,10 @@ export default function SettingsClient({
             data-testid="settings-imports-link"
             style={{
               display: 'block',
-              padding: '12px 14px',
-              borderRadius: 10,
+              padding: '14px 16px',
+              borderRadius: 14,
               border: '1px solid var(--border-soft)',
-              background: 'var(--surface-1)',
+              background: 'var(--surface-2)',
               color: 'var(--ink)',
               textDecoration: 'none',
               fontSize: 13,
