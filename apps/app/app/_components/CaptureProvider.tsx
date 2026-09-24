@@ -418,7 +418,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     setOpenTarget(next);
   }
 
-  function advanceOpenEvent(result: GraphResult) {
+  function adoptEventFromResult(result: GraphResult) {
     if (result.eventIds?.length === 1 && result.extracted.events[0]?.name) {
       // Transcript fallback: only adopted into silence — an ICS-bound or
       // picked session outranks what the memo happened to mention.
@@ -615,7 +615,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           previewJpegBase64: commitContext.attachment?.jpegBase64 ?? null,
         });
         advanceOpenTarget(result as GraphResult);
-        advanceOpenEvent(result as GraphResult);
+        adoptEventFromResult(result as GraphResult);
         clearPendingAttachment(commitContext.attachment);
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
@@ -823,7 +823,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           previewJpegBase64: commitContext.attachment?.jpegBase64 ?? null,
         });
         advanceOpenTarget(result as GraphResult);
-        advanceOpenEvent(result as GraphResult);
+        adoptEventFromResult(result as GraphResult);
         clearPendingAttachment(commitContext.attachment);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'commit failed.';
@@ -872,7 +872,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
             previewJpegBase64: commitContext.attachment?.jpegBase64 ?? null,
           });
           advanceOpenTarget(result as GraphResult);
-          advanceOpenEvent(result as GraphResult);
+          adoptEventFromResult(result as GraphResult);
           clearPendingAttachment(commitContext.attachment);
         } catch (err) {
           const message = err instanceof Error ? err.message : 'commit failed.';
@@ -959,7 +959,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           graphResult: result as GraphResult,
         });
         advanceOpenTarget(result as GraphResult);
-        advanceOpenEvent(result as GraphResult);
+        adoptEventFromResult(result as GraphResult);
         clearPendingAttachment(commitContext.attachment);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'commit failed.';
@@ -992,7 +992,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
           graphResult: result as GraphResult,
         });
         advanceOpenTarget(result as GraphResult);
-        advanceOpenEvent(result as GraphResult);
+        adoptEventFromResult(result as GraphResult);
         clearPendingAttachment(commitContext.attachment);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'commit failed.';

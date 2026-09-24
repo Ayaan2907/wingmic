@@ -162,6 +162,24 @@ describe('EventSessionChip', () => {
     expect(chip.textContent).toContain('web summit');
   });
 
+  it('the picker sheet dismisses on Escape and restores focus', async () => {
+    const a = evt('nexa summit');
+    const b = evt('web summit');
+    const harness = renderSurface();
+    harness.respond({ state: 'ambiguous', candidates: [a, b] }, [a, b]);
+    await screen.findByTestId('event-session-picker');
+
+    // aria-modal semantics: focus moves into the sheet on open…
+    expect(document.activeElement?.getAttribute('data-testid')).toBe('event-session-picker');
+
+    // …and Escape dismisses it.
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByTestId('event-session-picker')).toBeNull();
+    });
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it('the ambiguous chip surfaces the question before the sheet is answered', async () => {
     const a = evt('nexa summit');
     const b = evt('web summit');

@@ -220,6 +220,23 @@ function SheetFrame({
   children: React.ReactNode;
   onDismiss: () => void;
 }) {
+  const sheetRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Modal semantics need the behavior to match: Escape dismisses, focus moves
+  // into the sheet on mount and returns where it came from on unmount.
+  React.useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    sheetRef.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onDismiss();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      previouslyFocused?.focus?.();
+    };
+  }, [onDismiss]);
+
   return (
     <>
       <div
@@ -228,10 +245,12 @@ function SheetFrame({
         style={{ position: 'fixed', inset: 0, zIndex: 69, background: 'rgba(0,0,0,0.45)' }}
       />
       <div
+        ref={sheetRef}
         role="dialog"
         aria-modal="true"
         aria-label={label}
         data-testid={testId}
+        tabIndex={-1}
         style={{
           position: 'fixed',
           left: 0,

@@ -181,6 +181,31 @@ describe('eventSession state machine', () => {
     expect(polled.pendingAutoBind).toBeNull();
   });
 
+  it('bindResolved honors an explicit unbind that raced the in-flight bind', () => {
+    // Id-less ics-auto match: response optimistically shows bound and stages
+    // the canonical-row bind; the user unbinds while that bind is in flight;
+    // the resolution must not silently re-bind (review finding, High).
+    const staged = reduceEventSession(EVENT_SESSION_INITIAL, {
+      type: 'response',
+      session: bound(summit), // id-less — the canonical row doesn't exist yet
+      candidates: [summit],
+    });
+    expect(staged.pendingAutoBind).toEqual(summit);
+
+    const unbound = reduceEventSession(staged, { type: 'unbind' });
+    expect(unbound.phase).toBe('none');
+    expect(unbound.suppressed).toEqual([eventKey(summit)]);
+
+    const resolved = reduceEventSession(unbound, {
+      type: 'bindResolved',
+      event: summitBound,
+      source: 'ics-auto',
+    });
+    expect(resolved.phase).toBe('none');
+    expect(resolved.event).toBeNull();
+    expect(resolved.suppressed).toEqual([eventKey(summit)]);
+  });
+
   it('re-arms auto-bind after the suppressed event leaves the window', () => {
     const boundSummit = reduceEventSession(EVENT_SESSION_INITIAL, {
       type: 'response',

@@ -194,7 +194,14 @@ export function reduceEventSession(
       };
     }
 
-    case 'bindResolved':
+    case 'bindResolved': {
+      // An explicit unbind wins the race against an in-flight ics-auto bind:
+      // the suppression contract forbids silently re-binding the event the
+      // user just dismissed. (Picker-driven picks can't hit this — the option
+      // list already filters suppressed candidates.)
+      if (state.suppressed.includes(eventKey(action.event))) {
+        return { ...state, pendingAutoBind: null, toast: null };
+      }
       return {
         ...state,
         phase: 'bound',
@@ -203,6 +210,7 @@ export function reduceEventSession(
         pendingAutoBind: null,
         toast: null,
       };
+    }
 
     case 'bindFailed':
       // Honest failure: no silent retry loop — the next poll re-derives,

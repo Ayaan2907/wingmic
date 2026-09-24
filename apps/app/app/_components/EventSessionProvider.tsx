@@ -103,9 +103,15 @@ export function EventSessionProvider({ children }: { children: React.ReactNode }
   }, [queryError]);
 
   // Resolve on route change — the session is global, and the hallway move
-  // (chat → home → settings) must never drop it.
+  // (chat → home → settings) must never drop it. The mount run is skipped:
+  // useQuery has already started the identical fetch, and refetching it
+  // would cancel and reissue the request.
+  const lastPathnameRef = useRef(pathname);
   useEffect(() => {
-    if (!chromeless) current.refetch();
+    if (chromeless) return;
+    if (lastPathnameRef.current === pathname) return;
+    lastPathnameRef.current = pathname;
+    current.refetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, chromeless]);
 
