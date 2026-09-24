@@ -43,6 +43,10 @@ Environment:
 | `get_person`      | Person by name + graph neighborhood (orgs/events/topics) | `GET /people`, `GET /graph` | `graph:read`    |
 | `create_followup` | Create a follow-up (captured through the same pipeline)  | `POST /api/v1/capture`      | `capture:write` |
 
+`get_person` covers the most recent 100 people by name; when no listed person matches it falls back
+to semantic recall, which additionally needs the `search:read` scope — without it the tool reports
+"no match" instead of erroring.
+
 Error behavior:
 
 - A key missing a scope gets a **tool-level error naming the missing scope**

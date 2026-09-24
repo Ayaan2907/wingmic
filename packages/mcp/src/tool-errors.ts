@@ -23,7 +23,7 @@ export function formatToolError(err: unknown): string {
       return `wingmic API rate limit reached (60 requests per key per minute).${wait}`;
     }
     if (err.code === 'network_error') {
-      return `${err.message} Check WINGMIC_BASE_URL and your connection, then retry.`;
+      return `${err.message} Check WINGMIC_API_URL and your connection, then retry.`;
     }
     return `wingmic API error (${err.code}): ${err.message}`;
   }

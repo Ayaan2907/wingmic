@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TOOL_SCOPES } from './server';
+import { TOOL_SCOPES, matchPerson } from './server';
 import { jsonResponse, makeHarness, recordingFetch } from './test-helpers';
 
 /** Extracts the text out of a CallToolResult for assertions. */
@@ -231,6 +231,54 @@ describe('each tool calls the REST v1 endpoint its scope grants', () => {
     };
     expect(parsed.matched).toBe(false);
     expect(parsed.matches[0].name).toBe('Sarah Chen');
+  });
+
+  it('get_person fallback degrades gracefully when the key lacks search:read', async () => {
+    // get_person is a graph:read tool; its semantic fallback needs search:read.
+    // A graph:read-only key must get a no-match result, not a hard scope error.
+    const { fetch } = recordingFetch((url) => {
+      if (url.includes('/api/v1/people'))
+        return jsonResponse({ people: [{ id: 'p2', name: 'Marco Diaz' }] });
+      return jsonResponse(scopeErrorBody('search:read'), 403);
+    });
+    const { client } = await makeHarness(fetch);
+    const result = (await client.callTool({
+      name: 'get_person',
+      arguments: { name: 'Unknown Person' },
+    })) as { isError?: boolean; content: Array<{ type: string; text?: string }> };
+    expect(result.isError).toBeUndefined();
+    const parsed = JSON.parse(resultText(result)) as {
+      matched: boolean;
+      matches: unknown[];
+      message: string;
+    };
+    expect(parsed.matched).toBe(false);
+    expect(parsed.matches).toHaveLength(0);
+    expect(parsed.message).toContain('search:read');
+  });
+
+  it('matchPerson never matches on a whitespace-only name', () => {
+    const people = [{ id: 'p2', name: 'Marco Diaz' }];
+    expect(matchPerson(people, '   ')).toBeUndefined();
+    expect(matchPerson(people, '')).toBeUndefined();
+  });
+
+  it('create_followup passes clientCaptureId through for retry idempotency', async () => {
+    const { fetch, calls } = recordingFetch(() =>
+      jsonResponse({
+        extracted: { actions: [{ what: 'send intro' }] },
+        interactionId: 'i3',
+        entityIds: [],
+      }),
+    );
+    const { client } = await makeHarness(fetch);
+    await client.callTool({
+      name: 'create_followup',
+      arguments: { what: 'send Sarah the intro', clientCaptureId: 'retry-key-1' },
+    });
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0].init.body)) as { clientCaptureId?: string };
+    expect(body.clientCaptureId).toBe('retry-key-1');
   });
 
   it('create_followup hits POST /api/v1/capture (capture:write) with a follow-up transcript', async () => {

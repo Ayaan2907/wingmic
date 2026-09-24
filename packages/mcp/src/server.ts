@@ -57,6 +57,9 @@ function safeRun<Args>(run: (args: Args) => Promise<object>) {
 /** Case-insensitive name match on the people list; exact match wins over prefix. */
 export function matchPerson(people: Person[], name: string): Person | undefined {
   const needle = name.trim().toLowerCase();
+  // An empty needle (e.g. a whitespace-only name) would match every person
+  // via startsWith('') — return no match instead of a confidently wrong one.
+  if (needle.length === 0) return undefined;
   return (
     people.find((p) => p.name.toLowerCase() === needle) ??
     people.find((p) => p.name.toLowerCase().startsWith(needle))
@@ -151,7 +154,8 @@ export function createWingmicServer(config: McpConfig, fetchImpl?: FetchLike): M
       title: 'Get person',
       description:
         'Look up a person by name: their entry plus the orgs, events, and topics directly linked to them. ' +
-        'Falls back to semantic search when no person matches the name exactly. Requires the graph:read scope.',
+        'When no listed person matches (the list covers the most recent 100 people), it falls back to semantic ' +
+        'search if the key has the search:read scope, and otherwise reports no match. Requires the graph:read scope.',
       inputSchema: {
         name: z.string().min(1).describe('Person name as captured in wingmic (case-insensitive)'),
       },
@@ -161,17 +165,33 @@ export function createWingmicServer(config: McpConfig, fetchImpl?: FetchLike): M
       const person = matchPerson(people, args.name);
       if (person === undefined) {
         // No exact list match — semantic recall may still know this person
-        // under an alias or a partial name.
-        const recall = await client.recall(args.name, 5);
-        return {
-          matched: false,
-          message: `No person named "${args.name}" in the graph. Closest semantic matches:`,
-          matches: recall.entities.map((e: RecallEntity) => ({
-            id: e.id,
-            name: e.name,
-            score: e.score,
-          })),
-        };
+        // under an alias or a partial name. The fallback needs search:read;
+        // a graph:read-only key degrades to the no-match result below
+        // instead of erroring mid-tool.
+        try {
+          const recall = await client.recall(args.name, 5);
+          return {
+            matched: false,
+            message: `No person named "${args.name}" among the most recent 100 people. Closest semantic matches:`,
+            matches: recall.entities.map((e: RecallEntity) => ({
+              id: e.id,
+              name: e.name,
+              score: e.score,
+            })),
+          };
+        } catch (err) {
+          if (err instanceof WingmicApiError && err.missingScope !== undefined) {
+            return {
+              matched: false,
+              message:
+                `No person named "${args.name}" among the most recent 100 people. ` +
+                `The semantic-match fallback needs the search:read scope, which the configured key lacks, ` +
+                `so no further matches were checked.`,
+              matches: [],
+            };
+          }
+          throw err;
+        }
       }
       const graph = await client.getGraph();
       return { matched: true, ...personNeighborhood(graph, person.id) };
@@ -196,11 +216,20 @@ export function createWingmicServer(config: McpConfig, fetchImpl?: FetchLike): M
           .string()
           .optional()
           .describe('When to follow up (free text or ISO date), e.g. "next week"'),
+        clientCaptureId: z
+          .string()
+          .min(1)
+          .max(128)
+          .optional()
+          .describe(
+            'Client-generated id for retry idempotency — the same id returns the existing follow-up',
+          ),
       },
     },
-    safeRun(async (args: { what: string; when?: string }) =>
+    safeRun(async (args: { what: string; when?: string; clientCaptureId?: string }) =>
       client.capture({
         transcript: `follow up: ${args.what}${args.when !== undefined ? ` by ${args.when}` : ''}`,
+        ...(args.clientCaptureId !== undefined ? { clientCaptureId: args.clientCaptureId } : {}),
       }),
     ),
   );
