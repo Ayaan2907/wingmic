@@ -11,7 +11,7 @@
 import * as React from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { accent, second, coral } from '@/app/chat/_components/tokens';
-import { API_SCOPES } from '@/lib/api/scopes';
+import { API_SCOPES, type ApiScope } from '@/lib/api/scopes';
 
 type ApiKeyRow = {
   id: string;
@@ -39,7 +39,7 @@ export default function ApiKeysClient() {
   const utils = trpc.useUtils();
   const list = trpc.apiKeys.list.useQuery();
   const [name, setName] = React.useState('');
-  const [scopes, setScopes] = React.useState<string[]>(['graph:read']);
+  const [scopes, setScopes] = React.useState<ApiScope[]>(['graph:read']);
   const [freshKey, setFreshKey] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
@@ -54,11 +54,7 @@ export default function ApiKeysClient() {
     },
     onError: (err) => setFormError(err.message),
   });
-  const revoke = trpc.apiKeys.revoke.useMutation({
-    onSuccess: () => void utils.apiKeys.list.invalidate(),
-  });
-
-  const toggleScope = (scope: string) => {
+  const toggleScope = (scope: ApiScope) => {
     setScopes((prev) =>
       prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope],
     );
@@ -70,7 +66,7 @@ export default function ApiKeysClient() {
       setFormError('pick at least one scope');
       return;
     }
-    create.mutate({ name: name.trim(), scopes: scopes as never });
+    create.mutate({ name: name.trim(), scopes });
   };
 
   const copy = async () => {
@@ -125,7 +121,7 @@ export default function ApiKeysClient() {
       {list.data && list.data.length > 0 && (
         <ul style={{ marginTop: 16, display: 'grid', gap: 10 }}>
           {list.data.map((key) => (
-            <ApiKeyRowItem key={key.id} row={key} onRevoke={() => revoke.mutate({ id: key.id })} />
+            <ApiKeyRowItem key={key.id} row={key} />
           ))}
         </ul>
       )}
@@ -264,8 +260,20 @@ export default function ApiKeysClient() {
   );
 }
 
-function ApiKeyRowItem({ row, onRevoke }: { row: ApiKeyRow; onRevoke: () => void }) {
+function ApiKeyRowItem({ row }: { row: ApiKeyRow }) {
+  const utils = trpc.useUtils();
   const [confirming, setConfirming] = React.useState(false);
+  const [revokeError, setRevokeError] = React.useState<string | null>(null);
+  const revoke = trpc.apiKeys.revoke.useMutation({
+    onSuccess: () => void utils.apiKeys.list.invalidate(),
+    onError: (err) => {
+      // A failed revoke (network error, or the key was already revoked
+      // elsewhere) must be visible — the row stays live until revocation
+      // actually lands.
+      setRevokeError(err.message);
+      setConfirming(false);
+    },
+  });
   const revoked = row.revokedAt != null;
   return (
     <li
@@ -302,13 +310,17 @@ function ApiKeyRowItem({ row, onRevoke }: { row: ApiKeyRow; onRevoke: () => void
           {row.scopes.join(' · ')} — created {fmtDate(row.createdAt)} · last used{' '}
           {fmtDate(row.lastUsedAt)}
         </div>
+        {revokeError && (
+          <div style={{ marginTop: 4, fontSize: 12, color: coral }}>{revokeError}</div>
+        )}
       </div>
       {!revoked &&
         (confirming ? (
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             <button
               type="button"
-              onClick={onRevoke}
+              disabled={revoke.isPending}
+              onClick={() => revoke.mutate({ id: row.id })}
               style={{
                 padding: '6px 12px',
                 borderRadius: 8,
@@ -316,10 +328,10 @@ function ApiKeyRowItem({ row, onRevoke }: { row: ApiKeyRow; onRevoke: () => void
                 color: coral,
                 background: 'transparent',
                 fontSize: 12,
-                cursor: 'pointer',
+                cursor: revoke.isPending ? 'default' : 'pointer',
               }}
             >
-              confirm revoke
+              {revoke.isPending ? 'revoking…' : 'confirm revoke'}
             </button>
             <button
               type="button"

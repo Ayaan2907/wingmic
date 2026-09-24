@@ -48,6 +48,9 @@ export function bearerKey(req: Request): string | null {
  * Synthesize a tRPC context for an API-key caller. API keys authenticate
  * the user directly; the procedures reachable from /api/v1 consume only
  * `user.id` (graph.get, entity.listPeople, capture.commit, recall.query).
+ * That id-only contract is pinned by the proxy read-tracker test in
+ * app/api/v1/__tests__/v1.test.ts — extend that test when a procedure
+ * starts needing more of the session user.
  */
 export function apiCallerContext(userId: string, headers: Headers): TRPCContext {
   return {

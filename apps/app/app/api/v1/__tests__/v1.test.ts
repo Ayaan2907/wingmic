@@ -54,6 +54,12 @@ import { GET as peopleGET } from '../people/route';
 import { POST as capturePOST } from '../capture/route';
 import { GET as recallGET } from '../recall/route';
 
+// Direct router imports for the apiCallerContext contract pin below.
+import { graphRouter } from '@/lib/trpc/routers/graph';
+import { entityRouter } from '@/lib/trpc/routers/entity';
+import { captureRouter } from '@/lib/trpc/routers/capture';
+import { recallRouter } from '@/lib/trpc/routers/recall';
+
 type DB = ReturnType<typeof drizzle<typeof schema>>;
 
 const USER_ID = 'user_v1';
@@ -193,6 +199,43 @@ describe('/api/v1', () => {
         expect(body.error.message).toContain(ep.scope);
       }
     }
+  });
+
+  it('contract pin: v1-reachable procedures read only ctx.user.id (the synthesized context carries nothing else)', async () => {
+    // apiCallerContext hands the routers a user of `{ id }` while the real
+    // BetterAuth session user carries email/name/... — the widening cast is
+    // safe ONLY while every /api/v1 procedure consumes just `user.id`. This
+    // test fails the first time a procedure reads any other field off the
+    // user, which is the signal to widen apiCallerContext deliberately.
+    const reads: string[] = [];
+    const trackedUser = new Proxy<Record<string, unknown>>({ id: USER_ID }, {
+      get(target, prop) {
+        if (typeof prop === 'string') reads.push(prop);
+        return target[prop as string];
+      },
+    });
+    const ctx = {
+      db,
+      session: { user: trackedUser },
+      user: trackedUser,
+      headers: new Headers(),
+    } as unknown as Parameters<typeof graphRouter.createCaller>[0];
+
+    // Drive every procedure /api/v1 can reach. Validation failures still
+    // record reads — .catch keeps the read-tracker authoritative.
+    await graphRouter.createCaller(ctx).get().catch(() => undefined);
+    await entityRouter.createCaller(ctx).listPeople({ limit: 5 }).catch(() => undefined);
+    await captureRouter
+      .createCaller(ctx)
+      .commit({ transcript: 'grabbed coffee with Sarah Chen — follow up next week' })
+      .catch(() => undefined);
+    await recallRouter.createCaller(ctx).query({ q: 'rust' }).catch(() => undefined);
+
+    const unexpected = [...new Set(reads)].filter((k) => k !== 'id');
+    expect(
+      unexpected,
+      `procedures read ctx.user.${unexpected.join(', ctx.user.')} — apiCallerContext does not synthesize it`,
+    ).toEqual([]);
   });
 
   it('unauthenticated requests get 401', async () => {
