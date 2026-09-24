@@ -4,8 +4,9 @@
  * OnboardingClient — /onboarding first-run flow (PR κ-onboarding).
  *
  * Four steps: (1) welcome, (2) first / last / linkedin url / optional public
- * calendar ics, (3) mic-permission explainer (mock — getUserMedia waits until
- * record in chat), (4) privacy acknowledgement + "get started".
+ * calendar ics, (3) mic priming — requests real getUserMedia on a tap so the
+ * browser caches the grant before the first take (spec D4, AC6; was an
+ * explainer-only mock), (4) privacy acknowledgement + "get started".
  *
  * Both "get started" and skip `await acknowledge.mutateAsync(...)` then
  * `router.push('/chat')`. Skip still acknowledges on purpose: a skip that left the
@@ -22,10 +23,17 @@ import { useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc/client';
 import { normalizeLinkedInUrl } from '@/lib/imports';
 import { parseCalendarIcsUrl } from '@/lib/enrich/parseIcs';
-import { accent, second, third, blue, violet } from '@/app/chat/_components/tokens';
+import { accent, second, third, blue, violet, coral } from '@/app/chat/_components/tokens';
+import {
+  describeMicDenial,
+  micGrantPersistent,
+  requestMicAccess,
+  type MicPrimeState,
+} from './micPrime';
 
 const TOTAL_STEPS = 4;
 const PROFILE_STEP = 1;
+const MIC_STEP = 2;
 
 const STEPS: { eyebrow: string; title: string; titleTwist: string; body: string }[] = [
   {
@@ -44,7 +52,7 @@ const STEPS: { eyebrow: string; title: string; titleTwist: string; body: string 
     eyebrow: '◆ the mic',
     title: 'one mic,',
     titleTwist: 'one surface.',
-    body: 'wingmic asks for the mic only when you press record in chat — never in the background. nothing is captured until you tap to talk.',
+    body: 'one thing before your first take: we ask for the mic now, so recording never stops to ask. wingmic never listens in the background — nothing is captured until you tap to talk.',
   },
   {
     eyebrow: '◆ privacy',
@@ -94,6 +102,24 @@ export default function OnboardingClient() {
   const [lastName, setLastName] = React.useState('');
   const [linkedinUrl, setLinkedinUrl] = React.useState('');
   const [calendarIcsUrl, setCalendarIcsUrl] = React.useState('');
+  const [mic, setMic] = React.useState<MicPrimeState>({ status: 'idle' });
+
+  const primeMic = React.useCallback(async () => {
+    const media = navigator.mediaDevices;
+    if (!media?.getUserMedia) {
+      setMic({ status: 'denied', ...describeMicDenial(new Error('mediaDevices unavailable')) });
+      return;
+    }
+    setMic({ status: 'asking' });
+    try {
+      await requestMicAccess((constraints) => media.getUserMedia(constraints));
+      // Safari doesn't reliably persist the grant; "unknown" (null) must not
+      // promise the sheet won't reappear — AC6 honesty cuts both ways.
+      setMic({ status: 'granted', persistent: (await micGrantPersistent()) === true });
+    } catch (err) {
+      setMic({ status: 'denied', ...describeMicDenial(err) });
+    }
+  }, []);
 
   const finish = React.useCallback(async (mode: 'profile' | 'skip') => {
     if (leaving) return;
@@ -142,6 +168,7 @@ export default function OnboardingClient() {
   const current = STEPS[step];
   const isLast = step === TOTAL_STEPS - 1;
   const onProfile = step === PROFILE_STEP;
+  const onMic = step === MIC_STEP;
 
   return (
     <main
@@ -237,6 +264,91 @@ export default function OnboardingClient() {
                 style={fieldStyle}
               />
             </label>
+          </div>
+        )}
+        {onMic && (
+          <div
+            style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 24, maxWidth: 420 }}
+            data-testid="mic-prime"
+          >
+            {mic.status === 'granted' ? (
+              <p
+                role="status"
+                className="mono"
+                style={{
+                  font: '500 13px/1.5 var(--font-mono)',
+                  color: second,
+                  letterSpacing: 0.5,
+                  margin: 0,
+                }}
+              >
+                ✓ mic ready —{' '}
+                {mic.persistent
+                  ? "your first take won't stop to ask."
+                  : 'your browser may ask again next time.'}
+              </p>
+            ) : mic.status === 'denied' ? (
+              <>
+                <p
+                  role="alert"
+                  className="mono"
+                  style={{
+                    font: '500 13px/1.5 var(--font-mono)',
+                    color: coral,
+                    letterSpacing: 0.5,
+                    margin: 0,
+                  }}
+                >
+                  {/* cause-specific prefix: nothing "blocked" a missing device */}
+                  {mic.code === 'NotAllowedError' ? '✗ mic blocked — ' : '✗ '}
+                  {mic.message}
+                </p>
+                <button
+                  type="button"
+                  onClick={primeMic}
+                  style={{
+                    padding: 15,
+                    borderRadius: 12,
+                    background: accent,
+                    color: '#000',
+                    font: '700 15px var(--font-sans)',
+                    border: '1.5px solid #000',
+                    boxShadow: '4px 4px 0 #000',
+                    cursor: 'pointer',
+                  }}
+                >
+                  try again
+                </button>
+                <p className="mono" style={{ font: '400 12px var(--font-mono)', color: 'var(--text-40)', margin: 0 }}>
+                  you can continue — typed memos work too.
+                </p>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={primeMic}
+                  disabled={mic.status === 'asking'}
+                  style={{
+                    padding: 15,
+                    borderRadius: 12,
+                    background: accent,
+                    color: '#000',
+                    font: '700 15px var(--font-sans)',
+                    border: '1.5px solid #000',
+                    boxShadow: '4px 4px 0 #000',
+                    cursor: mic.status === 'asking' ? 'default' : 'pointer',
+                  }}
+                >
+                  {mic.status === 'asking' ? 'asking…' : 'enable the mic'}
+                </button>
+                {mic.status === 'idle' && (
+                  <p className="mono" style={{ font: '400 12px var(--font-mono)', color: 'var(--text-40)', margin: 0 }}>
+                    your browser shows the prompt — that&apos;s us, asking.
+                  </p>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>

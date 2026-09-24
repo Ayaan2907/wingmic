@@ -409,6 +409,10 @@ export const entityMerges = sqliteTable(
 // ─── Acts (agent drafts — email / meeting / reminder / intro / todo) ───
 // Persisted follow-ups from capture extraction. UI: home ActCards + /acts.
 // Permission-first: status stays drafted until the user sends/dismisses.
+// Lifecycle (spec D2): capture.commit inserts rows as 'drafting' placeholders
+// and polish runs in the background (scheduleActDrafting) — 'drafted' when the
+// draft lands, 'failed' when it errors (retryable from /acts). 'drafting' and
+// 'failed' are code-level states: the column is plain TEXT, no migration.
 
 export const acts = sqliteTable(
   'act',
@@ -421,7 +425,7 @@ export const acts = sqliteTable(
       enum: ['reminder', 'email', 'meeting', 'todo', 'intro'],
     }).notNull(),
     status: text('status', {
-      enum: ['drafted', 'snoozed', 'sent', 'dismissed'],
+      enum: ['drafting', 'drafted', 'snoozed', 'sent', 'dismissed', 'failed'],
     })
       .notNull()
       .default('drafted'),
@@ -475,6 +479,34 @@ export const usageDaily = sqliteTable(
   (t) => [primaryKey({ columns: [t.userId, t.day, t.kind] })],
 );
 
+// ─── ICS snapshot (last-good calendar fetch) ────────────────────────────
+// Per-user fallback for `events.current`: when the live ICS fetch fails
+// (flaky venue wifi is exactly when event binding matters), the session
+// resolves from the last successful fetch stored here.
+
+/**
+ * Serialized ParsedIcsEvent (apps/app lib/enrich/parseIcs) as stored in the
+ * snapshot row. Dates are ISO instants; `dateRangeEnd` keeps the ICS
+ * convention where all-day DTEND normalizes to the inclusive last-day
+ * midnight (see icsEventWindow for how occupancy is derived).
+ */
+export type IcsSnapshotEvent = {
+  summary: string;
+  location: string | null;
+  url: string | null;
+  dateRangeStart: string | null;
+  dateRangeEnd: string | null;
+  allDay: boolean;
+};
+
+export const icsSnapshots = sqliteTable('ics_snapshot', {
+  ownerUserId: text('owner_user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  payload: text('payload', { mode: 'json' }).$type<IcsSnapshotEvent[]>().notNull(),
+  fetchedAt: ts('fetched_at'),
+});
+
 // ─── Connection requests (opt-in linking, exposed in v0.2+) ────────────
 
 export const connectionRequests = sqliteTable('connection_request', {
@@ -518,3 +550,4 @@ export type EntityNote = typeof entityNotes.$inferSelect;
 export type EntityMerge = typeof entityMerges.$inferSelect;
 export type Act = typeof acts.$inferSelect;
 export type NewAct = typeof acts.$inferInsert;
+export type IcsSnapshot = typeof icsSnapshots.$inferSelect;

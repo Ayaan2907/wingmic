@@ -7,6 +7,7 @@ import { settingsRouter } from './settings';
 import { onboardingRouter } from './onboarding';
 import { actsRouter } from './acts';
 import { importsRouter } from './imports';
+import { eventsRouter } from './events';
 
 /**
  * Root tRPC router. Capture + recall wedges plus the `ping` / `me`

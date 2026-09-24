@@ -4,6 +4,7 @@ import { TRPCProvider } from '@/lib/trpc/client';
 import { CaptureProvider } from './_components/CaptureProvider';
 import { AppShell } from './_components/AppShell';
 import { RecordingOverlay } from './_components/RecordingOverlay';
+import { ServiceWorkerRegistrar } from './_components/ServiceWorkerRegistrar';
 import './globals.css';
 
 const inter = Inter({
@@ -32,6 +33,8 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://app.wingmic.xyz'),
   title: { default: 'wingmic', template: '%s · wingmic' },
   description: 'your social RAM, on disk.',
+  manifest: '/manifest.webmanifest', // PWA installability — copied to public/ by prebuild
+  icons: { apple: '/apple-touch-icon.png' }, // iOS Safari ignores manifest icons for A2HS
   robots: { index: false, follow: false }, // product app not indexed
 };
 
@@ -39,6 +42,7 @@ export const viewport: Viewport = {
   themeColor: '#0a0a0a',
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover', // engages env(safe-area-inset-*) on notched devices
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -52,6 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <CaptureProvider>
             <AppShell>{children}</AppShell>
             <RecordingOverlay />
+            <ServiceWorkerRegistrar />
           </CaptureProvider>
         </TRPCProvider>
       </body>
