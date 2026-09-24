@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { cleanup, render, screen, fireEvent } from '@testing-library/react';
 import { PersonCaptureCard } from '../PersonCaptureCard';
+
+// renders leave scheduler work queued (react-dom reads window.event in a
+// delayed commit callback); unmounting before env teardown keeps that work
+// from firing after jsdom is gone
+afterEach(cleanup);
 
 describe('PersonCaptureCard', () => {
   it('renders name, company, topics, and promised hint', () => {
