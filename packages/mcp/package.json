@@ -9,7 +9,10 @@
   "bin": {
     "wingmic-mcp": "./dist/cli.js"
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
