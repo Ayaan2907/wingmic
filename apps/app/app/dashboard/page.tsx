@@ -1,8 +1,11 @@
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { auth } from '@/lib/auth';
+import ApiKeysClient from './ApiKeysClient';
 
 export const metadata = { title: 'dashboard' };
+
+export const dynamic = 'force-dynamic';
 
 export default async function Page() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -13,6 +16,7 @@ export default async function Page() {
       style={{
         minHeight: '100dvh',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         padding: '32px 20px',
@@ -31,17 +35,22 @@ export default async function Page() {
             marginBottom: 14,
           }}
         >
-          dashboard · placeholder
+          dashboard
         </div>
         <h1 style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.025em', lineHeight: 1.05 }}>
-          coming soon.{' '}
+          your keys.{' '}
           <span className="serif" style={{ fontStyle: 'italic', color: '#FFC452', fontWeight: 400 }}>
-            for now, capture + recall.
+            capture + recall live in chat.
           </span>
         </h1>
         <p style={{ marginTop: 14, color: 'var(--text-55)', fontSize: 15, lineHeight: 1.55 }}>
-          go to <a href="/chat" style={{ color: '#FFC452', textDecoration: 'underline' }}>/chat</a> or <a href="/recall" style={{ color: '#FFC452', textDecoration: 'underline' }}>/recall</a>.
+          go to <a href="/chat" style={{ color: '#FFC452', textDecoration: 'underline' }}>/chat</a> or{' '}
+          <a href="/recall" style={{ color: '#FFC452', textDecoration: 'underline' }}>/recall</a>.
         </p>
+      </div>
+
+      <div style={{ marginTop: 40, width: '100%' }}>
+        <ApiKeysClient />
       </div>
     </main>
   );
