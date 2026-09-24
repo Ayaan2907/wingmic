@@ -4,6 +4,8 @@
  * Layer recipe: contact shadow + ambient + wide lift, all near-black warm.
  */
 export const shadows = {
+  /** Small floating elements: avatars, tiles, chips. */
+  contact: '0 2px 8px rgba(6,6,10,0.3)',
   /** Resting cards. */
   card: '0 1px 2px rgba(6,6,10,0.28), 0 8px 24px rgba(6,6,10,0.30), 0 24px 56px rgba(6,6,10,0.22)',
   /** Cards floating above content: hover states, sticky headers. */

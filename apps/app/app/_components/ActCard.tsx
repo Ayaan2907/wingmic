@@ -13,8 +13,10 @@ import { buildIcs, mailtoHref } from '@/lib/acts/mapAction';
 import { chooseActChannel, type ActChannel } from '@/lib/acts/chooseActChannel';
 import { linkedinProfileHref } from '@/lib/acts/linkedinHref';
 import { PersonAvatar } from './entity/EntityAvatar';
+import { colors, shadows } from '@wingmic/design-tokens';
 
-const accent = '#FFC452';
+const accent = colors.accent;
+const alarm = colors.alarm;
 
 export type PendingAct = {
   /** DB id when loaded from acts.list — enables send mutations. */
@@ -160,13 +162,14 @@ export function ActCard({
   return (
     <div
       style={{
-        padding: 14,
-        borderRadius: 14,
-        background: 'var(--surface-1, rgba(255,255,255,0.02))',
-        border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
+        padding: 16,
+        borderRadius: 20,
+        background: 'var(--surface-1)',
+        border: '1px solid var(--border-soft)',
+        boxShadow: shadows.card,
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
+        gap: 12,
       }}
       data-testid="act-card"
       data-act-status={a.status ?? 'drafted'}
@@ -212,7 +215,7 @@ export function ActCard({
                 className="mono"
                 data-testid="act-status-failed"
                 role="alert"
-                style={{ fontSize: 9.5, color: '#FF6B6B' }}
+                style={{ fontSize: 9.5, color: alarm }}
               >
                 · failed
               </span>
@@ -259,15 +262,16 @@ export function ActCard({
             }
             onClick={handleSend}
             style={{
-              padding: '7px 11px',
-              borderRadius: 8,
+              padding: '10px 16px',
+              minHeight: 40,
+              borderRadius: 999,
               background: accent,
               color: '#000',
-              border: '1.5px solid #000',
-              boxShadow: '2px 2px 0 #000',
-              font: '700 11px Inter, system-ui, sans-serif',
+              boxShadow: shadows.button,
+              font: '700 12px Inter, system-ui, sans-serif',
               cursor: canSend && !emailBlocked ? 'pointer' : 'not-allowed',
               opacity: canSend && !emailBlocked ? 1 : 0.85,
+              transition: `box-shadow var(--dur-fast) var(--ease-relaxed)`,
             }}
           >
             {sendLabel}
@@ -276,7 +280,7 @@ export function ActCard({
             <span
               className="mono"
               role="alert"
-              style={{ fontSize: 9, color: '#FF6B6B', letterSpacing: 0.3, textAlign: 'right' }}
+              style={{ fontSize: 9, color: alarm, letterSpacing: 0.3, textAlign: 'right' }}
             >
               {sendError || copyError}
             </span>
@@ -289,10 +293,10 @@ export function ActCard({
           data-testid="act-drafting"
           className="mono"
           style={{
-            padding: '10px 12px',
-            borderRadius: 8,
-            background: 'rgba(0,0,0,0.3)',
-            border: '1px dashed rgba(255,255,255,0.15)',
+            padding: '12px 14px',
+            borderRadius: 12,
+            background: 'rgba(0,0,0,0.25)',
+            border: '1px dashed var(--border-mid)',
             fontSize: 11,
             color: 'var(--text-55)',
           }}
@@ -303,10 +307,10 @@ export function ActCard({
         <div
           data-testid="act-failed"
           style={{
-            padding: '10px 12px',
-            borderRadius: 8,
-            background: 'rgba(0,0,0,0.3)',
-            border: '1px solid rgba(255,107,107,0.35)',
+            padding: '12px 14px',
+            borderRadius: 12,
+            background: 'rgba(0,0,0,0.25)',
+            border: '1px solid rgba(255,107,107,0.3)',
             display: 'flex',
             flexDirection: 'column',
             gap: 6,
@@ -315,7 +319,7 @@ export function ActCard({
           <span
             className="mono"
             role="alert"
-            style={{ fontSize: 10, color: '#FF6B6B', letterSpacing: 0.3 }}
+            style={{ fontSize: 10, color: alarm, letterSpacing: 0.3 }}
           >
             draft failed — the background polish errored. retry reuses what you captured.
           </span>
@@ -336,10 +340,10 @@ export function ActCard({
         <div
           data-testid="act-draft"
           style={{
-            padding: '10px 12px',
-            borderRadius: 8,
-            background: 'rgba(0,0,0,0.3)',
-            border: '1px solid rgba(255,255,255,0.05)',
+            padding: '12px 14px',
+            borderRadius: 12,
+            background: 'rgba(0,0,0,0.22)',
+            border: '1px solid var(--border-soft)',
             display: 'flex',
             flexDirection: 'column',
             gap: 6,
@@ -353,7 +357,7 @@ export function ActCard({
                 fontSize: 11,
                 color: 'var(--text-70, var(--text-55))',
                 paddingBottom: 6,
-                borderBottom: '1px solid rgba(255,255,255,0.06)',
+                borderBottom: '1px solid var(--border-soft)',
               }}
             >
               {a.subject}
@@ -363,8 +367,8 @@ export function ActCard({
             data-testid="act-body"
             className="mono"
             style={{
-              fontSize: 11,
-              lineHeight: 1.55,
+              fontSize: 12,
+              lineHeight: 1.6,
               color: 'var(--ink)',
               whiteSpace: 'pre-wrap',
               maxHeight: 220,
@@ -396,8 +400,8 @@ export function ActCard({
             style={{
               width: '100%',
               boxSizing: 'border-box',
-              padding: '8px 10px',
-              borderRadius: 8,
+              padding: '10px 12px',
+              borderRadius: 12,
               border: '1px solid var(--border-mid)',
               background: 'var(--surface-2)',
               color: 'var(--ink)',
@@ -412,8 +416,8 @@ export function ActCard({
             style={{
               width: '100%',
               boxSizing: 'border-box',
-              padding: '8px 10px',
-              borderRadius: 8,
+              padding: '10px 12px',
+              borderRadius: 12,
               border: '1px solid var(--border-mid)',
               background: 'var(--surface-2)',
               color: 'var(--ink)',
@@ -470,11 +474,12 @@ export function ActCard({
               style={{
                 fontSize: 11,
                 fontWeight: 700,
-                padding: '6px 10px',
-                borderRadius: 8,
-                border: '1.5px solid #000',
+                padding: '8px 14px',
+                minHeight: 36,
+                borderRadius: 999,
                 background: accent,
                 color: '#000',
+                boxShadow: shadows.button,
                 cursor: saving ? 'not-allowed' : 'pointer',
                 opacity: saving ? 0.7 : 1,
               }}
@@ -487,7 +492,7 @@ export function ActCard({
               className="mono"
               role="alert"
               data-testid="act-edit-error"
-              style={{ fontSize: 9, color: '#FF6B6B', letterSpacing: 0.3 }}
+              style={{ fontSize: 9, color: alarm, letterSpacing: 0.3 }}
             >
               {editError}
             </span>

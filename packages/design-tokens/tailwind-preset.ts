@@ -32,6 +32,7 @@ export const wingmicPreset: Partial<Config> = {
         '2xl': `${radii['2xl']}px`,
       },
       boxShadow: {
+        contact: shadows.contact,
         card: shadows.card,
         raised: shadows.raised,
         overlay: shadows.overlay,
