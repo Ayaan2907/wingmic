@@ -15,6 +15,7 @@ import { PersonAvatar } from '@/app/_components/entity/EntityAvatar';
 import { PersonListRail } from './_components/PersonListRail';
 import { trpc } from '@/lib/trpc/client';
 import { parseImportSource } from '@/lib/imports';
+import type { EntityEnrichReason } from '@/app/_components/entity/EntityDetailScaffold';
 
 export interface PersonDetail {
   kind: 'person';
@@ -33,7 +34,21 @@ export interface PersonDetail {
   related: EntityRelated[];
   topics: Array<{ id: string; name: string }>;
   publicProfile?: EntityPublicProfile | null;
+  webSearchConfigured?: boolean;
   possibleMatches?: EntityPossibleMatch[];
+}
+
+type EnrichResult =
+  | { ok: true; wroteFactKeys: string[] }
+  | { ok: false; reason: 'no_provider' | 'failed'; message?: string };
+
+/** Map a finished enrich mutation to the card's "why nothing landed" reason.
+ * ok with facts written → null (refresh will render them); ok with nothing
+ * written → 'empty'; failed / no provider → that reason. */
+export function enrichReasonFromResult(res: EnrichResult | undefined): EntityEnrichReason | null {
+  if (!res) return null;
+  if (res.ok) return res.wroteFactKeys.length === 0 ? 'empty' : null;
+  return res.reason;
 }
 
 export default function PersonDetailClient({ detail }: { detail: PersonDetail }) {
@@ -85,6 +100,25 @@ export default function PersonDetailClient({ detail }: { detail: PersonDetail })
     },
   });
 
+  // D3: visible enrichment. Refetch only when facts actually landed — a
+  // no_provider / failed / empty answer leaves the card on its honest
+  // not-enriched state with the retry still one tap away.
+  const enrich = trpc.entity.enrich.useMutation({
+    onSuccess: (res) => {
+      if (res.ok && res.wroteFactKeys.length > 0) {
+        void utils.entity.detail.invalidate({ kind: 'person', id: detail.id });
+        router.refresh();
+      }
+    },
+  });
+  const enrichState = {
+    pending: enrich.isPending,
+    providerConfigured: detail.webSearchConfigured ?? true,
+    lastReason:
+      enrichReasonFromResult(enrich.data as EnrichResult | undefined) ??
+      (enrich.error ? ('failed' as const) : null),
+  };
+
   const subText = React.useMemo(
     () => [detail.sub.role, detail.sub.companyName].filter(Boolean).join(' · ') || 'no role yet',
     [detail.sub.role, detail.sub.companyName],
@@ -132,6 +166,8 @@ export default function PersonDetailClient({ detail }: { detail: PersonDetail })
           related={detail.related}
           topics={detail.topics}
           publicProfile={detail.publicProfile}
+          enrich={enrichState}
+          onEnrich={() => enrich.mutate({ entityId: detail.id })}
           possibleMatches={detail.possibleMatches}
           onMergePossibleMatch={(sourceId) =>
             merge.mutate({ sourceId, targetId: detail.id })
