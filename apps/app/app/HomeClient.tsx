@@ -89,7 +89,7 @@ export default function HomeClient({ userName, initialData }: HomeClientProps) {
           paddingTop: 20,
           paddingBottom: 8,
           boxSizing: 'border-box',
-          animation: 'wm-fade 420ms var(--ease-relaxed, ease-out) both',
+          animation: 'wm-fade var(--dur-slow, 420ms) var(--ease-relaxed, ease-out) both',
         }}
       >
         <h1

@@ -163,7 +163,7 @@ export function ActsClient() {
           width: '100%',
           margin: '0 auto',
           boxSizing: 'border-box',
-          animation: 'wm-fade 420ms var(--ease-relaxed, ease-out) both',
+          animation: 'wm-fade var(--dur-slow, 420ms) var(--ease-relaxed, ease-out) both',
         }}
       >
         <div
