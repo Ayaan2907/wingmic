@@ -33,6 +33,7 @@ import {
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc/client';
+import { useEventSession } from './EventSessionProvider';
 import { useAudioRecorder, type UseAudioRecorder } from '@/app/capture/_components/useAudioRecorder';
 import type {
   ChatInitialItem,
@@ -106,8 +107,6 @@ export interface CaptureContextValue {
   /** Selected person on a committed memo. Next memo binds as a follow-up. */
   openTarget: OpenCaptureTarget | null;
   setOpenTarget: (target: OpenCaptureTarget | null) => void;
-  openEvent: OpenEventSession | null;
-  setOpenEvent: (event: OpenEventSession | null) => void;
   pendingAttachment: PendingAttachment | null;
   attachmentBusy: boolean;
   attachmentError: string | null;
@@ -193,8 +192,6 @@ const DEFAULT_VALUE: CaptureContextValue = {
   setPasteDraft: () => {},
   openTarget: null,
   setOpenTarget: () => {},
-  openEvent: null,
-  setOpenEvent: () => {},
   pendingAttachment: null,
   attachmentBusy: false,
   attachmentError: null,
@@ -237,13 +234,11 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const [pasteDraft, setPasteDraft] = useState('');
   const [undoQueue, setUndoQueue] = useState<UndoEntry[]>([]);
   const [openTarget, setOpenTarget] = useState<OpenCaptureTarget | null>(null);
-  const [openEvent, setOpenEvent] = useState<OpenEventSession | null>(null);
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [photoBindChoices, setPhotoBindChoices] = useState<OpenCaptureTarget[] | null>(null);
   const openTargetRef = useRef<OpenCaptureTarget | null>(null);
-  const openEventRef = useRef<OpenEventSession | null>(null);
   const pendingAttachmentRef = useRef<PendingAttachment | null>(null);
   const attachmentGenerationRef = useRef(0);
   const attachmentBusyRef = useRef(false);
@@ -253,14 +248,27 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     openTargetRef.current = openTarget;
   }, [openTarget]);
   useEffect(() => {
-    openEventRef.current = openEvent;
-  }, [openEvent]);
-  useEffect(() => {
     pendingAttachmentRef.current = pendingAttachment;
   }, [pendingAttachment]);
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  // ── Global event session (EventSessionProvider, layout-level) ──
+  // The capture pipeline reads the bound event imperatively at pipeline
+  // start (refs, not render state — the same discipline as openTarget),
+  // and adopts commit-derived events into the session when it has nothing
+  // bound (the transcript fallback layer; the reducer enforces precedence).
+  const eventSession = useEventSession();
+  const eventSessionRef = useRef(eventSession);
+  useEffect(() => {
+    eventSessionRef.current = eventSession;
+  }, [eventSession]);
+  const sessionEventRef = useRef<OpenEventSession | null>(null);
+  useEffect(() => {
+    const bound = eventSession.state.phase === 'bound' ? eventSession.state.event : null;
+    sessionEventRef.current = bound?.id ? { eventId: bound.id, name: bound.name } : null;
+  }, [eventSession.state]);
 
   const activeIdRef = useRef<string | null>(null);
   /** Bubble id handed off when recorder enters encoding — frees the orb for the next take. */
@@ -318,7 +326,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     return {
       attachment: pendingAttachmentRef.current,
       target: openTargetRef.current,
-      event: openEventRef.current,
+      event: sessionEventRef.current,
     };
   }
 
@@ -412,9 +420,12 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
 
   function advanceOpenEvent(result: GraphResult) {
     if (result.eventIds?.length === 1 && result.extracted.events[0]?.name) {
-      const next = { eventId: result.eventIds[0]!, name: result.extracted.events[0].name };
-      openEventRef.current = next;
-      setOpenEvent(next);
+      // Transcript fallback: only adopted into silence — an ICS-bound or
+      // picked session outranks what the memo happened to mention.
+      eventSessionRef.current.adoptCommitEvent({
+        eventId: result.eventIds[0]!,
+        name: result.extracted.events[0].name,
+      });
     }
   }
 
@@ -585,7 +596,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      patch(id, { status: 'linking', transcript, transcribeMs, intent: 'memo' });
+      patch(id, { status: 'linking', transcript, transcribeMs, intent: 'memo', boundEvent: commitContext.event });
 
       const c0 = performance.now();
       try {
@@ -800,6 +811,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
         transcribeMs: 0,
         fromPaste: true,
         error: null,
+        boundEvent: commitContext.event,
       });
       const c0 = performance.now();
       try {
@@ -847,7 +859,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       }
       if (msg.transcript) {
         const commitContext = currentCommitContext();
-        patch(id, { status: 'linking', error: null });
+        patch(id, { status: 'linking', error: null, boundEvent: commitContext.event });
         const c0 = performance.now();
         try {
           const result = await commitMutation.mutateAsync(
@@ -967,7 +979,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     async (id: string) => {
       const msg = messages.find((m) => m.id === id);
       if (!msg?.transcript) return;
-      patch(id, { status: 'linking', intent: 'memo', error: null, ask: null });
+      patch(id, { status: 'linking', intent: 'memo', error: null, ask: null, boundEvent: sessionEventRef.current });
       const commitContext = currentCommitContext();
       const c0 = performance.now();
       try {
@@ -1068,19 +1080,17 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const seedThreadOnce = useCallback((initial: ChatInitialItem[]) => {
     if (seededRef.current) return;
     seededRef.current = true;
-    setMessages((prev) => {
-      const ids = new Set(prev.map((m) => m.id));
-      const seeded = seedMessages(initial).filter((m) => !ids.has(m.id));
-      const next = [...seeded, ...prev];
-      if (!openEventRef.current) {
-        const session = lastCommittedEvent(next);
-        if (session) {
-          openEventRef.current = session;
-          setOpenEvent(session);
-        }
-      }
-      return next;
-    });
+    const incoming = seedMessages(initial).filter(
+      (m) => !messagesRef.current.some((p) => p.id === m.id),
+    );
+    setMessages((prev) => [...incoming, ...prev]);
+    // Restore the last commit-derived event into the global session — the
+    // same transcript-fallback layer as live commits (adopts into silence;
+    // the reducer ignores it when an ICS/picked session is already bound).
+    const seed = lastCommittedEvent([...incoming, ...messagesRef.current]);
+    if (seed) {
+      eventSessionRef.current.adoptCommitEvent(seed);
+    }
   }, []);
 
   const visibleMessages = useMemo(
@@ -1099,8 +1109,6 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       setPasteDraft,
       openTarget,
       setOpenTarget,
-      openEvent,
-      setOpenEvent,
       pendingAttachment,
       attachmentBusy,
       attachmentError,
@@ -1129,7 +1137,6 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       pasteOpenForId,
       pasteDraft,
       openTarget,
-      openEvent,
       pendingAttachment,
       attachmentBusy,
       attachmentError,

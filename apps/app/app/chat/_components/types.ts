@@ -102,6 +102,12 @@ export interface ThreadMessage {
   ask?: AskResult | null;
   /** Local preview of a pending / just-committed JPEG. */
   previewJpegBase64?: string | null;
+  /**
+   * The current-event session this capture was bound to — frozen when the
+   * pipeline entered `linking`, rendered as the bubble's inline chip
+   * ("→ at NEXA summit", D2 visual half). Optional for seeded bubbles.
+   */
+  boundEvent?: { eventId: string; name: string } | null;
 }
 
 export interface ChatInitialItem {
