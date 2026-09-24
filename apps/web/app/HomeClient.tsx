@@ -20,6 +20,7 @@ import {
   LiveFeed,
 } from './_components/marketing-ui';
 import HeroStage from './_components/HeroPhone';
+import MagicLinkForm from './_components/MagicLinkForm';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3211';
 
@@ -161,6 +162,16 @@ function App() {
           {/* Interactive stage — iPhone on mobile, MacBook on desktop */}
           <div className="wm-hero-phone-wrap" style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>
             <HeroStage />
+            {/* Hero sign-in — the magic link sends right from here (issue #169) */}
+            <div className="wm-hero-signin" style={{ width: '100%', maxWidth: 480, margin: '18px auto 0', textAlign: 'center' }}>
+              <MagicLinkForm accent={accent} />
+              <div className="mono" style={{
+                marginTop: 10, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase',
+                color: 'rgba(255,255,255,0.35)',
+              }}>
+                magic-link sign in · no password · free
+              </div>
+            </div>
             {/* mobile-only: scroll cue at the bottom of the first screen */}
             <a href="#how" className="wm-scroll-cue mono" aria-label="scroll for more" style={{
               alignItems: 'center', gap: 4, color: 'rgba(255,255,255,0.5)', fontSize: 11,
@@ -1024,16 +1035,9 @@ function App() {
             Wingmic v1.0 is open. Sign in with a magic link — no password, no waitlist.
           </p>
 
-          <a href={APP_URL} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 10,
-            padding: '16px 30px', borderRadius: 10,
-            background: accent, color: '#000',
-            fontSize: 17, fontWeight: 700, textDecoration: 'none',
-            boxShadow: '3px 3px 0 #000', border: '1.5px solid #000',
-          }}>
-            Log in
-            <svg width="15" height="15" viewBox="0 0 14 14" fill="none"><path d="M1 7h12m0 0L8 2m5 5l-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-          </a>
+          <div style={{ maxWidth: 480, margin: '0 auto' }}>
+            <MagicLinkForm accent={accent} />
+          </div>
 
           <div className="mono" style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 24, letterSpacing: 1, textTransform: 'uppercase' }}>
             magic-link sign in · no password · MIT-licensed

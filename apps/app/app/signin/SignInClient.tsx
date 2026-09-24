@@ -7,9 +7,16 @@ type Status = 'idle' | 'sending' | 'sent' | 'error';
 
 const accent = '#FFC452';
 
-export default function SignInClient({ next = '/chat' }: { next?: string }) {
+export default function SignInClient({
+  next = '/chat',
+  initialEmail = '',
+}: {
+  next?: string;
+  /** Prefill from ?email= — the landing's fallback link carries it (issue #169). */
+  initialEmail?: string;
+}) {
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail);
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
 

@@ -114,6 +114,11 @@ a {
 }
 
 .wm-scroll-cue { display: none; }
+
+/* Hero/footer magic-link form: input + button side by side, stacked when narrow. */
+@media (max-width: 560px) {
+  .wm-magic-row { flex-direction: column; }
+}
 @keyframes mic-pulse {
   0%   { box-shadow: 0 6px 20px rgba(255, 196, 82, 0.45), 0 0 0 0 rgba(255, 196, 82, 0.5); }
   70%  { box-shadow: 0 8px 28px rgba(255, 196, 82, 0.6), 0 0 0 16px rgba(255, 196, 82, 0); }
@@ -317,8 +322,9 @@ a {
   }
   .wm-phoneBox {
     /* width-driven so the frame keeps its exact aspect (no cut corners) */
-    width: min(94vw, calc((100vh - 182px) * 0.49)) !important;
-    width: min(94vw, calc((100dvh - 182px) * 0.49)) !important;
+    /* -340px (was -182px): the fold now also holds the hero sign-in form */
+    width: min(94vw, calc((100vh - 340px) * 0.49)) !important;
+    width: min(94vw, calc((100dvh - 340px) * 0.49)) !important;
     height: auto !important;
     max-width: none;
   }
@@ -429,7 +435,8 @@ a {
     position: relative;
   }
   .wm-macBook {
-    width: min(88vw, calc((100dvh - 260px) * 1.6));
+    /* -360px (was -260px): the fold now also holds the hero sign-in form */
+    width: min(88vw, calc((100dvh - 360px) * 1.6));
   }
   .wm-scroll-cue {
     display: flex !important;
