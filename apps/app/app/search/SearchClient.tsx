@@ -5,7 +5,13 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { useSearchParams } from 'next/navigation';
 import { trpc } from '@/lib/trpc/client';
-import { accent, second, third, violet, blue } from '@/app/chat/_components/tokens';
+import { colors, shadows } from '@wingmic/design-tokens';
+
+const accent = colors.accent;
+const second = colors.second;
+const third = colors.third;
+const violet = colors.info.violet;
+const blue = colors.info.blue;
 
 // ── Result shape (mirrors recall.query's returned entities) ─────────────
 type Company = { id: string; name: string; role: string | null };
@@ -102,14 +108,14 @@ export default function SearchClient() {
               marginBottom: 10,
             }}
           >
-            search
+            ◆ search
           </div>
           <h1
             style={{
               fontSize: 'clamp(28px, 6vw, 44px)',
-              fontWeight: 800,
-              letterSpacing: '-0.025em',
-              lineHeight: 1.05,
+              fontWeight: 700,
+              letterSpacing: '-0.028em',
+              lineHeight: 1.1,
             }}
           >
             ask anything.{' '}
@@ -128,13 +134,13 @@ export default function SearchClient() {
             autoFocus
             style={{
               flex: 1,
-              minHeight: 48,
-              padding: '12px 14px',
-              borderRadius: 12,
+              minHeight: 52,
+              padding: '14px 16px',
+              borderRadius: 14,
               background: 'var(--surface-2)',
               border: '1px solid var(--border-mid)',
               color: 'var(--ink)',
-              fontSize: 15.5,
+              fontSize: 16,
               fontFamily: 'inherit',
               outline: 'none',
             }}
@@ -162,10 +168,11 @@ export default function SearchClient() {
                   fontWeight: 600,
                   cursor: 'pointer',
                   fontFamily: 'inherit',
-                  border: active ? '1.5px solid #000' : '1px solid var(--border-mid)',
+                  border: active ? '1px solid transparent' : '1px solid var(--border-mid)',
                   background: active ? accent : 'var(--surface-2)',
                   color: active ? '#000' : 'var(--text-55)',
-                  boxShadow: active ? '3px 3px 0 #000' : 'none',
+                  boxShadow: active ? shadows.button : 'none',
+                  transition: 'box-shadow 150ms var(--ease-relaxed, ease-out), background 150ms var(--ease-relaxed, ease-out)',
                 }}
               >
                 {g.label}
@@ -181,7 +188,7 @@ export default function SearchClient() {
             aria-live="polite"
             style={{
               padding: '12px 14px',
-              borderRadius: 10,
+              borderRadius: 12,
               background: 'var(--surface-1)',
               border: '1px solid var(--border-soft)',
               color: 'var(--text-55)',
@@ -197,13 +204,13 @@ export default function SearchClient() {
         {search.error && (
           <div
             style={{
-              padding: '12px 14px',
-              borderRadius: 10,
-              background: 'rgba(255, 107, 107, 0.08)',
+              padding: '14px 16px',
+              borderRadius: 14,
+              background: 'rgba(255, 107, 107, 0.06)',
               border: '1px solid rgba(255, 107, 107, 0.25)',
-              color: '#FF8888',
+              color: colors.alarm,
               fontSize: 13,
-              lineHeight: 1.5,
+              lineHeight: 1.6,
             }}
           >
             {search.error.message}
@@ -214,12 +221,12 @@ export default function SearchClient() {
           <div
             style={{
               padding: 24,
-              borderRadius: 12,
+              borderRadius: 18,
               background: 'var(--surface-1)',
               border: '1px solid var(--border-soft)',
               color: 'var(--text-55)',
               fontSize: 15,
-              lineHeight: 1.55,
+              lineHeight: 1.6,
             }}
           >
             search your graph — who you met, what was said.
@@ -248,12 +255,12 @@ export default function SearchClient() {
               <div
                 style={{
                   padding: 24,
-                  borderRadius: 12,
+                  borderRadius: 18,
                   background: 'var(--surface-1)',
                   border: '1px solid var(--border-soft)',
                   color: 'var(--text-55)',
                   fontSize: 15,
-                  lineHeight: 1.55,
+                  lineHeight: 1.6,
                 }}
               >
                 no matches yet. capture a few people first, then try again.
@@ -336,10 +343,11 @@ function ResultCard({ entity }: { entity: Entity }) {
   return (
     <article
       style={{
-        padding: 18,
-        borderRadius: 14,
+        padding: 20,
+        borderRadius: 18,
         background: 'var(--surface-1)',
         border: '1px solid var(--border-soft)',
+        boxShadow: shadows.card,
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
@@ -439,7 +447,7 @@ function ResultCard({ entity }: { entity: Entity }) {
               key={i}
               style={{
                 fontSize: 13.5,
-                lineHeight: 1.55,
+                lineHeight: 1.6,
                 color: 'var(--text-70)',
                 paddingLeft: 14,
                 position: 'relative',
