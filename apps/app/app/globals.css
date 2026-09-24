@@ -303,6 +303,29 @@ a:focus-visible {
   }
 }
 
+/* ── v3 motion: subtle entrance + ambient breathe ──────────────────────
+   Screen-level micro-motion, applied via inline styles. Kept in globals so
+   reduced-motion collapse above (and the token durations) always govern. */
+@keyframes wm-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes wm-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
