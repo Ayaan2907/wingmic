@@ -13,6 +13,7 @@ const markSentMutate = vi.fn();
 const snoozeMutate = vi.fn();
 const dismissMutate = vi.fn();
 const updateMutate = vi.fn();
+const retryDraftMutate = vi.fn();
 let snoozeOnError: ((err: unknown, vars: { id: string }) => void) | undefined;
 let dismissOnError: ((err: unknown, vars: { id: string }) => void) | undefined;
 
@@ -54,6 +55,13 @@ vi.mock('@/lib/trpc/client', () => ({
           isPending: false,
         }),
       },
+      retryDraft: {
+        useMutation: () => ({
+          mutate: retryDraftMutate,
+          isPending: false,
+          variables: undefined,
+        }),
+      },
     },
     useUtils: () => ({
       acts: { list: { invalidate: vi.fn() } },
@@ -86,6 +94,7 @@ describe('ActsClient', () => {
   beforeEach(() => {
     listState = { data: { acts: [sampleAct] }, isLoading: false };
     markSentMutate.mockClear();
+    retryDraftMutate.mockClear();
   });
 
   it('shows the permission-first banner (no v0.3 preview copy)', () => {
@@ -128,6 +137,17 @@ describe('ActsClient', () => {
     render(<ActsClient />);
     fireEvent.click(screen.getByTestId('act-dismiss'));
     expect(dismissMutate).toHaveBeenCalledWith({ id: 'act_1' });
+  });
+
+  it('wires the retry button on failed drafts to the retryDraft mutation', () => {
+    listState = {
+      data: { acts: [{ ...sampleAct, id: 'act_failed_ui', status: 'failed' }] },
+      isLoading: false,
+    };
+    render(<ActsClient />);
+    expect(screen.getByTestId('act-status-failed')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('act-retry'));
+    expect(retryDraftMutate).toHaveBeenCalledWith({ id: 'act_failed_ui' });
   });
 
   it('surfaces snooze/dismiss errors on the card like markSent', async () => {

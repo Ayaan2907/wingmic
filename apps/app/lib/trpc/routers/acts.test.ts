@@ -3,13 +3,14 @@ import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import * as schema from '@wingmic/db/schema';
 
+const { polishDraftMock } = vi.hoisted(() => ({ polishDraftMock: vi.fn() }));
+
 vi.mock('@/lib/acts/draftAgent', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../../acts/draftAgent')>();
-  return {
-    ...mod,
-    polishDraft: async (input: Parameters<typeof mod.polishDraft>[0]) =>
-      mod.templateDraft(input),
-  };
+  polishDraftMock.mockImplementation(
+    async (input: Parameters<typeof mod.polishDraft>[0]) => mod.templateDraft(input),
+  );
+  return { ...mod, polishDraft: polishDraftMock };
 });
 
 import { actsRouter } from './acts';
@@ -99,6 +100,8 @@ describe('acts router', () => {
       target?: string | null;
       source?: string | null;
       kind?: string;
+      createdAtMs?: number;
+      updatedAtMs?: number;
     } = {},
   ) {
     await client.execute({
@@ -113,8 +116,10 @@ describe('acts router', () => {
         opts.status ?? 'drafted',
         opts.target === undefined ? 'e_ada' : opts.target,
         opts.source ?? null,
-        now,
-        now,
+        // drizzle mode:'timestamp' columns store seconds (the list self-heal
+        // test compares updatedAt through drizzle date math).
+        Math.floor((opts.createdAtMs ?? now) / 1000),
+        Math.floor((opts.updatedAtMs ?? opts.createdAtMs ?? now) / 1000),
       ],
     });
   }
@@ -323,5 +328,103 @@ describe('acts router', () => {
       body: 'nope',
     });
     expect(res.ok).toBe(false);
+  });
+
+  it('default list includes in-flight drafting and failed rows (spec D2)', async () => {
+    await insertAct('act_list_drafting', { status: 'drafting', source: 'ix_bg1' });
+    await insertAct('act_list_failed', { status: 'failed', source: 'ix_bg2' });
+
+    const result = await caller().list({ limit: 50 });
+    expect(result.acts.map((a) => a.id)).toContain('act_list_drafting');
+    expect(result.acts.map((a) => a.id)).toContain('act_list_failed');
+
+    const drafting = await caller().list({ status: 'drafting', limit: 50 });
+    expect(drafting.acts.map((a) => a.id)).toContain('act_list_drafting');
+    const failed = await caller().list({ status: 'failed', limit: 50 });
+    expect(failed.acts.map((a) => a.id)).toContain('act_list_failed');
+  });
+
+  it('retryDraft re-polishes a failed act from its stored action', async () => {
+    await client.execute({
+      sql: `INSERT INTO interaction VALUES (
+        'int_retry', ?, 'met Ada Lovelace at Analytical Engines, she asked for the rust deck',
+        ?, null, ?, null, null, null, null, null, 'committed', null
+      )`,
+      args: [userId, now, now],
+    });
+    await insertAct('act_retry_1', { status: 'failed', source: 'int_retry' });
+    polishDraftMock.mockClear();
+
+    const res = await caller().retryDraft({ id: 'act_retry_1' });
+    expect(res).toEqual({ ok: true, id: 'act_retry_1' });
+    expect(polishDraftMock).toHaveBeenCalledTimes(1);
+
+    const listed = await caller().list({ limit: 50 });
+    const row = listed.acts.find((a) => a.id === 'act_retry_1');
+    expect(row?.status).toBe('drafted');
+    expect(row?.body.toLowerCase()).toContain('analytical engines');
+  });
+
+  it('retryDraft returns the row to failed when the re-polish throws again', async () => {
+    await insertAct('act_retry_2', { status: 'failed' });
+    polishDraftMock.mockRejectedValueOnce(new Error('llm still down'));
+
+    const res = await caller().retryDraft({ id: 'act_retry_2' });
+    expect(res.ok).toBe(false);
+
+    const row = await client.execute(`SELECT status, body FROM act WHERE id = 'act_retry_2'`);
+    expect(row.rows[0]?.status).toBe('failed');
+    expect(row.rows[0]?.body).toBe('send the deck'); // seed preserved
+  });
+
+  it('retryDraft refuses acts that are not failed', async () => {
+    await insertAct('act_retry_3', { status: 'drafted' });
+    polishDraftMock.mockClear();
+
+    const res = await caller().retryDraft({ id: 'act_retry_3' });
+    expect(res.ok).toBe(false);
+    expect(polishDraftMock).not.toHaveBeenCalled();
+  });
+
+  it('retryDraft ignores other users acts', async () => {
+    await insertAct('act_retry_other', { userId: otherUserId, status: 'failed' });
+    const res = await caller().retryDraft({ id: 'act_retry_other' });
+    expect(res.ok).toBe(false);
+  });
+
+  it('list self-heals stale drafting rows into retryable failed (restart recovery)', async () => {
+    await insertAct('act_list_stale', { status: 'drafting', createdAtMs: now - 11 * 60_000 });
+    await insertAct('act_list_inflight', { status: 'drafting' }); // fresh — still in flight
+
+    const result = await caller().list({ limit: 50 });
+    const stale = result.acts.find((a) => a.id === 'act_list_stale');
+    const fresh = result.acts.find((a) => a.id === 'act_list_inflight');
+    expect(stale?.status).toBe('failed');
+    expect(fresh?.status).toBe('drafting');
+  });
+
+  it('serializes concurrent retries — one polish runs, the loser refuses', async () => {
+    await insertAct('act_retry_race', { status: 'failed' });
+    polishDraftMock.mockClear();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    polishDraftMock.mockImplementationOnce(() =>
+      gate.then(() => ({ body: 'polished once', subject: null })),
+    );
+
+    const p1 = caller().retryDraft({ id: 'act_retry_race' });
+    const p2 = caller().retryDraft({ id: 'act_retry_race' });
+    setTimeout(release, 20);
+    const results = await Promise.all([p1, p2]);
+
+    // Exactly one retry claims the row and polishes; the loser's claim
+    // refuses — no duplicate LLM call, and the winner's row is not flipped
+    // back to failed.
+    expect(results.filter((r) => r.ok).length).toBe(1);
+    expect(results.filter((r) => !r.ok).length).toBe(1);
+    expect(polishDraftMock).toHaveBeenCalledTimes(1);
+    const row = await client.execute(`SELECT status, body FROM act WHERE id = 'act_retry_race'`);
+    expect(row.rows[0]?.status).toBe('drafted');
+    expect(row.rows[0]?.body).toBe('polished once');
   });
 });

@@ -409,6 +409,10 @@ export const entityMerges = sqliteTable(
 // ─── Acts (agent drafts — email / meeting / reminder / intro / todo) ───
 // Persisted follow-ups from capture extraction. UI: home ActCards + /acts.
 // Permission-first: status stays drafted until the user sends/dismisses.
+// Lifecycle (spec D2): capture.commit inserts rows as 'drafting' placeholders
+// and polish runs in the background (scheduleActDrafting) — 'drafted' when the
+// draft lands, 'failed' when it errors (retryable from /acts). 'drafting' and
+// 'failed' are code-level states: the column is plain TEXT, no migration.
 
 export const acts = sqliteTable(
   'act',
@@ -421,7 +425,7 @@ export const acts = sqliteTable(
       enum: ['reminder', 'email', 'meeting', 'todo', 'intro'],
     }).notNull(),
     status: text('status', {
-      enum: ['drafted', 'snoozed', 'sent', 'dismissed'],
+      enum: ['drafting', 'drafted', 'snoozed', 'sent', 'dismissed', 'failed'],
     })
       .notNull()
       .default('drafted'),

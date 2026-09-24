@@ -25,6 +25,9 @@ vi.mock('@/lib/trpc/client', () => ({
       markSent: {
         useMutation: () => ({ mutate: vi.fn(), isPending: false }),
       },
+      retryDraft: {
+        useMutation: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
+      },
     },
     settings: {
       get: {

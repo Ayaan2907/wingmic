@@ -93,4 +93,44 @@ describe('ActCard', () => {
     expect(onSent).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
+
+  it('renders the drafting placeholder without a draft body or actions', () => {
+    render(
+      <ActCard act={{ ...ACT, id: 'act_drafting', status: 'drafting', body: 'send the deck' }} />,
+    );
+    expect(screen.getByTestId('act-drafting').textContent).toMatch(/drafting/i);
+    expect(screen.queryByTestId('act-body')).toBeNull();
+    expect(screen.queryByTestId('act-draft')).toBeNull();
+    expect(screen.getByTestId('act-card').getAttribute('aria-busy')).toBe('true');
+    const send = screen.getByRole('button', { name: /mark done/i });
+    expect((send as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByTestId('act-edit-toggle')).toBeNull();
+  });
+
+  it('renders the failed state with a working retry and the seed body visible', () => {
+    const onRetry = vi.fn();
+    render(
+      <ActCard
+        act={{ ...ACT, id: 'act_failed', status: 'failed', body: 'send the deck' }}
+        onRetry={onRetry}
+      />,
+    );
+    expect(screen.getByTestId('act-failed')).toBeTruthy();
+    expect(screen.getByTestId('act-status-failed')).toBeTruthy();
+    expect(screen.getByTestId('act-body').textContent).toMatch(/send the deck/);
+    fireEvent.click(screen.getByTestId('act-retry'));
+    expect(onRetry).toHaveBeenCalledWith('act_failed');
+    const send = screen.getByRole('button', { name: /mark done/i });
+    expect((send as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByTestId('act-edit-toggle')).toBeNull();
+  });
+
+  it('disables the retry button while a retry is in flight', () => {
+    render(
+      <ActCard act={{ ...ACT, id: 'act_failed', status: 'failed' }} onRetry={vi.fn()} retrying />,
+    );
+    const btn = screen.getByTestId('act-retry') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(btn.textContent).toMatch(/retrying/i);
+  });
 });

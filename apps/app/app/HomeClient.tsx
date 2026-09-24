@@ -440,6 +440,24 @@ function HomeActsPanel({ fallbackCount }: { fallbackCount: number }) {
     },
   });
 
+  const retryDraft = trpc.acts.retryDraft.useMutation({
+    onSuccess: (_data, vars) => {
+      setMarkErrors((prev) => {
+        if (!prev[vars.id]) return prev;
+        const next = { ...prev };
+        delete next[vars.id];
+        return next;
+      });
+      void utils.acts.list.invalidate();
+    },
+    onError: (_err, vars) => {
+      setMarkErrors((prev) => ({
+        ...prev,
+        [vars.id]: 'could not retry — try again',
+      }));
+    },
+  });
+
   const acts = data?.acts ?? [];
   const previewActs = acts.slice(0, 3);
   const atCap = acts.length >= 50;
@@ -577,6 +595,8 @@ function HomeActsPanel({ fallbackCount }: { fallbackCount: number }) {
                 act={a}
                 sendError={markErrors[a.id ?? ''] ?? null}
                 onSent={handleMarkSent}
+                onRetry={(id) => retryDraft.mutate({ id })}
+                retrying={retryDraft.isPending && retryDraft.variables?.id === a.id}
               />
             ))}
           </div>

@@ -78,6 +78,23 @@ export function ActsClient() {
     },
   });
   const update = trpc.acts.update.useMutation({ onSuccess: invalidate });
+  const retryDraft = trpc.acts.retryDraft.useMutation({
+    onSuccess: (_data, vars) => {
+      setMarkErrors((prev) => {
+        if (!prev[vars.id]) return prev;
+        const next = { ...prev };
+        delete next[vars.id];
+        return next;
+      });
+      invalidate();
+    },
+    onError: (_err, vars) => {
+      setMarkErrors((prev) => ({
+        ...prev,
+        [vars.id]: 'could not retry — try again',
+      }));
+    },
+  });
 
   const acts = data?.acts ?? [];
   const countLabel = React.useMemo(
@@ -277,6 +294,8 @@ export function ActsClient() {
                 onSent={(id) => markSent.mutate({ id })}
                 onSnooze={(id) => snooze.mutate({ id, hours: 24 })}
                 onDismiss={(id) => dismiss.mutate({ id })}
+                onRetry={(id) => retryDraft.mutate({ id })}
+                retrying={retryDraft.isPending && retryDraft.variables?.id === a.id}
                 onSaveEdit={async (id, patch) => {
                   try {
                     const res = await update.mutateAsync({ id, ...patch });
