@@ -242,6 +242,14 @@ describe('PersonDetailClient', () => {
     expect(screen.getByTestId('entity-enriching').textContent).toMatch(/enriching…/);
   });
 
+  it('shows the empty-search result on the honest card and keeps retry', () => {
+    enrichHook.data = { ok: true, wroteFactKeys: [] };
+    render(<PersonDetailClient detail={detail} />);
+    const state = screen.getByTestId('entity-not-enriched');
+    expect(state.textContent).toMatch(/nothing solid found/i);
+    expect(screen.getByTestId('entity-enrich-retry').textContent).toMatch(/retry/i);
+  });
+
   it('shows the failure reason and relabels the button to retry after a failed fetch', () => {
     enrichHook.data = { ok: false, reason: 'failed', message: 'tavily down' };
     render(<PersonDetailClient detail={{ ...detail, webSearchConfigured: true }} />);

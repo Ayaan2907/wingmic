@@ -15,6 +15,8 @@ import { PersonAvatar } from '@/app/_components/entity/EntityAvatar';
 import { PersonListRail } from './_components/PersonListRail';
 import { trpc } from '@/lib/trpc/client';
 import { parseImportSource } from '@/lib/imports';
+import type { inferRouterOutputs } from '@trpc/server';
+import type { AppRouter } from '@/lib/trpc/routers/_app';
 import type { EntityEnrichReason } from '@/app/_components/entity/EntityDetailScaffold';
 
 export interface PersonDetail {
@@ -38,9 +40,7 @@ export interface PersonDetail {
   possibleMatches?: EntityPossibleMatch[];
 }
 
-type EnrichResult =
-  | { ok: true; wroteFactKeys: string[] }
-  | { ok: false; reason: 'no_provider' | 'failed'; message?: string };
+type EnrichResult = inferRouterOutputs<AppRouter>['entity']['enrich'];
 
 /** Map a finished enrich mutation to the card's "why nothing landed" reason.
  * ok with facts written → null (refresh will render them); ok with nothing

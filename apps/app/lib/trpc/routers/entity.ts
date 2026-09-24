@@ -8,10 +8,24 @@ import { linkedinProfileHref } from '@/lib/acts/linkedinHref';
 import { namesOverlap } from '@/lib/entity/namesOverlap';
 import { mergePersonEntities, undoPersonMerge } from '@/lib/entity/mergePerson';
 import { webSearchProviderFromEnv } from '@/lib/web-search';
+import { WebSearchConfigError } from '@/lib/web-search/types';
 import {
   enrichPersonFacts,
   getPersonEnrichInput,
 } from '@/lib/enrich/enrichPersons';
+
+/** env → provider, but a configured-but-unwired vendor ('exa' until its
+ * adapter lands) counts as "not configured": the factory throws
+ * WebSearchConfigError for those, and a throw at detail-query time would 500
+ * every person page. Anything else still propagates. */
+function webSearchProviderOrNone() {
+  try {
+    return webSearchProviderFromEnv();
+  } catch (e) {
+    if (e instanceof WebSearchConfigError) return null;
+    throw e;
+  }
+}
 
 // entity.detail — single procedure powering /person/[id], /company/[id],
 // /event/[id], /topic/[id]. Source of truth: docs/superpowers/plans/2026-05-23-...md §18
@@ -169,7 +183,7 @@ export const entityRouter = router({
   enrich: protectedProcedure
     .input(z.object({ entityId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const provider = webSearchProviderFromEnv();
+      const provider = webSearchProviderOrNone();
       if (!provider) {
         return { ok: false as const, reason: 'no_provider' as const };
       }
@@ -352,7 +366,7 @@ async function loadPerson(
     publicProfile,
     // D3: lets the card distinguish "not enriched, web search off" from
     // "not enriched, fetch failed" without an extra round-trip.
-    webSearchConfigured: webSearchProviderFromEnv() != null,
+    webSearchConfigured: webSearchProviderOrNone() != null,
     possibleMatches,
   };
 }
