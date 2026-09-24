@@ -1,12 +1,12 @@
 # Wingmic — Design System
 
-> **v2 — synthesized from Claude Design bundle 2026-05-24 (handle: IeDyiNzPI2mu5WRJRWuuKQ)**
+> **v3 — relaxed premium (2026-09-24).** Supersedes the v2 hard-offset rules: soft diffused layered elevation, generous air, calmer contrast, rounder radii, subtle purposeful motion (reduced-motion aware), amber as candlelight rather than warning. Encoded in `packages/design-tokens` — that package is the styling source of truth; this doc describes it.
 >
-> **Source of truth (v2):** `design/v2/screens.md` (mobile-first screens + desktop layouts mapped to lib-* components) + the upstream Claude Design library `Wingmic Component Library.html` from which v2 was extracted.
+> **Source of truth:** `packages/design-tokens` (runtime tokens) + `design/v2/screens.md` for layout structure. The upstream Claude Design library `Wingmic Component Library.html` remains historical reference from which v2 was extracted.
 > Earlier homepage/video/prototype HTMLs from v1 are superseded.
-> Use this file as the **default design system for every artifact in this project** — homepage, prototype, product app, decks. When in doubt, match the component library.
+> Use this file as the **default design system for every artifact in this project** — homepage, prototype, product app, decks. When in doubt, match the tokens package.
 
-The aesthetic is **editorial brutalist + terminal**: warm hand-set type colliding with monospace UI chrome, sticker tape and scribble underlines pinned to a clean dark canvas, a living graph background that hums rather than shouts. It should feel like something a developer made *and* a designer art-directed — not slick SaaS, not generic AI.
+The aesthetic is **relaxed premium**: a warm dark canvas that breathes — generous air, soft diffused elevation, calm contrast carried by surface tinting rather than stark borders, and one amber signature used sparingly, like candlelight. Editorial type stays (Inter, JetBrains Mono chrome, Instrument Serif italic twist); weights and tracking relax away from terminal-brutalist. Motion is subtle and purposeful — gentle fades, soft rises, a breathing orb — never bouncy, always collapsed under `prefers-reduced-motion`. It should feel composed and expensive, not loud: something a developer made *and* a designer art-directed — not slick SaaS, not generic AI.
 
 ---
 
@@ -83,14 +83,16 @@ Editorial brutalist + terminal. Warm dark `#0a0a0a` page (never pure black) with
 ### Surfaces (translucent, on `--bg-page`)
 
 ```css
---surface-1:     rgba(255,255,255,0.025);   /* card base */
---surface-2:     rgba(255,255,255,0.04);    /* card hover / nested */
---surface-3:     rgba(255,255,255,0.06);    /* input / pill */
---border-soft:   rgba(255,255,255,0.06);
---border-mid:    rgba(255,255,255,0.10);
---border-hard:   rgba(255,255,255,0.15);
+--surface-1:     rgba(255,255,255,0.04);    /* card base — v3 calmer tint carries separation */
+--surface-2:     rgba(255,255,255,0.06);    /* card hover / nested */
+--surface-3:     rgba(255,255,255,0.09);    /* input / pill */
+--accent-soft:   rgba(255,196,82,0.12);     /* amber candlelight tint fill */
+--accent-faint:  rgba(255,196,82,0.06);     /* amber whisper fill */
+--border-soft:   rgba(255,255,255,0.05);
+--border-mid:    rgba(255,255,255,0.08);
+--border-hard:   rgba(255,255,255,0.12);
 --border-acc:    rgba(255,196,82,0.4);      /* status / live badge */
---border-blk:    #000;                       /* 1.5px on primary buttons */
+--border-blk:    #000;                       /* reserved — no longer on primary buttons (v3) */
 ```
 
 ### Text on dark
@@ -810,6 +812,14 @@ See table in §6 → "Entity detail pages".
 
 - **Type holds.** Hero stays `clamp(48, 8vw, 110)` for landing; product H1 stays `Inter 900 44–60px`. Don't shrink it on desktop — the negative space carries it.
 - **Cards widen, then split.** Single-column lists become 2-column grids only on desktop (≥1120). Never 3-column body grids (§8 rule).
+- **Detail → two-pane.** On desktop, `person`/`company`/`event` pages become `[list column 280px] [detail column flex]`. List is the entity directory; detail uses the §13 scaffold.
+- **Chat gains an entity rail.** On desktop only, chat is `[thread flex] [entities rail 320px]` — rail surfaces the active entity, extracted chips, and sources. Mobile collapses these into inline pills + agent message footer.
+- **Graph gains a detail pane.** On desktop, graph is `[canvas flex] [detail 340px]`. On mobile, tapping a node raises a `border-radius 14` card floating above the bottom nav.
+
+### 14.4 Things that don't change between breakpoints
+
+The atoms. Buttons keep the 4px offset shadow. Pills keep the alpha recipe. Voice bars stay 22 × 3px @ 38px max. The mic orb's seven states are pixel-identical mobile ↔ desktop. **Don't redesign atoms per breakpoint** — if a button needs to be smaller, use the `sm` size, don't make a new one.
+ngle-column lists become 2-column grids only on desktop (≥1120). Never 3-column body grids (§8 rule).
 - **Detail → two-pane.** On desktop, `person`/`company`/`event` pages become `[list column 280px] [detail column flex]`. List is the entity directory; detail uses the §13 scaffold.
 - **Chat gains an entity rail.** On desktop only, chat is `[thread flex] [entities rail 320px]` — rail surfaces the active entity, extracted chips, and sources. Mobile collapses these into inline pills + agent message footer.
 - **Graph gains a detail pane.** On desktop, graph is `[canvas flex] [detail 340px]`. On mobile, tapping a node raises a `border-radius 14` card floating above the bottom nav.
