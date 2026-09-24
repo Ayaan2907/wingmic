@@ -43,8 +43,10 @@ export default defineConfig({
     },
   ],
   webServer: {
-    // tee'd so specs can read the magic-link URL off the server console
-    command: `sh -c "bun run dev -- --port ${PORT} 2>&1 | tee ${DEV_LOG}"`,
+    // exec + redirection (not a pipeline): the torn-down process IS the dev
+    // server, so nothing survives holding :3211 with a stale DEV_LOG — specs
+    // read the magic-link URL off the log when RESEND_API_KEY is unset
+    command: `sh -c "exec bun run dev -- --port ${PORT} > ${DEV_LOG} 2>&1"`,
     url: BASE_URL,
     reuseExistingServer: !isCI,
     timeout: 60_000,

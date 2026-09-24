@@ -6,6 +6,7 @@ const pushSpy = vi.fn();
 const mutateAsyncSpy = vi.fn().mockResolvedValue({ ok: true });
 const trackStopSpy = vi.fn();
 const gumSpy = vi.fn();
+const permQuerySpy = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushSpy }),
@@ -191,6 +192,12 @@ describe('mic priming (spec D4, AC6)', () => {
       value: { getUserMedia: gumSpy },
       configurable: true,
     });
+    Object.defineProperty(navigator, 'permissions', {
+      value: { query: permQuerySpy },
+      configurable: true,
+    });
+    permQuerySpy.mockReset();
+    permQuerySpy.mockResolvedValue({ state: 'granted' });
   });
   afterEach(() => cleanup());
 
@@ -231,6 +238,39 @@ describe('mic priming (spec D4, AC6)', () => {
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
 
     await waitFor(() => expect(screen.getByText(/mic ready/i)).toBeTruthy());
+  });
+
+  it('renders the unavailable cause without the blocked prefix — nothing blocked a missing device', async () => {
+    gumSpy.mockRejectedValue(Object.assign(new Error('no device'), { name: 'NotFoundError' }));
+    render(<OnboardingClient />);
+    walkToMic();
+    fireEvent.click(screen.getByRole('button', { name: /enable the mic/i }));
+
+    await waitFor(() => expect(screen.getByText(/mic unavailable/i)).toBeTruthy());
+    expect(screen.queryByText(/mic blocked/i)).toBeNull();
+    expect(screen.getByRole('button', { name: /try again/i })).toBeTruthy();
+    expect(screen.queryByText(/mic ready/i)).toBeNull();
+  });
+
+  it('promises no permission sheet only when the browser reports a persisted grant', async () => {
+    gumSpy.mockResolvedValue({ getTracks: () => [{ stop: trackStopSpy }] });
+    permQuerySpy.mockResolvedValue({ state: 'granted' });
+    render(<OnboardingClient />);
+    walkToMic();
+    fireEvent.click(screen.getByRole('button', { name: /enable the mic/i }));
+
+    await waitFor(() => expect(screen.getByText(/won't stop to ask/i)).toBeTruthy());
+  });
+
+  it('keeps granted copy honest when the browser cannot report persistence (safari)', async () => {
+    gumSpy.mockResolvedValue({ getTracks: () => [{ stop: trackStopSpy }] });
+    permQuerySpy.mockRejectedValue(new Error('permissions unsupported'));
+    render(<OnboardingClient />);
+    walkToMic();
+    fireEvent.click(screen.getByRole('button', { name: /enable the mic/i }));
+
+    await waitFor(() => expect(screen.getByText(/may ask again next time/i)).toBeTruthy());
+    expect(screen.queryByText(/won't stop to ask/i)).toBeNull();
   });
 
   it('denial does not trap — next still advances to the privacy step', async () => {

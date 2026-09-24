@@ -26,6 +26,7 @@ import { parseCalendarIcsUrl } from '@/lib/enrich/parseIcs';
 import { accent, second, third, blue, violet, coral } from '@/app/chat/_components/tokens';
 import {
   describeMicDenial,
+  micGrantPersistent,
   requestMicAccess,
   type MicPrimeState,
 } from './micPrime';
@@ -112,7 +113,9 @@ export default function OnboardingClient() {
     setMic({ status: 'asking' });
     try {
       await requestMicAccess((constraints) => media.getUserMedia(constraints));
-      setMic({ status: 'granted' });
+      // Safari doesn't reliably persist the grant; "unknown" (null) must not
+      // promise the sheet won't reappear — AC6 honesty cuts both ways.
+      setMic({ status: 'granted', persistent: (await micGrantPersistent()) === true });
     } catch (err) {
       setMic({ status: 'denied', ...describeMicDenial(err) });
     }
@@ -279,7 +282,10 @@ export default function OnboardingClient() {
                   margin: 0,
                 }}
               >
-                ✓ mic ready — your first take won&apos;t stop to ask.
+                ✓ mic ready —{' '}
+                {mic.persistent
+                  ? "your first take won't stop to ask."
+                  : 'your browser may ask again next time.'}
               </p>
             ) : mic.status === 'denied' ? (
               <>
@@ -293,7 +299,9 @@ export default function OnboardingClient() {
                     margin: 0,
                   }}
                 >
-                  ✗ mic blocked — {mic.message}
+                  {/* cause-specific prefix: nothing "blocked" a missing device */}
+                  {mic.code === 'NotAllowedError' ? '✗ mic blocked — ' : '✗ '}
+                  {mic.message}
                 </p>
                 <button
                   type="button"

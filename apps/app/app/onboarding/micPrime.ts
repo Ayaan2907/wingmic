@@ -21,7 +21,7 @@ export type MicPrimeCode = 'NotAllowedError' | 'mic_unavailable';
 export type MicPrimeState =
   | { status: 'idle' }
   | { status: 'asking' }
-  | { status: 'granted' }
+  | { status: 'granted'; /** browser reports the grant as persisted across loads */ persistent: boolean }
   | { status: 'denied'; code: MicPrimeCode; message: string };
 
 /** The slice of MediaStream the priming flow relies on. */
@@ -55,6 +55,25 @@ export function describeMicDenial(err: unknown): { code: MicPrimeCode; message: 
     code: 'mic_unavailable',
     message: 'mic unavailable. plug one in or type the memo.',
   };
+}
+
+/**
+ * Whether the browser itself reports the mic grant as persisted. Safari does
+ * not reliably keep getUserMedia grants across page loads, and where the
+ * permissions query is unsupported or rejects, the honest answer is "unknown"
+ * (null) — callers should treat unknown as not persistent and use copy that
+ * doesn't promise the sheet will never appear again.
+ */
+export async function micGrantPersistent(): Promise<boolean | null> {
+  const permissions =
+    typeof navigator === 'undefined' ? undefined : navigator.permissions;
+  if (!permissions?.query) return null;
+  try {
+    const status = await permissions.query({ name: 'microphone' as PermissionName });
+    return status.state === 'granted' ? true : false;
+  } catch {
+    return null;
+  }
 }
 
 /**

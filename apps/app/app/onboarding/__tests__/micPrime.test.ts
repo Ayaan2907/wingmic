@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { describeMicDenial, requestMicAccess } from '../micPrime';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describeMicDenial, micGrantPersistent, requestMicAccess } from '../micPrime';
 
 describe('describeMicDenial', () => {
   it("maps NotAllowedError to the capture surface's held-mic copy", () => {
@@ -28,6 +28,41 @@ describe('describeMicDenial', () => {
   it('maps non-Error throws to mic_unavailable instead of crashing', () => {
     expect(describeMicDenial('weird').code).toBe('mic_unavailable');
     expect(describeMicDenial(undefined).code).toBe('mic_unavailable');
+  });
+});
+
+describe('micGrantPersistent', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('is true when the browser reports the grant as granted', async () => {
+    vi.stubGlobal('navigator', {
+      permissions: { query: vi.fn().mockResolvedValue({ state: 'granted' }) },
+    });
+    await expect(micGrantPersistent()).resolves.toBe(true);
+  });
+
+  it('is false when the browser reports prompt or denied — grant not proven', async () => {
+    vi.stubGlobal('navigator', {
+      permissions: { query: vi.fn().mockResolvedValue({ state: 'prompt' }) },
+    });
+    await expect(micGrantPersistent()).resolves.toBe(false);
+
+    vi.stubGlobal('navigator', {
+      permissions: { query: vi.fn().mockResolvedValue({ state: 'denied' }) },
+    });
+    await expect(micGrantPersistent()).resolves.toBe(false);
+  });
+
+  it('is null where the query is unsupported (safari), so copy stays honest', async () => {
+    vi.stubGlobal('navigator', {
+      permissions: { query: vi.fn().mockRejectedValue(new Error('unsupported')) },
+    });
+    await expect(micGrantPersistent()).resolves.toBeNull();
+  });
+
+  it('is null when navigator.permissions is missing entirely', async () => {
+    vi.stubGlobal('navigator', {});
+    await expect(micGrantPersistent()).resolves.toBeNull();
   });
 });
 
