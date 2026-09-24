@@ -30,6 +30,10 @@ vi.mock('@wingmic/extractor', async (orig) => {
       entityIds: ['en_v1'],
       eventIds: [],
       persons: [],
+      companyIds: [],
+      topicIds: [],
+      newEntities: 0,
+      matchedEntities: 1,
     })),
   };
 });

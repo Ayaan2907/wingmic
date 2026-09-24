@@ -12,6 +12,8 @@ import {
   isBlockedExtractUrl,
   type WebSearchProvider,
 } from '@/lib/web-search';
+import { ANALYTICS_EVENTS } from '@/lib/analytics/events';
+import { trackAnalyticsEvent } from '@/lib/analytics/server';
 import { insertBlankFacts } from './blankFacts';
 import { hitsToPersonaDraft } from './hitsToDraft';
 
@@ -38,6 +40,7 @@ export type PersonEnrichInput = {
  */
 export async function enrichPersonFacts(opts: {
   db: DB;
+  userId: string;
   entityId: string;
   person: PersonEnrichInput;
   provider: WebSearchProvider;
@@ -54,35 +57,53 @@ export async function enrichPersonFacts(opts: {
   });
   if (!query.q.trim()) return { wroteFactKeys: [] };
 
-  const hits = await provider.search(query);
-  const draft = hitsToPersonaDraft(person, hits);
+  // enrichment_run covers every provider-backed person enrichment — the
+  // post-commit background path and the entities.enrich retry alike.
+  try {
+    const hits = await provider.search(query);
+    const draft = hitsToPersonaDraft(person, hits);
 
-  if (draft.sourceUrl && !isBlockedExtractUrl(draft.sourceUrl)) {
-    try {
-      await provider.extract({ urls: [draft.sourceUrl], query: person.name });
-    } catch {
-      // snippets are enough
+    if (draft.sourceUrl && !isBlockedExtractUrl(draft.sourceUrl)) {
+      try {
+        await provider.extract({ urls: [draft.sourceUrl], query: person.name });
+      } catch {
+        // snippets are enough
+      }
     }
+
+    const facts = [
+      draft.sourceUrl ? { key: 'source_url', value: draft.sourceUrl, confidence: WEB_CONFIDENCE } : null,
+      draft.sourceUrl ? { key: 'url', value: draft.sourceUrl, confidence: WEB_CONFIDENCE } : null,
+      draft.linkedin ? { key: 'linkedin', value: draft.linkedin, confidence: WEB_CONFIDENCE } : null,
+    ].filter((f): f is { key: string; value: string; confidence: number } => f != null);
+
+    const fp = fingerprint(draft);
+    if (fp && isStrongFingerprint(fp.kind)) {
+      facts.push({ key: 'fingerprint', value: fp.id, confidence: WEB_CONFIDENCE });
+    }
+
+    const wroteFactKeys = await insertBlankFacts(
+      db,
+      entityId,
+      facts,
+      opts.sourceInteractionId ?? null,
+    );
+    trackAnalyticsEvent(opts.userId, ANALYTICS_EVENTS.enrichmentRun, {
+      kind: 'person',
+      status: 'ok',
+      fields: wroteFactKeys.length,
+    });
+    return { wroteFactKeys };
+  } catch (err) {
+    // Rethrow unchanged — one vendor miss must not skip later people (batch
+    // path) and the retry card must still render its honest failure state.
+    trackAnalyticsEvent(opts.userId, ANALYTICS_EVENTS.enrichmentRun, {
+      kind: 'person',
+      status: 'error',
+      fields: 0,
+    });
+    throw err;
   }
-
-  const facts = [
-    draft.sourceUrl ? { key: 'source_url', value: draft.sourceUrl, confidence: WEB_CONFIDENCE } : null,
-    draft.sourceUrl ? { key: 'url', value: draft.sourceUrl, confidence: WEB_CONFIDENCE } : null,
-    draft.linkedin ? { key: 'linkedin', value: draft.linkedin, confidence: WEB_CONFIDENCE } : null,
-  ].filter((f): f is { key: string; value: string; confidence: number } => f != null);
-
-  const fp = fingerprint(draft);
-  if (fp && isStrongFingerprint(fp.kind)) {
-    facts.push({ key: 'fingerprint', value: fp.id, confidence: WEB_CONFIDENCE });
-  }
-
-  const wroteFactKeys = await insertBlankFacts(
-    db,
-    entityId,
-    facts,
-    opts.sourceInteractionId ?? null,
-  );
-  return { wroteFactKeys };
 }
 
 /**
@@ -173,6 +194,7 @@ export async function enrichPersonsAfterCommit(opts: {
     try {
       await enrichPersonFacts({
         db,
+        userId,
         entityId: resolved.entityId,
         person: cand,
         provider,

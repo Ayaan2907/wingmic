@@ -14,6 +14,13 @@ import { MAX_ATTACHMENT_BYTES } from '@/lib/chat/compressImage';
 import { consumeDailyUsage, DAILY_LIMITS } from '@/lib/usage/dailyCap';
 import { mergePhotoSignals } from '@/lib/capture/photoSignals';
 import { readPhotoSignals } from '@/lib/capture/readPhotoSignals';
+import {
+  ANALYTICS_EVENTS,
+  type CaptureCompletedProperties,
+  type CaptureStartedProperties,
+  type EntityCreatedProperties,
+} from '@/lib/analytics/events';
+import { trackAnalyticsEvent } from '@/lib/analytics/server';
 import * as schema from '@wingmic/db/schema';
 import type { DB } from '@wingmic/db';
 
@@ -135,6 +142,20 @@ export const captureRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Funnel step 1 — every attempt counts, including ones that fail
+      // validation or hit the daily cap; capture_completed closes the step.
+      const captureStartedAt = Date.now();
+      const captureStartedProperties: CaptureStartedProperties = {
+        hasAttachment: input.attachment !== undefined,
+        hasParent: input.parentInteractionId !== undefined,
+        hasTarget: input.targetEntityId !== undefined || input.targetEventId !== undefined,
+      };
+      trackAnalyticsEvent(
+        ctx.user.id,
+        ANALYTICS_EVENTS.captureStarted,
+        captureStartedProperties,
+      );
+
       try {
         const attachment = validateCaptureAttachment(input.attachment?.jpegBase64);
 
@@ -171,6 +192,15 @@ export const captureRouter = router({
               eventId: null,
               attachment,
             });
+            trackAnalyticsEvent(ctx.user.id, ANALYTICS_EVENTS.captureCompleted, {
+              duplicate: true,
+              hasAttachment: attachment !== undefined,
+              newEntities: 0,
+              matchedEntities: 0,
+              actions: 0,
+              actsPending: 0,
+              durationMs: Date.now() - captureStartedAt,
+            } satisfies CaptureCompletedProperties);
             return {
               extracted: {
                 persons: [],
@@ -453,6 +483,7 @@ export const captureRouter = router({
                 : Promise.resolve(),
               enrichEventsAfterCommit({
                 db: ctx.db,
+                userId: ctx.user.id,
                 eventIds: result.eventIds,
                 capturedAt,
                 provider,
@@ -464,6 +495,24 @@ export const captureRouter = router({
 
         // actsPending: drafting rows queued for background polish — the
         // bubble can turn committed now; drafts land in /acts as they finish.
+        trackAnalyticsEvent(ctx.user.id, ANALYTICS_EVENTS.captureCompleted, {
+          duplicate: false,
+          hasAttachment: attachment !== undefined,
+          newEntities: result.newEntities,
+          matchedEntities: result.matchedEntities,
+          actions: extracted.actions.length,
+          actsPending,
+          durationMs: Date.now() - captureStartedAt,
+        } satisfies CaptureCompletedProperties);
+        trackAnalyticsEvent(ctx.user.id, ANALYTICS_EVENTS.entityCreated, {
+          newEntities: result.newEntities,
+          matchedEntities: result.matchedEntities,
+          persons: result.persons.length,
+          companies: result.companyIds.length,
+          events: result.eventIds.length,
+          topics: result.topicIds.length,
+        } satisfies EntityCreatedProperties);
+
         return {
           extracted,
           ...result,

@@ -33,6 +33,7 @@
     "better-auth": "^1.6.9",
     "drizzle-orm": "^0.45.2",
     "next": "^15.0.3",
+    "posthog-node": "^5.53.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-force-graph-2d": "^1.29.1",

@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { and, eq, inArray, isNull, or, desc, sql } from 'drizzle-orm';
 import { router, protectedProcedure } from '../trpc';
 import { embedText } from '@wingmic/extractor/embeddings';
+import { ANALYTICS_EVENTS } from '@/lib/analytics/events';
+import { trackAnalyticsEvent } from '@/lib/analytics/server';
 import * as schema from '@wingmic/db/schema';
 import { ENTITY_EMBEDDING_INDEX } from '@wingmic/db/schema';
 
@@ -34,6 +36,15 @@ export const recallRouter = router({
     )
     .query(async ({ input, ctx }) => {
       const t0 = Date.now();
+      // Habitual-query funnel: every completed recall counts, including the
+      // degraded text mode and zero-result runs. `mode` is read at call time.
+      const trackSearchRun = (results: number): void => {
+        trackAnalyticsEvent(ctx.user.id, ANALYTICS_EVENTS.searchRun, {
+          mode,
+          results,
+          durationMs: Date.now() - t0,
+        });
+      };
       let mode: RecallMode = 'semantic';
       let ids: string[] = [];
       let scoreById = new Map<string, number>();
@@ -67,6 +78,7 @@ export const recallRouter = router({
         mode = 'text';
         const terms = tokenizeQuery(input.q);
         if (terms.length === 0) {
+          trackSearchRun(0);
           return { entities: [], durationMs: Date.now() - t0, mode };
         }
 
@@ -93,6 +105,7 @@ export const recallRouter = router({
       }
 
       if (ids.length === 0) {
+        trackSearchRun(0);
         return { entities: [], durationMs: Date.now() - t0, mode };
       }
 
@@ -200,6 +213,7 @@ export const recallRouter = router({
         })
         .filter((x): x is NonNullable<typeof x> => x !== null);
 
+      trackSearchRun(results.length);
       return { entities: results, durationMs: Date.now() - t0, mode };
     }),
 });
