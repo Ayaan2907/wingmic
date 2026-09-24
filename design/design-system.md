@@ -372,20 +372,20 @@ A canvas-rendered force graph (60 nodes, ≤160px connection radius, 0.65 alpha,
 **Variants**:
 | Variant | Background | FG | Border | Shadow |
 |---|---|---|---|---|
-| `primary`     | `--accent` `#FFC452`    | `#000` | `1.5px solid #000` | `4px 4px 0 #000` |
-| `destructive` | `--alarm`  `#FF6B6B`    | `#000` | `1.5px solid #000` | `4px 4px 0 #000` |
-| `secondary`   | `#ffffff`               | `#000` | `1px solid rgba(255,255,255,0.15)` | none |
-| `ghost`       | transparent             | `#fff` | `1.5px solid rgba(255,255,255,0.22)` | none |
+| `primary`     | `--accent` `#FFC452`    | `#000` | none | `--shadow-button` (soft layered) |
+| `destructive` | `--alarm`  `#FF6B6B`    | `#000` | none | `--shadow-button` (soft layered) |
+| `secondary`   | `--surface-3`           | `#fff` | `1px solid var(--border-mid)` | none |
+| `ghost`       | transparent             | `#fff` | `1px solid var(--border-mid)` | none |
 | `mono`        | `--bg-card` `#08080d`   | `--accent` | `1px solid rgba(255,196,82,0.4)` | none — font: mono |
 
 Disabled: opacity `0.45`, `pointer-events: none`.
-Hover (primary): `translate(-1px, -1px)` + shadow `4px → 5px` over `0.12s ease-out`.
+Hover (primary): shadow lifts `--shadow-button → --shadow-button-hover` over `--dur-fast var(--ease-relaxed)` — the element itself does not move.
 Loading: same silhouette, inline 14×14 spinner (`border: 2px solid rgba(0,0,0,0.25)`, top `#000`, `wm-spin 0.8s linear infinite`), caption changes to gerund (`Sending…`).
 
 **Icon button (chrome)**: round, **44px hit target**, four flavors:
-- Subtle: `rgba(255,255,255,0.05)` bg + `1px rgba(255,255,255,0.08)` border + white icon.
-- Primary brutal: amber bg + `1.5px #000` border + `3px 3px 0 #000` shadow + black icon.
-- Ghost: transparent + `1.5px rgba(255,255,255,0.22)` border.
+- Subtle: `var(--surface-3)` bg + `1px var(--border-soft)` border + white icon.
+- Primary: amber bg + no border + `--shadow-button` + black icon.
+- Ghost: transparent + `1px var(--border-mid)` border.
 - Destructive: `rgba(255,107,107,0.12)` bg + `1px rgba(255,107,107,0.4)` border + alarm-red icon.
 
 ### Inputs
@@ -442,7 +442,7 @@ States: `resting` · `filled` (check glyph trailing, second-color) · `focused` 
 
 ### Avatars
 
-Round (chat) or square (entity / acts tile, `borderRadius: Math.round(size * 0.28)`). Initial in `Inter 800 black`, sized `Math.round(size * 0.4)`. Color hashed deterministically from the initial across `[accent, second, third, blue, violet]`. Sizes used: `24 / 28 / 32 / 36 / 40 / 44 / 56 / 72`. Stacked variant for participants — overlap `-10px` with `2px solid var(--bg-page)` border, `+N` chip at end.
+Round (chat) or square (entity / acts tile, `borderRadius: Math.round(size * 0.28)`). Initial in `Inter 700` (v3 relaxed from 800), sized `Math.round(size * 0.4)`. Color hashed deterministically from the initial across `[accent, second, third, blue, violet]`. Soft contact shadow (`0 2px 8px rgba(6,6,10,0.3)`) replaces the v2 hard offset. Sizes used: `24 / 28 / 32 / 36 / 40 / 44 / 56 / 72`. Stacked variant for participants — overlap `-10px` with `2px solid var(--bg-page)` border, `+N` chip at end.
 
 ### Mic orb (the centerpiece)
 
