@@ -19,6 +19,7 @@ import {
   draftActsForInteraction,
   markInteractionActsFailed,
   scheduleActDrafting,
+  sweepStaleDrafting,
 } from '../scheduleActDrafting';
 
 const polishDraftMock = vi.mocked(polishDraft);
@@ -87,6 +88,7 @@ describe('scheduleActDrafting (deferred acts drafting, spec D2)', () => {
       source?: string | null;
       kind?: string;
       body?: string;
+      createdAtMs?: number;
     } = {},
   ) {
     await client.execute({
@@ -99,7 +101,9 @@ describe('scheduleActDrafting (deferred acts drafting, spec D2)', () => {
         opts.body ?? 'send the deck',
         opts.target === undefined ? 'e_ada' : opts.target,
         opts.source ?? 'int_1',
-        now,
+        // drizzle mode:'timestamp' columns store seconds; the sweep's
+        // createdAt comparison runs through drizzle date math.
+        Math.floor((opts.createdAtMs ?? now) / 1000),
         now,
       ],
     });
@@ -205,5 +209,31 @@ describe('scheduleActDrafting (deferred acts drafting, spec D2)', () => {
     expect((await actById('act_other_user'))?.status).toBe('drafting');
     expect((await actById('act_other_interaction'))?.status).toBe('drafting');
     expect((await actById('act_already_drafted'))?.status).toBe('drafted');
+  });
+
+  it('sweepStaleDrafting recovers orphaned drafting rows past the grace window', async () => {
+    await seedAct('act_stale', { createdAtMs: now - 11 * 60_000 });
+    await seedAct('act_fresh', { createdAtMs: now - 60_000 });
+    await seedAct('act_stale_drafted', { status: 'drafted', createdAtMs: now - 30 * 60_000 });
+    await seedAct('act_stale_failed', { status: 'failed', createdAtMs: now - 30 * 60_000 });
+
+    const recovered = await sweepStaleDrafting(db);
+
+    expect(recovered).toBe(1);
+    // Stale drafting → failed (retryable); fresh drafting is still in flight.
+    expect((await actById('act_stale'))?.status).toBe('failed');
+    expect((await actById('act_fresh'))?.status).toBe('drafting');
+    expect((await actById('act_stale_drafted'))?.status).toBe('drafted');
+    expect((await actById('act_stale_failed'))?.status).toBe('failed');
+  });
+
+  it('a recovered stale row keeps its seed body so retry can re-polish it', async () => {
+    await seedAct('act_stale_seed', { createdAtMs: now - 11 * 60_000 });
+
+    await sweepStaleDrafting(db);
+
+    const row = await actById('act_stale_seed');
+    expect(row?.status).toBe('failed');
+    expect(row?.body).toBe('send the deck');
   });
 });

@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, isNull, lte, or } from 'drizzle-orm';
 import * as schema from '@wingmic/db/schema';
 import { router, protectedProcedure } from '../trpc';
 import { toPendingAct } from '@/lib/acts/mapAction';
-import { redraftActRow } from '@/lib/acts/scheduleActDrafting';
+import { redraftActRow, sweepStaleDrafting } from '@/lib/acts/scheduleActDrafting';
 import { polishDraft, type DraftIntent } from '@/lib/acts/draftAgent';
 import {
   chooseActChannel,
@@ -65,6 +65,9 @@ export const actsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const now = new Date();
+      // Self-heal: rows stuck 'drafting' past the grace window (restart
+      // mid-polish) become failed + retryable the moment the inbox opens.
+      await sweepStaleDrafting(ctx.db);
       const filter = input.status
         ? null
         : (input.filter ?? 'pending');
@@ -323,10 +326,23 @@ export const actsRouter = router({
         return { ok: false as const, id: input.id };
       }
 
-      await ctx.db
+      // Claim the row by moving failed → drafting. Checking the claim result
+      // is what makes concurrent retries safe: a losing retry must not polish
+      // (duplicate LLM call) nor mark the winner's in-flight row failed.
+      const claimed = await ctx.db
         .update(schema.acts)
         .set({ status: 'drafting', updatedAt: new Date() })
-        .where(and(eq(schema.acts.id, input.id), eq(schema.acts.status, 'failed')));
+        .where(
+          and(
+            eq(schema.acts.id, input.id),
+            eq(schema.acts.userId, ctx.user.id),
+            eq(schema.acts.status, 'failed'),
+          ),
+        )
+        .returning({ id: schema.acts.id });
+      if (claimed.length === 0) {
+        return { ok: false as const, id: input.id };
+      }
 
       try {
         let transcript: string | null = null;

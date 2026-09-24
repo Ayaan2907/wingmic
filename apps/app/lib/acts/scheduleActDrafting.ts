@@ -7,7 +7,7 @@
  * failures are never swallowed: a failed run marks the affected rows
  * 'failed' so /acts can surface an honest draft-failed + retry state.
  */
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt } from 'drizzle-orm';
 import * as schema from '@wingmic/db/schema';
 import type { DB } from '@wingmic/db';
 import { polishDraft, type DraftOutput } from '@/lib/acts/draftAgent';
@@ -55,7 +55,10 @@ export async function redraftActRow(
 
   let hasEmail = false;
   let hasLinkedin = false;
-  if (row.targetEntityId) {
+  // Only trust facts of entities this user actually owns — `named` is the
+  // owner-validated set; the raw targetEntityId is not.
+  const validatedIds = named.map((e) => e.id);
+  if (row.targetEntityId && validatedIds.includes(row.targetEntityId)) {
     const facts = await db.query.entityFacts.findMany({
       where: and(
         inArray(schema.entityFacts.entityId, [row.targetEntityId]),
@@ -146,6 +149,30 @@ export async function markInteractionActsFailed(args: {
 }
 
 /**
+ * Recover 'drafting' rows orphaned by a restart mid-polish (deploy, crash):
+ * past the grace window the queue that owned them is gone, so they can only
+ * fail — the inbox then renders an honest retry. Deliberately unthrottled:
+ * the WHERE clause makes a healthy sweep a single no-op indexed update.
+ */
+const STALE_GRACE_MS = 10 * 60 * 1000;
+
+export async function sweepStaleDrafting(db: DB, graceMs = STALE_GRACE_MS): Promise<number> {
+  const cutoff = new Date(Date.now() - graceMs);
+  const recovered = await db
+    .update(schema.acts)
+    .set({ status: 'failed', updatedAt: new Date() })
+    .where(and(eq(schema.acts.status, 'drafting'), lt(schema.acts.createdAt, cutoff)))
+    .returning({ id: schema.acts.id });
+  if (recovered.length > 0) {
+    console.warn('[acts] recovered stale drafting rows as failed', {
+      count: recovered.length,
+      ids: recovered.map((r) => r.id),
+    });
+  }
+  return recovered.length;
+}
+
+/**
  * Fire-and-forget hook for capture.commit — must not be awaited. Mirrors
  * scheduleEnrich, but a failed run marks the affected rows 'failed' instead
  * of disappearing: the inbox renders the failure with a retry.
@@ -156,6 +183,11 @@ export function scheduleActDrafting(args: {
   interactionId: string;
   transcript: string;
 }): void {
+  // A restart mid-polish orphans 'drafting' rows — sweep opportunistically
+  // so the next capture also heals the last one.
+  void sweepStaleDrafting(args.db).catch((sweepErr) => {
+    console.error('[acts] stale-drafting sweep failed', { sweepErr });
+  });
   void draftActsForInteraction(args).catch((err) => {
     console.error('[acts] background drafting failed — marking rows failed', {
       interactionId: args.interactionId,

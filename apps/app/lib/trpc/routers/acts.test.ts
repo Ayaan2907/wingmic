@@ -100,6 +100,7 @@ describe('acts router', () => {
       target?: string | null;
       source?: string | null;
       kind?: string;
+      createdAtMs?: number;
     } = {},
   ) {
     await client.execute({
@@ -114,7 +115,9 @@ describe('acts router', () => {
         opts.status ?? 'drafted',
         opts.target === undefined ? 'e_ada' : opts.target,
         opts.source ?? null,
-        now,
+        // drizzle mode:'timestamp' columns store seconds (list self-heal test
+        // compares createdAt through drizzle date math).
+        Math.floor((opts.createdAtMs ?? now) / 1000),
         now,
       ],
     });
@@ -386,5 +389,41 @@ describe('acts router', () => {
     await insertAct('act_retry_other', { userId: otherUserId, status: 'failed' });
     const res = await caller().retryDraft({ id: 'act_retry_other' });
     expect(res.ok).toBe(false);
+  });
+
+  it('list self-heals stale drafting rows into retryable failed (restart recovery)', async () => {
+    await insertAct('act_list_stale', { status: 'drafting', createdAtMs: now - 11 * 60_000 });
+    await insertAct('act_list_inflight', { status: 'drafting' }); // fresh — still in flight
+
+    const result = await caller().list({ limit: 50 });
+    const stale = result.acts.find((a) => a.id === 'act_list_stale');
+    const fresh = result.acts.find((a) => a.id === 'act_list_inflight');
+    expect(stale?.status).toBe('failed');
+    expect(fresh?.status).toBe('drafting');
+  });
+
+  it('serializes concurrent retries — one polish runs, the loser refuses', async () => {
+    await insertAct('act_retry_race', { status: 'failed' });
+    polishDraftMock.mockClear();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    polishDraftMock.mockImplementationOnce(() =>
+      gate.then(() => ({ body: 'polished once', subject: null })),
+    );
+
+    const p1 = caller().retryDraft({ id: 'act_retry_race' });
+    const p2 = caller().retryDraft({ id: 'act_retry_race' });
+    setTimeout(release, 20);
+    const results = await Promise.all([p1, p2]);
+
+    // Exactly one retry claims the row and polishes; the loser's claim
+    // refuses — no duplicate LLM call, and the winner's row is not flipped
+    // back to failed.
+    expect(results.filter((r) => r.ok).length).toBe(1);
+    expect(results.filter((r) => !r.ok).length).toBe(1);
+    expect(polishDraftMock).toHaveBeenCalledTimes(1);
+    const row = await client.execute(`SELECT status, body FROM act WHERE id = 'act_retry_race'`);
+    expect(row.rows[0]?.status).toBe('drafted');
+    expect(row.rows[0]?.body).toBe('polished once');
   });
 });
