@@ -13,7 +13,7 @@
  * override) · about (static version/links).
  *
  * Bottom-nav / desktop rail is owned by the shared AppShell (PR λ-shell);
- * this screen renders no nav of its own. Colors via @/app/chat/_components/tokens.
+ * this screen renders no nav of its own. Colors via @wingmic/design-tokens.
  */
 
 import * as React from 'react';
