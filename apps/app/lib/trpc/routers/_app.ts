@@ -28,6 +28,7 @@ export const appRouter = router({
   onboarding: onboardingRouter,
   acts: actsRouter,
   imports: importsRouter,
+  events: eventsRouter,
 });
 
 export type AppRouter = typeof appRouter;

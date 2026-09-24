@@ -1,10 +1,18 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { PersonCaptureCard } from '../PersonCaptureCard';
 
+// React 19 leaves a scheduler immediate pending after act() flushes; if the
+// jsdom environment tears down first, the callback crashes the fork with
+// `window is not defined` (a CI-only unhandled error). Draining inside the
+// living environment keeps the run deterministic.
+async function drainScheduler() {
+  await act(async () => {});
+}
+
 describe('PersonCaptureCard', () => {
-  it('renders name, company, topics, and promised hint', () => {
+  it('renders name, company, topics, and promised hint', async () => {
     const onPhoto = vi.fn();
     render(
       <PersonCaptureCard
@@ -31,9 +39,10 @@ describe('PersonCaptureCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'add photo for Sara Chen' }));
     expect(onPhoto).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'correct Sara Chen' })).toBeNull();
+    await drainScheduler();
   });
 
-  it('renders every person as its own card, not a dump CTA', () => {
+  it('renders every person as its own card, not a dump CTA', async () => {
     const { rerender } = render(
       <PersonCaptureCard
         person={{ name: 'Priya Mehta', role: 'hiring', companyHint: 'Linear', topics: [] }}
@@ -50,5 +59,6 @@ describe('PersonCaptureCard', () => {
       />,
     );
     expect(screen.getByText('Marcus Kim')).toBeTruthy();
+    await drainScheduler();
   });
 });
