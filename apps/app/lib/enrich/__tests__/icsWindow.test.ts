@@ -413,6 +413,61 @@ END:VCALENDAR`);
     expect(result.ongoing).toHaveLength(0);
   });
 
+  it('honors WKST for biweekly parity (Google Calendar exports WKST=SU)', () => {
+    const feed = parseIcsEvents(`BEGIN:VCALENDAR
+BEGIN:VEVENT
+SUMMARY:Biweekly sunday-anchored
+DTSTART:20260902T170000Z
+DTEND:20260902T180000Z
+RRULE:FREQ=WEEKLY;INTERVAL=2;WKST=SU;BYDAY=SU
+END:VEVENT
+END:VCALENDAR`);
+
+    // DTSTART Wed Sep 2. Sunday-anchored week of DTSTART: Aug 30–Sep 5, so
+    // Sunday occurrences land Aug 30 (pre-DTSTART), Sep 13, Sep 27.
+    const correctWeek = matchIcsWindow(feed, new Date(Date.UTC(2026, 8, 13, 17, 30)), opts);
+    expect(correctWeek.ongoing.map((e) => e.summary)).toEqual(['Biweekly sunday-anchored']);
+
+    // Monday-anchored parity would place Sundays on Sep 6, Sep 20, … —
+    // Sep 20 must stay empty, Sep 13 occupied.
+    const wrongWeek = matchIcsWindow(feed, new Date(Date.UTC(2026, 8, 20, 17, 30)), opts);
+    expect(wrongWeek.ongoing).toHaveLength(0);
+  });
+
+  it('treats unrecognized rule parts as unsupported', () => {
+    const feed = parseIcsEvents(`BEGIN:VCALENDAR
+BEGIN:VEVENT
+SUMMARY:Guarded rule
+DTSTART:20260903T170000Z
+DTEND:20260903T180000Z
+RRULE:FREQ=WEEKLY;BYMONTH=9
+END:VEVENT
+END:VCALENDAR`);
+
+    // BYMONTH is not understood — degrade to the base occurrence (Sep 3)
+    // rather than over-generating weekly matches.
+    const base = matchIcsWindow(feed, new Date(Date.UTC(2026, 8, 3, 17, 30)), opts);
+    expect(base.ongoing.map((e) => e.summary)).toEqual(['Guarded rule']);
+
+    const later = matchIcsWindow(feed, new Date(Date.UTC(2026, 8, 24, 17, 30)), opts);
+    expect(later.ongoing).toHaveLength(0);
+  });
+
+  it('keeps explicit WKST=MO identical to the default anchor', () => {
+    const feed = parseIcsEvents(`BEGIN:VCALENDAR
+BEGIN:VEVENT
+SUMMARY:Biweekly thursday
+DTSTART:20260903T170000Z
+DTEND:20260903T180000Z
+RRULE:FREQ=WEEKLY;INTERVAL=2;WKST=MO;BYDAY=TH
+END:VEVENT
+END:VCALENDAR`);
+
+    // Sep 3, Sep 17, Oct 1 … — the second Thursday is in window.
+    const result = matchIcsWindow(feed, new Date(Date.UTC(2026, 8, 17, 17, 30)), opts);
+    expect(result.ongoing.map((e) => e.summary)).toEqual(['Biweekly thursday']);
+  });
+
   it('expands recurring all-day events within their UTC day window', () => {
     const feed = parseIcsEvents(`BEGIN:VCALENDAR
 BEGIN:VEVENT

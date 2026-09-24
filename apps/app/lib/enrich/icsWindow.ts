@@ -47,22 +47,33 @@ type RruleParts = {
   until: Date | null;
   count: number | null;
   byday: number[];
+  /** Week-start day (getUTCDay code) for weekly parity; null = RFC default MO. */
+  wkst: number | null;
 };
 
 const BYDAY_CODES: Record<string, number> = { MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6, SU: 0 };
 
+/** Rule parts this parser understands — anything else degrades to the base occurrence. */
+const KNOWN_RRULE_PARTS = new Set(['FREQ', 'INTERVAL', 'UNTIL', 'COUNT', 'BYDAY', 'WKST']);
+
 /**
  * Parse the RRULE forms worth expanding for a hallway-time-window match:
- * FREQ=DAILY/WEEKLY/MONTHLY with INTERVAL, UNTIL, COUNT and weekly BYDAY.
- * Anything else (YEARLY, ordinal BYDAY like 2MO, BYSETPOS, …) returns null
- * and the event stays a single base occurrence — honest degradation over a
- * half-correct expansion.
+ * FREQ=DAILY/WEEKLY/MONTHLY with INTERVAL, UNTIL, COUNT, weekly BYDAY and
+ * WKST. Anything else (YEARLY, ordinal BYDAY like 2MO, BYSETPOS, BYMONTH,
+ * …) returns null and the event stays a single base occurrence — honest
+ * degradation over a half-correct expansion. WKST shifts weekly parity
+ * (Google Calendar exports WKST=SU); silently dropping it would bind
+ * biweekly rules on the wrong alternating weeks.
  */
 function parseRrule(value: string): RruleParts | null {
   const parts: Record<string, string> = {};
   for (const piece of value.toUpperCase().split(';')) {
     const eq = piece.indexOf('=');
-    if (eq > 0) parts[piece.slice(0, eq)] = piece.slice(eq + 1);
+    if (eq > 0) {
+      const key = piece.slice(0, eq);
+      if (!KNOWN_RRULE_PARTS.has(key)) return null;
+      parts[key] = piece.slice(eq + 1);
+    }
   }
   const freq = parts.FREQ;
   if (freq !== 'DAILY' && freq !== 'WEEKLY' && freq !== 'MONTHLY') return null;
@@ -99,7 +110,12 @@ function parseRrule(value: string): RruleParts | null {
       byday.push(day);
     }
   }
-  return { freq, interval, until, count, byday };
+  let wkst: number | null = null;
+  if (parts.WKST) {
+    wkst = BYDAY_CODES[parts.WKST] ?? null;
+    if (wkst === null) return null;
+  }
+  return { freq, interval, until, count, byday, wkst };
 }
 
 /** Hard generation cap — absurdly old DTSTARTs degrade to the base occurrence. */
@@ -167,19 +183,20 @@ function expandOccurrences(
     }
     capHit = index >= firstRelevant + MAX_RULE_ITERATIONS;
   } else if (rule.freq === 'WEEKLY') {
+    const anchorDow = rule.wkst ?? 1; // RFC default: weeks start Monday.
     const baseMidnight = Math.floor(startMs / DAY_MS) * DAY_MS;
     const timeOfDay = startMs - baseMidnight;
-    const daysSinceMonday = (new Date(startMs).getUTCDay() + 6) % 7;
-    const monday0 = baseMidnight - daysSinceMonday * DAY_MS;
+    const daysSinceAnchor = (new Date(startMs).getUTCDay() - anchorDow + 7) % 7;
+    const anchor0 = baseMidnight - daysSinceAnchor * DAY_MS;
     const days = [...new Set(rule.byday)].sort((a, b) => a - b);
-    // getUTCDay numbers (Sun=0) → offsets from the Monday anchor (MO=0).
-    const mondayOffsets = days.map((day) => (day + 6) % 7);
+    // getUTCDay codes → offsets from the WKST-anchored week start.
+    const anchorOffsets = days.map((day) => (day - anchorDow + 7) % 7);
     let week = 0;
     for (; week < MAX_RULE_ITERATIONS; week += 1) {
-      const weekStart = monday0 + week * rule.interval * 7 * DAY_MS;
+      const weekStart = anchor0 + week * rule.interval * 7 * DAY_MS;
       if (weekStart > horizonEndMs) break;
       let stopped = false;
-      for (const offset of mondayOffsets) {
+      for (const offset of anchorOffsets) {
         if (!consider(weekStart + offset * DAY_MS + timeOfDay)) {
           stopped = true;
           break;
