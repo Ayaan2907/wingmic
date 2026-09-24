@@ -188,13 +188,11 @@ function Header({ userName }: { userName: string | null }) {
             justifyContent: 'center',
             color: 'var(--text-55)',
             textDecoration: 'none',
-            fontSize: 10,
-            letterSpacing: 0.5,
-            textTransform: 'uppercase',
+            fontSize: 14,
             flexShrink: 0,
           }}
         >
-          set
+          ⚙
         </Link>
       </div>
     </header>
