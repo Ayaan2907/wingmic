@@ -23,6 +23,7 @@ function ics(overrides: Partial<ParsedIcsEvent>): ParsedIcsEvent {
     dateRangeStart: null,
     dateRangeEnd: null,
     allDay: false,
+    rrule: null,
     ...overrides,
   };
 }
@@ -323,6 +324,43 @@ describe('events router', () => {
       if (res.session.state === 'bound') {
         expect(res.session.source).toBe('ics-auto');
       }
+    });
+
+    it('does not collapse distinct non-Latin-named events onto one row', async () => {
+      const dinner = await caller().bind({ event: { name: '飲み会' } });
+      const meeting = await caller().bind({ event: { name: '会議' } });
+
+      if (dinner.session.state !== 'bound' || meeting.session.state !== 'bound') {
+        throw new Error('expected bound sessions');
+      }
+      expect(dinner.session.event.id).not.toBe(meeting.session.event.id);
+      expect(await db.query.events.findMany()).toHaveLength(2);
+
+      // The same non-Latin name still converges to its own row.
+      const again = await caller().bind({ event: { name: '飲み会' } });
+      if (again.session.state !== 'bound') throw new Error('expected bound session');
+      expect(again.session.event.id).toBe(dinner.session.event.id);
+    });
+
+    it('keeps same-name events with different external ids distinct', async () => {
+      await client.execute({
+        sql: `INSERT INTO event (id, slug, name, external_source, external_id, observed_count, created_at)
+              VALUES ('evt_aaa', 'demo-night', 'Demo night', 'luma', 'aaa', 2, 1)`,
+        args: [],
+      });
+
+      const res = await caller().bind({
+        event: { name: 'Demo night', url: 'https://lu.ma/bbb' },
+      });
+
+      if (res.session.state !== 'bound') throw new Error('expected bound session');
+      expect(res.session.event.id).not.toBe('evt_aaa');
+      const createdId = res.session.event.id;
+      const rows = await db.query.events.findMany();
+      expect(rows).toHaveLength(2);
+      const created = rows.find((row) => row.id === createdId);
+      expect(created?.externalId).toBe('bbb');
+      expect(created?.slug).toContain('luma-');
     });
   });
 });

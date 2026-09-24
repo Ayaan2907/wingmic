@@ -4,7 +4,12 @@ import { drizzle } from 'drizzle-orm/libsql';
 import { eq } from 'drizzle-orm';
 import * as schema from '@wingmic/db/schema';
 
-import { getIcsSnapshot, ICS_SNAPSHOT_TTL_MS } from '../icsSnapshot';
+import {
+  getIcsSnapshot,
+  ICS_SNAPSHOT_TTL_MS,
+  __icsSnapshotCacheSizeForTests,
+  __resetIcsSnapshotCacheForTests,
+} from '../icsSnapshot';
 
 const ICS_URL = 'https://calendar.google.com/calendar/ical/ada%40example.com/public/basic.ics';
 const OTHER_ICS_URL =
@@ -72,6 +77,8 @@ describe('getIcsSnapshot', () => {
       INSERT INTO user (id, email, created_at, updated_at) VALUES ('u4', 'u4@example.com', 1, 1);
       INSERT INTO user (id, email, created_at, updated_at) VALUES ('u5', 'u5@example.com', 1, 1);
       INSERT INTO user (id, email, created_at, updated_at) VALUES ('u6', 'u6@example.com', 1, 1);
+      INSERT INTO user (id, email, created_at, updated_at) VALUES ('u7', 'u7@example.com', 1, 1);
+      INSERT INTO user (id, email, created_at, updated_at) VALUES ('u8', 'u8@example.com', 1, 1);
     `);
   }
 
@@ -168,5 +175,22 @@ describe('getIcsSnapshot', () => {
     expect(feed.calls()).toBe(2);
     expect(before[0]!.summary).toBe('NEXA Summit');
     expect(after[0]!.summary).toBe('ETH Denver');
+  });
+
+  it('evicts expired entries on write, not just on read (retention)', async () => {
+    await seedTables();
+    const feed = stubFeed([FEED_A, FEED_B]);
+    __resetIcsSnapshotCacheForTests();
+    vi.useFakeTimers({ now: new Date('2026-09-24T12:00:00Z') });
+
+    await getIcsSnapshot(db, 'u7', ICS_URL);
+    expect(__icsSnapshotCacheSizeForTests()).toBe(1);
+
+    // The next user's write sweeps u7's now-expired entry — without the
+    // sweep a churned user pins their parsed feed in memory forever.
+    vi.setSystemTime(new Date('2026-09-24T12:00:00Z').getTime() + ICS_SNAPSHOT_TTL_MS + 1);
+    await getIcsSnapshot(db, 'u8', OTHER_ICS_URL);
+    expect(__icsSnapshotCacheSizeForTests()).toBe(1);
+    expect(feed.calls()).toBe(2);
   });
 });

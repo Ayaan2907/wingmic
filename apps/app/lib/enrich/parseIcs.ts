@@ -10,6 +10,12 @@ export type ParsedIcsEvent = {
    * shifts one day back out (see icsEventWindow).
    */
   allDay: boolean;
+  /**
+   * Raw RRULE value (e.g. "FREQ=WEEKLY;BYDAY=MO,WE"), null when the event
+   * is a single fixed occurrence. Consumed by the recurrence expansion in
+   * icsWindow.ts; other consumers see the base occurrence only.
+   */
+  rrule: string | null;
 };
 
 function unfoldIcs(raw: string): string {
@@ -115,6 +121,7 @@ export function parseIcsEvents(raw: string): ParsedIcsEvent[] {
       dateRangeStart: icsDate(dtstart),
       dateRangeEnd: icsDate(parsedField(block, 'DTEND'), true),
       allDay: dtstart?.params.get('VALUE')?.toUpperCase() === 'DATE',
+      rrule: field(block, 'RRULE'),
     });
   }
   return events;

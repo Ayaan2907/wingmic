@@ -89,6 +89,54 @@ function boundSession(event: EventSessionEvent, source: 'ics-auto' | 'picked') {
   return { session: { state: 'bound', event, source } as const };
 }
 
+type Harvested = NonNullable<ReturnType<typeof parseEventExternal>>;
+
+/**
+ * Deterministic slug for names with no ASCII projection (飲み会, emoji-only).
+ * FNV-1a — stable across runtimes, no crypto dependency. Keeps same-name
+ * binds converging while distinct names stay distinct.
+ */
+function fallbackSlugFor(name: string): string {
+  let hash = 0x811c9dc5;
+  for (const ch of name) {
+    hash ^= ch.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `x-${hash.toString(16).padStart(8, '0')}`;
+}
+
+function eventSlug(name: string): string {
+  const slug = slugify(name);
+  if (slug) return slug;
+  // slugify's '' sentinel is load-bearing for the extractor fingerprint
+  // path ("caller must validate"), so the non-collapsing fallback lives
+  // on the bind surface: a shared '' slug would collapse distinct
+  // calendar events onto one canonical row.
+  return fallbackSlugFor(name);
+}
+
+/** Same hex-encoded disambiguation as upsertEvent (resolution.ts). */
+function disambiguatedSlug(base: string, harvested: Harvested): string {
+  const encodedId = Array.from(new TextEncoder().encode(harvested.id), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+  return `${base.slice(0, 40)}-${harvested.source}-${encodedId}`;
+}
+
+/**
+ * The slug row carries a different external identity than the bind —
+ * two distinct events sharing a name-slug (e.g. two lu.ma ids). Same
+ * name with no external id is convergence, not collision.
+ */
+function isExternalCollision(row: schema.Event, harvested: Harvested | null): boolean {
+  return Boolean(
+    harvested &&
+      row.externalSource !== null &&
+      row.externalId !== null &&
+      (row.externalSource !== harvested.source || row.externalId !== harvested.id),
+  );
+}
+
 /**
  * events.current / events.bind — the server half of current-event binding
  * (spec D1). `current` is a pure read over the user's ICS feed; `bind` is
@@ -154,37 +202,27 @@ export const eventsRouter = router({
       }
     }
 
-    let slug = slugify(descriptor.name);
+    let slug = eventSlug(descriptor.name);
     const bySlug = await ctx.db.query.events.findFirst({
       where: eq(schema.events.slug, slug),
     });
-    const externalCollision =
-      bySlug &&
-      harvested &&
-      bySlug.externalSource !== null &&
-      bySlug.externalId !== null &&
-      (bySlug.externalSource !== harvested.source || bySlug.externalId !== harvested.id);
-    if (bySlug && !externalCollision) {
+    if (bySlug && !isExternalCollision(bySlug, harvested)) {
       // Re-bind / same-named event — return the row untouched. observedCount
       // and promotedAt only move when a real capture observes the event.
       return boundSession(rowToSessionEvent(bySlug, descriptor.allDay ?? false), source);
     }
-    if (bySlug && externalCollision) {
-      // Same hex-encoded slug disambiguation as upsertEvent.
-      const encodedId = Array.from(new TextEncoder().encode(harvested.id), (byte) =>
-        byte.toString(16).padStart(2, '0'),
-      ).join('');
-      slug = `${slug.slice(0, 40)}-${harvested.source}-${encodedId}`;
+    if (bySlug && harvested) {
+      slug = disambiguatedSlug(slug, harvested);
     }
 
-    // Lazy-create the canonical row. observedCount starts at 0: binding is
-    // not an observation — the counter (and promotion) only moves when a
-    // real capture observes the event, preserving upsertEvent semantics.
-    try {
+    const insertAndBind = async (slugToUse: string) => {
+      // Lazy-create the canonical row. observedCount starts at 0: binding is
+      // not an observation — the counter (and promotion) only moves when a
+      // real capture observes the event, preserving upsertEvent semantics.
       const inserted = await ctx.db
         .insert(schema.events)
         .values({
-          slug,
+          slug: slugToUse,
           name: descriptor.name,
           dateRangeStart: descriptor.dateRangeStart ?? null,
           dateRangeEnd: descriptor.dateRangeEnd ?? null,
@@ -205,23 +243,38 @@ export const eventsRouter = router({
         });
       }
       return boundSession(rowToSessionEvent(created, descriptor.allDay ?? false), source);
+    };
+
+    try {
+      return await insertAndBind(slug);
     } catch (err) {
-      // Concurrent bind of the same event — the unique constraint on slug
-      // (or external id) resolves the race: re-read the winner's row.
-      if (err instanceof Error && /UNIQUE constraint failed/.test(err.message)) {
-        const winner = harvested
-          ? await ctx.db.query.events.findFirst({
-              where: and(
-                eq(schema.events.externalSource, harvested.source),
-                eq(schema.events.externalId, harvested.id),
-              ),
-            })
-          : await ctx.db.query.events.findFirst({ where: eq(schema.events.slug, slug) });
+      if (!(err instanceof Error && /UNIQUE constraint failed/.test(err.message))) throw err;
+      if (harvested) {
+        // Concurrent bind of the same external identity — bind to the winner.
+        const winner = await ctx.db.query.events.findFirst({
+          where: and(
+            eq(schema.events.externalSource, harvested.source),
+            eq(schema.events.externalId, harvested.id),
+          ),
+        });
         if (winner) {
           return boundSession(rowToSessionEvent(winner, descriptor.allDay ?? false), source);
         }
       }
-      throw err;
+      // The slug was claimed between read and insert. A same-named bind
+      // raced us — bind to the winner; a distinct event sharing the slug
+      // re-runs the hex disambiguation and retries the insert once.
+      const bySlugNow = await ctx.db.query.events.findFirst({
+        where: eq(schema.events.slug, slug),
+      });
+      if (bySlugNow && !isExternalCollision(bySlugNow, harvested)) {
+        return boundSession(rowToSessionEvent(bySlugNow, descriptor.allDay ?? false), source);
+      }
+      if (!harvested) {
+        // Unreachable — without an external id the winner re-read binds.
+        throw err;
+      }
+      return insertAndBind(disambiguatedSlug(slug, harvested));
     }
   }),
 });

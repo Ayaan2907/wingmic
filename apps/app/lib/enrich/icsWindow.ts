@@ -41,12 +41,184 @@ export type IcsWindowResult = {
   upcoming: ParsedIcsEvent[];
 };
 
+type RruleParts = {
+  freq: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  interval: number;
+  until: Date | null;
+  count: number | null;
+  byday: number[];
+};
+
+const BYDAY_CODES: Record<string, number> = { MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6, SU: 0 };
+
 /**
- * Classify parsed calendar events against `now`. The two phases are
- * disjoint by construction — ongoing requires now >= start, upcoming
- * requires now < start — so an event never appears in both lists and the
- * merged candidate list needs no dedupe. Input order is preserved within
- * each phase.
+ * Parse the RRULE forms worth expanding for a hallway-time-window match:
+ * FREQ=DAILY/WEEKLY/MONTHLY with INTERVAL, UNTIL, COUNT and weekly BYDAY.
+ * Anything else (YEARLY, ordinal BYDAY like 2MO, BYSETPOS, …) returns null
+ * and the event stays a single base occurrence — honest degradation over a
+ * half-correct expansion.
+ */
+function parseRrule(value: string): RruleParts | null {
+  const parts: Record<string, string> = {};
+  for (const piece of value.toUpperCase().split(';')) {
+    const eq = piece.indexOf('=');
+    if (eq > 0) parts[piece.slice(0, eq)] = piece.slice(eq + 1);
+  }
+  const freq = parts.FREQ;
+  if (freq !== 'DAILY' && freq !== 'WEEKLY' && freq !== 'MONTHLY') return null;
+  const intervalRaw = Number(parts.INTERVAL ?? '1');
+  const interval = Number.isInteger(intervalRaw) && intervalRaw >= 1 ? intervalRaw : 1;
+  let until: Date | null = null;
+  if (parts.UNTIL) {
+    const m = parts.UNTIL.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2}))?/);
+    // DATE-form UNTIL means the whole final day; floating (Z-less) times are
+    // read as UTC — same canonical-time posture as all-day windows.
+    until = m
+      ? new Date(
+          Date.UTC(
+            Number(m[1]),
+            Number(m[2]) - 1,
+            Number(m[3]),
+            m[4] ? Number(m[4]) : 23,
+            m[5] ? Number(m[5]) : 59,
+            m[6] ? Number(m[6]) : 59,
+          ),
+        )
+      : null;
+  }
+  const countRaw = parts.COUNT ? Number(parts.COUNT) : null;
+  const count = countRaw !== null && Number.isInteger(countRaw) && countRaw >= 1 ? countRaw : null;
+  const byday: number[] = [];
+  if (parts.BYDAY) {
+    // BYDAY only carries weekday semantics for WEEKLY; MONTHLY ordinal
+    // forms (2MO) are deliberately unsupported.
+    if (freq === 'MONTHLY') return null;
+    for (const token of parts.BYDAY.split(',')) {
+      const day = BYDAY_CODES[token.trim()];
+      if (day === undefined) return null;
+      byday.push(day);
+    }
+  }
+  return { freq, interval, until, count, byday };
+}
+
+/** Hard generation cap — absurdly old DTSTARTs degrade to the base occurrence. */
+const MAX_RULE_ITERATIONS = 600;
+
+/**
+ * Concrete occurrences of a recurring event whose occupancy could intersect
+ * [horizonStart, horizonEnd]. The base DTSTART occurrence is occurrence #1
+ * (RFC 5545). Synthesized occurrences carry convention-applied concrete
+ * instants: all-day duration already includes the exclusive-DTEND day, so
+ * the synth shifts dateRangeEnd back out to keep icsEventWindow correct.
+ * All recurrence math is UTC — the same canonical-time limitation as
+ * all-day windows (the server has no user timezone).
+ *
+ * Returns the base occurrence unchanged when the generation cap is hit
+ * mid-horizon (incomplete scan) — never a partial occurrence list.
+ */
+function expandOccurrences(
+  event: ParsedIcsEvent,
+  window: IcsEventWindow,
+  horizonStartMs: number,
+  horizonEndMs: number,
+): ParsedIcsEvent[] {
+  if (!event.rrule) return [event];
+  const rule = parseRrule(event.rrule);
+  if (!rule) return [event];
+
+  const startMs = window.start.getTime();
+  const durationMs = window.end.getTime() - startMs;
+  const backshift = event.allDay ? DAY_MS : 0;
+  const synth = (occStart: number): ParsedIcsEvent => ({
+    ...event,
+    dateRangeStart: new Date(occStart),
+    dateRangeEnd: new Date(occStart + durationMs - backshift),
+  });
+
+  const untilMs = rule.until?.getTime() ?? null;
+  const out: ParsedIcsEvent[] = [];
+  let emitted = 0; // rule occurrences seen so far, DTSTART's included
+  let capHit = false;
+  // Returns false once no further occurrence can matter.
+  const consider = (occStartMs: number): boolean => {
+    if (occStartMs < startMs) return true; // pre-DTSTART pad in BYDAY weeks
+    emitted += 1;
+    if (rule.count !== null && emitted > rule.count) return false;
+    if (untilMs !== null && occStartMs > untilMs) return false;
+    if (occStartMs > horizonEndMs) return false;
+    if (occStartMs + durationMs >= horizonStartMs) out.push(synth(occStartMs));
+    return true;
+  };
+
+  if (rule.freq === 'DAILY' || (rule.freq === 'WEEKLY' && rule.byday.length === 0)) {
+    const step = rule.interval * (rule.freq === 'WEEKLY' ? 7 : 1) * DAY_MS;
+    // Jump straight to the first occurrence whose occupancy can reach the
+    // horizon; earlier occurrences still count toward COUNT via the seed.
+    const firstRelevant = Math.max(
+      0,
+      Math.ceil((horizonStartMs - durationMs - startMs) / step),
+    );
+    emitted = firstRelevant;
+    let index = firstRelevant;
+    while (index < firstRelevant + MAX_RULE_ITERATIONS) {
+      if (!consider(startMs + index * step)) break;
+      index += 1;
+    }
+    capHit = index >= firstRelevant + MAX_RULE_ITERATIONS;
+  } else if (rule.freq === 'WEEKLY') {
+    const baseMidnight = Math.floor(startMs / DAY_MS) * DAY_MS;
+    const timeOfDay = startMs - baseMidnight;
+    const daysSinceMonday = (new Date(startMs).getUTCDay() + 6) % 7;
+    const monday0 = baseMidnight - daysSinceMonday * DAY_MS;
+    const days = [...new Set(rule.byday)].sort((a, b) => a - b);
+    // getUTCDay numbers (Sun=0) → offsets from the Monday anchor (MO=0).
+    const mondayOffsets = days.map((day) => (day + 6) % 7);
+    let week = 0;
+    for (; week < MAX_RULE_ITERATIONS; week += 1) {
+      const weekStart = monday0 + week * rule.interval * 7 * DAY_MS;
+      if (weekStart > horizonEndMs) break;
+      let stopped = false;
+      for (const offset of mondayOffsets) {
+        if (!consider(weekStart + offset * DAY_MS + timeOfDay)) {
+          stopped = true;
+          break;
+        }
+      }
+      if (stopped) break;
+    }
+    capHit = week >= MAX_RULE_ITERATIONS;
+  } else {
+    // MONTHLY (no BYDAY — parseRrule rejects that combination): same UTC
+    // day-of-month and time; months lacking the day are skipped.
+    const d0 = new Date(startMs);
+    const dom = d0.getUTCDate();
+    const timeOfDay = startMs - Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), d0.getUTCDate());
+    let monthIndex = 0;
+    for (; monthIndex < MAX_RULE_ITERATIONS; monthIndex += 1) {
+      const totalMonths = d0.getUTCMonth() + monthIndex * rule.interval;
+      const year = d0.getUTCFullYear() + Math.floor(totalMonths / 12);
+      const month = totalMonths % 12;
+      const monthStart = Date.UTC(year, month, 1);
+      if (monthStart > horizonEndMs) break;
+      const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      if (dom <= daysInMonth) {
+        if (!consider(Date.UTC(year, month, dom) + timeOfDay)) break;
+      }
+    }
+    capHit = monthIndex >= MAX_RULE_ITERATIONS;
+  }
+
+  return capHit ? [event] : out;
+}
+
+/**
+ * Classify parsed calendar events against `now`. Recurring events expand
+ * into concrete occurrences first (bounded — see expandOccurrences). The
+ * two phases are disjoint by construction — ongoing requires now >= start,
+ * upcoming requires now < start — so an event never appears in both lists
+ * and the merged candidate list needs no dedupe. Input order is preserved
+ * within each phase.
  */
 export function matchIcsWindow(
   events: ParsedIcsEvent[],
@@ -56,17 +228,25 @@ export function matchIcsWindow(
   const pastMs = (options.pastBufferMin ?? 0) * MINUTE_MS;
   const futureMs = (options.futureBufferMin ?? 0) * MINUTE_MS;
   const t = now.getTime();
+  // Margin for occurrences that started before the horizon but still
+  // overlap it (e.g. week-long recurring blocks).
+  const horizonStartMs = t - pastMs - 7 * DAY_MS;
+  const horizonEndMs = t + futureMs;
   const ongoing: ParsedIcsEvent[] = [];
   const upcoming: ParsedIcsEvent[] = [];
   for (const event of events) {
     const window = icsEventWindow(event);
     if (!window) continue;
-    const start = window.start.getTime();
-    const end = window.end.getTime();
-    if (t >= start && t <= end + pastMs) {
-      ongoing.push(event);
-    } else if (t < start && t >= start - futureMs) {
-      upcoming.push(event);
+    for (const occurrence of expandOccurrences(event, window, horizonStartMs, horizonEndMs)) {
+      const occWindow = icsEventWindow(occurrence);
+      if (!occWindow) continue;
+      const start = occWindow.start.getTime();
+      const end = occWindow.end.getTime();
+      if (t >= start && t <= end + pastMs) {
+        ongoing.push(occurrence);
+      } else if (t < start && t >= start - futureMs) {
+        upcoming.push(occurrence);
+      }
     }
   }
   return { ongoing, upcoming };

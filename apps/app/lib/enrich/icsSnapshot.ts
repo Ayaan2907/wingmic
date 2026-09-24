@@ -14,6 +14,30 @@ type CacheEntry = { url: string; events: ParsedIcsEvent[]; fetchedAt: number };
  */
 const cache = new Map<string, CacheEntry>();
 
+/** Test-only visibility into retention (see cacheSet). */
+export function __icsSnapshotCacheSizeForTests(): number {
+  return cache.size;
+}
+
+/** Test-only: the module cache outlives individual test databases. */
+export function __resetIcsSnapshotCacheForTests(): void {
+  cache.clear();
+}
+
+/**
+ * Retention, not just freshness: an entry past the TTL is dead weight (its
+ * next read refetches anyway), so it is evicted here. Without the sweep a
+ * user who set an ICS URL once and churned pins their parsed feed in
+ * memory for the process lifetime.
+ */
+function cacheSet(userId: string, entry: CacheEntry): void {
+  const now = Date.now();
+  for (const [id, cached] of cache) {
+    if (now - cached.fetchedAt >= ICS_SNAPSHOT_TTL_MS) cache.delete(id);
+  }
+  cache.set(userId, entry);
+}
+
 export function serializeIcsEvents(events: ParsedIcsEvent[]): schema.IcsSnapshotEvent[] {
   return events.map((event) => ({
     summary: event.summary,
@@ -33,6 +57,9 @@ export function deserializeIcsEvents(payload: schema.IcsSnapshotEvent[]): Parsed
     dateRangeStart: event.dateRangeStart ? new Date(event.dateRangeStart) : null,
     dateRangeEnd: event.dateRangeEnd ? new Date(event.dateRangeEnd) : null,
     allDay: event.allDay,
+    // The fallback payload predates recurrence support and doesn't persist
+    // RRULE — fallback rows match on their base occurrence only.
+    rrule: null,
   }));
 }
 
@@ -79,7 +106,7 @@ export async function getIcsSnapshot(
   const text = await fetchCalendarIcs(calendarIcsUrl);
   if (text) {
     const events = parseIcsEvents(text);
-    cache.set(userId, { url: calendarIcsUrl, events, fetchedAt: Date.now() });
+    cacheSet(userId, { url: calendarIcsUrl, events, fetchedAt: Date.now() });
     // The fallback row is an availability net, not a correctness record —
     // a failed write degrades to memory-only caching, so warn and continue.
     try {
@@ -96,6 +123,6 @@ export async function getIcsSnapshot(
   const events = row ? deserializeIcsEvents(row.payload) : [];
   // Cache the fallback too, so a failing feed is not re-fetched on every
   // request; the TTL bounds how long until the live fetch is retried.
-  cache.set(userId, { url: calendarIcsUrl, events, fetchedAt: Date.now() });
+  cacheSet(userId, { url: calendarIcsUrl, events, fetchedAt: Date.now() });
   return events;
 }
