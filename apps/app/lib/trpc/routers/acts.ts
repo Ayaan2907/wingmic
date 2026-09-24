@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, isNull, lte, or } from 'drizzle-orm';
 import * as schema from '@wingmic/db/schema';
 import { router, protectedProcedure } from '../trpc';
 import { toPendingAct } from '@/lib/acts/mapAction';
+import { redraftActRow } from '@/lib/acts/scheduleActDrafting';
 import { polishDraft, type DraftIntent } from '@/lib/acts/draftAgent';
 import {
   chooseActChannel,
@@ -53,9 +54,11 @@ export const actsRouter = router({
     .input(
       z
         .object({
-          /** Inbox filter — pending = drafted + due snoozed (default). */
+          /** Inbox filter — pending = drafting + drafted + failed + due snoozed (default). */
           filter: z.enum(['pending', 'sent', 'all']).default('pending'),
-          status: z.enum(['drafted', 'snoozed', 'sent', 'dismissed']).optional(),
+          status: z
+            .enum(['drafting', 'drafted', 'failed', 'snoozed', 'sent', 'dismissed'])
+            .optional(),
           limit: z.number().int().min(1).max(50).default(20),
         })
         .default({ limit: 20, filter: 'pending' }),
@@ -77,7 +80,9 @@ export const actsRouter = router({
                 ? and(
                     eq(schema.acts.userId, ctx.user.id),
                     or(
+                      eq(schema.acts.status, 'drafting'),
                       eq(schema.acts.status, 'drafted'),
+                      eq(schema.acts.status, 'failed'),
                       eq(schema.acts.status, 'snoozed'),
                       eq(schema.acts.status, 'sent'),
                     ),
@@ -85,7 +90,9 @@ export const actsRouter = router({
                 : and(
                     eq(schema.acts.userId, ctx.user.id),
                     or(
+                      eq(schema.acts.status, 'drafting'),
                       eq(schema.acts.status, 'drafted'),
+                      eq(schema.acts.status, 'failed'),
                       and(
                         eq(schema.acts.status, 'snoozed'),
                         or(isNull(schema.acts.runAt), lte(schema.acts.runAt, now)),
@@ -297,6 +304,62 @@ export const actsRouter = router({
         .returning({ id: schema.acts.id });
 
       return { ok: true as const, id: row?.id ?? null };
+    }),
+
+  /**
+   * Retry a failed background draft (spec D2). Re-runs polishDraft on the
+   * stored action data — seed body, entity names, channel from facts,
+   * transcript from the source interaction. The row re-enters 'drafting' and
+   * lands 'drafted' on success; a second failure returns the row to 'failed'
+   * and reports ok: false so the UI surfaces it — never silent.
+   */
+  retryDraft: protectedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const existing = await ctx.db.query.acts.findFirst({
+        where: and(eq(schema.acts.id, input.id), eq(schema.acts.userId, ctx.user.id)),
+      });
+      if (!existing || existing.status !== 'failed') {
+        return { ok: false as const, id: input.id };
+      }
+
+      await ctx.db
+        .update(schema.acts)
+        .set({ status: 'drafting', updatedAt: new Date() })
+        .where(and(eq(schema.acts.id, input.id), eq(schema.acts.status, 'failed')));
+
+      try {
+        let transcript: string | null = null;
+        if (existing.sourceInteractionId) {
+          const interaction = await ctx.db.query.interactions.findFirst({
+            where: and(
+              eq(schema.interactions.id, existing.sourceInteractionId),
+              eq(schema.interactions.userId, ctx.user.id),
+            ),
+            columns: { transcript: true },
+          });
+          transcript = interaction?.transcript ?? null;
+        }
+        const polished = await redraftActRow(ctx.db, ctx.user.id, existing, transcript);
+        const updated = await ctx.db
+          .update(schema.acts)
+          .set({
+            status: 'drafted',
+            body: polished.body,
+            subject: polished.subject,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(schema.acts.id, input.id), eq(schema.acts.status, 'drafting')))
+          .returning({ id: schema.acts.id });
+        return { ok: updated.length > 0, id: input.id };
+      } catch (err) {
+        console.error('[acts] retryDraft failed — row stays failed', { actId: input.id, err });
+        await ctx.db
+          .update(schema.acts)
+          .set({ status: 'failed', updatedAt: new Date() })
+          .where(and(eq(schema.acts.id, input.id), eq(schema.acts.status, 'drafting')));
+        return { ok: false as const, id: input.id };
+      }
     }),
 
   update: protectedProcedure

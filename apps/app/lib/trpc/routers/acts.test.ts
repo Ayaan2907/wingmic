@@ -3,13 +3,14 @@ import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import * as schema from '@wingmic/db/schema';
 
+const { polishDraftMock } = vi.hoisted(() => ({ polishDraftMock: vi.fn() }));
+
 vi.mock('@/lib/acts/draftAgent', async (importOriginal) => {
   const mod = await importOriginal<typeof import('../../acts/draftAgent')>();
-  return {
-    ...mod,
-    polishDraft: async (input: Parameters<typeof mod.polishDraft>[0]) =>
-      mod.templateDraft(input),
-  };
+  polishDraftMock.mockImplementation(
+    async (input: Parameters<typeof mod.polishDraft>[0]) => mod.templateDraft(input),
+  );
+  return { ...mod, polishDraft: polishDraftMock };
 });
 
 import { actsRouter } from './acts';
@@ -322,6 +323,68 @@ describe('acts router', () => {
       id: 'act_edit_other',
       body: 'nope',
     });
+    expect(res.ok).toBe(false);
+  });
+
+  it('default list includes in-flight drafting and failed rows (spec D2)', async () => {
+    await insertAct('act_list_drafting', { status: 'drafting', source: 'ix_bg1' });
+    await insertAct('act_list_failed', { status: 'failed', source: 'ix_bg2' });
+
+    const result = await caller().list({ limit: 50 });
+    expect(result.acts.map((a) => a.id)).toContain('act_list_drafting');
+    expect(result.acts.map((a) => a.id)).toContain('act_list_failed');
+
+    const drafting = await caller().list({ status: 'drafting', limit: 50 });
+    expect(drafting.acts.map((a) => a.id)).toContain('act_list_drafting');
+    const failed = await caller().list({ status: 'failed', limit: 50 });
+    expect(failed.acts.map((a) => a.id)).toContain('act_list_failed');
+  });
+
+  it('retryDraft re-polishes a failed act from its stored action', async () => {
+    await client.execute({
+      sql: `INSERT INTO interaction VALUES (
+        'int_retry', ?, 'met Ada Lovelace at Analytical Engines, she asked for the rust deck',
+        ?, null, ?, null, null, null, null, null, 'committed', null
+      )`,
+      args: [userId, now, now],
+    });
+    await insertAct('act_retry_1', { status: 'failed', source: 'int_retry' });
+    polishDraftMock.mockClear();
+
+    const res = await caller().retryDraft({ id: 'act_retry_1' });
+    expect(res).toEqual({ ok: true, id: 'act_retry_1' });
+    expect(polishDraftMock).toHaveBeenCalledTimes(1);
+
+    const listed = await caller().list({ limit: 50 });
+    const row = listed.acts.find((a) => a.id === 'act_retry_1');
+    expect(row?.status).toBe('drafted');
+    expect(row?.body.toLowerCase()).toContain('analytical engines');
+  });
+
+  it('retryDraft returns the row to failed when the re-polish throws again', async () => {
+    await insertAct('act_retry_2', { status: 'failed' });
+    polishDraftMock.mockRejectedValueOnce(new Error('llm still down'));
+
+    const res = await caller().retryDraft({ id: 'act_retry_2' });
+    expect(res.ok).toBe(false);
+
+    const row = await client.execute(`SELECT status, body FROM act WHERE id = 'act_retry_2'`);
+    expect(row.rows[0]?.status).toBe('failed');
+    expect(row.rows[0]?.body).toBe('send the deck'); // seed preserved
+  });
+
+  it('retryDraft refuses acts that are not failed', async () => {
+    await insertAct('act_retry_3', { status: 'drafted' });
+    polishDraftMock.mockClear();
+
+    const res = await caller().retryDraft({ id: 'act_retry_3' });
+    expect(res.ok).toBe(false);
+    expect(polishDraftMock).not.toHaveBeenCalled();
+  });
+
+  it('retryDraft ignores other users acts', async () => {
+    await insertAct('act_retry_other', { userId: otherUserId, status: 'failed' });
+    const res = await caller().retryDraft({ id: 'act_retry_other' });
     expect(res.ok).toBe(false);
   });
 });

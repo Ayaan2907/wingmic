@@ -37,7 +37,7 @@ export type PendingAct = {
   targetEmail?: string | null;
   /** Public LinkedIn URL when known — used for linkedin-note send. */
   targetLinkedin?: string | null;
-  status?: 'drafted' | 'snoozed' | 'sent' | 'dismissed';
+  status?: 'drafting' | 'drafted' | 'snoozed' | 'sent' | 'dismissed' | 'failed';
 };
 
 export function ActCard({
@@ -46,6 +46,8 @@ export function ActCard({
   onSnooze,
   onDismiss,
   onSaveEdit,
+  onRetry,
+  retrying = false,
   sendError,
 }: {
   act: PendingAct;
@@ -57,10 +59,15 @@ export function ActCard({
     id: string,
     patch: { body: string; subject: string | null },
   ) => void | boolean | Promise<void | boolean>;
+  /** Called when the user retries a failed background draft (spec D2). */
+  onRetry?: (id: string) => void;
+  /** True while the retry mutation is in flight. */
+  retrying?: boolean;
   /** Shown when markSent fails after a todo send. */
   sendError?: string | null;
 }) {
-  const canSend = Boolean(a.id);
+  const isPendingDraft = a.status === 'drafting' || a.status === 'failed';
+  const canSend = Boolean(a.id) && !isPendingDraft;
   const actionKind = a.actionKind ?? 'todo';
   const channel: ActChannel =
     a.channel ??
@@ -163,6 +170,7 @@ export function ActCard({
       }}
       data-testid="act-card"
       data-act-status={a.status ?? 'drafted'}
+      aria-busy={a.status === 'drafting' || undefined}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <span aria-hidden="true" style={{ display: 'inline-flex' }}>
@@ -188,6 +196,25 @@ export function ActCard({
             {a.status === 'snoozed' ? (
               <span className="mono" style={{ fontSize: 9.5, color: 'var(--text-40)' }}>
                 · snoozed
+              </span>
+            ) : null}
+            {a.status === 'drafting' ? (
+              <span
+                className="mono"
+                data-testid="act-status-drafting"
+                style={{ fontSize: 9.5, color: 'var(--text-55)' }}
+              >
+                · drafting…
+              </span>
+            ) : null}
+            {a.status === 'failed' ? (
+              <span
+                className="mono"
+                data-testid="act-status-failed"
+                role="alert"
+                style={{ fontSize: 9.5, color: '#FF6B6B' }}
+              >
+                · failed
               </span>
             ) : null}
           </div>
@@ -257,7 +284,55 @@ export function ActCard({
         </div>
       </div>
 
-      {!editing && (a.subject || draftBody) ? (
+      {!editing && a.status === 'drafting' ? (
+        <div
+          data-testid="act-drafting"
+          className="mono"
+          style={{
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: 'rgba(0,0,0,0.3)',
+            border: '1px dashed rgba(255,255,255,0.15)',
+            fontSize: 11,
+            color: 'var(--text-55)',
+          }}
+        >
+          drafting the follow-up…
+        </div>
+      ) : !editing && a.status === 'failed' ? (
+        <div
+          data-testid="act-failed"
+          style={{
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: 'rgba(0,0,0,0.3)',
+            border: '1px solid rgba(255,107,107,0.35)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+          }}
+        >
+          <span
+            className="mono"
+            role="alert"
+            style={{ fontSize: 10, color: '#FF6B6B', letterSpacing: 0.3 }}
+          >
+            draft failed — the background polish errored. retry reuses what you captured.
+          </span>
+          <div
+            data-testid="act-body"
+            className="mono"
+            style={{
+              fontSize: 11,
+              lineHeight: 1.55,
+              color: 'var(--text-55)',
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {draftBody}
+          </div>
+        </div>
+      ) : !editing && (a.subject || draftBody) ? (
         <div
           data-testid="act-draft"
           style={{
@@ -416,6 +491,31 @@ export function ActCard({
             >
               {editError}
             </span>
+          ) : null}
+        </div>
+      ) : a.status === 'drafting' ? null : a.status === 'failed' ? (
+        <div style={{ display: 'flex', gap: 10 }}>
+          {a.id && onRetry ? (
+            <button
+              type="button"
+              className="mono"
+              data-testid="act-retry"
+              disabled={retrying}
+              onClick={() => onRetry(a.id!)}
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: 0.4,
+                textTransform: 'uppercase',
+                background: 'none',
+                border: 'none',
+                color: retrying ? 'var(--text-40)' : '#FF6B6B',
+                cursor: retrying ? 'not-allowed' : 'pointer',
+                padding: 0,
+              }}
+            >
+              {retrying ? 'retrying…' : 'retry →'}
+            </button>
           ) : null}
         </div>
       ) : (
