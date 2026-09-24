@@ -818,12 +818,4 @@ See table in §6 → "Entity detail pages".
 
 ### 14.4 Things that don't change between breakpoints
 
-The atoms. Buttons keep the 4px offset shadow. Pills keep the alpha recipe. Voice bars stay 22 × 3px @ 38px max. The mic orb's seven states are pixel-identical mobile ↔ desktop. **Don't redesign atoms per breakpoint** — if a button needs to be smaller, use the `sm` size, don't make a new one.
-ngle-column lists become 2-column grids only on desktop (≥1120). Never 3-column body grids (§8 rule).
-- **Detail → two-pane.** On desktop, `person`/`company`/`event` pages become `[list column 280px] [detail column flex]`. List is the entity directory; detail uses the §13 scaffold.
-- **Chat gains an entity rail.** On desktop only, chat is `[thread flex] [entities rail 320px]` — rail surfaces the active entity, extracted chips, and sources. Mobile collapses these into inline pills + agent message footer.
-- **Graph gains a detail pane.** On desktop, graph is `[canvas flex] [detail 340px]`. On mobile, tapping a node raises a `border-radius 14` card floating above the bottom nav.
-
-### 14.4 Things that don't change between breakpoints
-
-The atoms. Buttons keep the 4px offset shadow. Pills keep the alpha recipe. Voice bars stay 22 × 3px @ 38px max. The mic orb's seven states are pixel-identical mobile ↔ desktop. **Don't redesign atoms per breakpoint** — if a button needs to be smaller, use the `sm` size, don't make a new one.
+The atoms. Buttons keep the soft layered elevation — never a hard offset. Pills keep the alpha recipe. Voice bars stay 22 × 3px @ 38px max. The mic orb's seven states are pixel-identical mobile ↔ desktop. **Don't redesign atoms per breakpoint** — if a button needs to be smaller, use the `sm` size, don't make a new one.
