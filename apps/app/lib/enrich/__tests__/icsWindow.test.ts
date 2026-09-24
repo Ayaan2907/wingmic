@@ -523,6 +523,29 @@ END:VCALENDAR`);
     expect(result.ongoing).toHaveLength(0);
   });
 
+  it('collapses RDATE instants that repeat rule occurrences and honors EXDATE over them', () => {
+    const feed = parseIcsEvents(`BEGIN:VCALENDAR
+BEGIN:VEVENT
+SUMMARY:Weekly sync
+DTSTART:20260903T170000Z
+DTEND:20260903T180000Z
+RRULE:FREQ=WEEKLY
+EXDATE:20260910T170000Z
+RDATE:20260910T170000Z,20260917T170000Z
+END:VEVENT
+END:VCALENDAR`);
+
+    // RFC gathers rule + RDATEs then subtracts EXDATEs: the RDATE repeating
+    // the cancelled second Thursday stays gone, and the RDATE repeating the
+    // third Thursday yields exactly one entry — not two, which would also
+    // downgrade a unique ongoing match to ambiguous.
+    const cancelled = matchIcsWindow(feed, new Date(Date.UTC(2026, 8, 10, 17, 30)), opts);
+    expect(cancelled.ongoing).toHaveLength(0);
+
+    const deduped = matchIcsWindow(feed, new Date(Date.UTC(2026, 8, 17, 17, 30)), opts);
+    expect(deduped.ongoing).toHaveLength(1);
+  });
+
   it('expands recurring all-day events within their UTC day window', () => {
     const feed = parseIcsEvents(`BEGIN:VCALENDAR
 BEGIN:VEVENT

@@ -157,6 +157,16 @@ function expandOccurrences(
   const exdateSet = new Set(event.exdates);
   let emitted = 0; // rule occurrences seen so far, DTSTART's included
   let capHit = false;
+  // RFC 5545 gathers the rule and RDATEs into one set, subtracts EXDATEs,
+  // and yields each instant once — dedupe rule/RDATE overlap so a feed
+  // repeating a rule instant in RDATE cannot emit duplicate session
+  // entries (which would also downgrade a unique match to ambiguous).
+  const seen = new Set<number>();
+  const pushOccurrence = (occStartMs: number): void => {
+    if (exdateSet.has(occStartMs) || seen.has(occStartMs)) return;
+    seen.add(occStartMs);
+    out.push(synth(occStartMs));
+  };
   // Returns false once no further occurrence can matter.
   const consider = (occStartMs: number): boolean => {
     if (occStartMs < startMs) return true; // pre-DTSTART pad in BYDAY weeks
@@ -168,7 +178,7 @@ function expandOccurrences(
     if (exdateSet.has(occStartMs)) return true;
     if (untilMs !== null && occStartMs > untilMs) return false;
     if (occStartMs > horizonEndMs) return false;
-    if (occStartMs + durationMs >= horizonStartMs) out.push(synth(occStartMs));
+    if (occStartMs + durationMs >= horizonStartMs) pushOccurrence(occStartMs);
     return true;
   };
 
@@ -237,7 +247,7 @@ function expandOccurrences(
   // occurrence, so added instants share that fate by construction.
   for (const rdateMs of event.rdates) {
     if (rdateMs > horizonEndMs || rdateMs + durationMs < horizonStartMs) continue;
-    out.push(synth(rdateMs));
+    pushOccurrence(rdateMs);
   }
 
   return capHit ? [event] : out;
