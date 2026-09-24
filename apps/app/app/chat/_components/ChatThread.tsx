@@ -76,22 +76,26 @@ export function ChatThread() {
       <div style={threadStyle}>
         {visibleMessages.length === 0 && !recording && <WelcomeAgent />}
 
-        {visibleMessages.map((m) => (
-          <MemoMessageBubble
-            key={m.id}
-            message={m}
-            onRetry={() => retryBubble(m.id)}
-            onDiscard={() => discardBubble(m.id)}
-            onPaste={() => openPaste(m.id)}
-            onDelete={() => softDelete(m.id)}
-            pasteOpen={pasteOpenForId === m.id}
-            pasteDraft={pasteDraft}
-            setPasteDraft={setPasteDraft}
-            onPasteSubmit={() => submitPaste(m.id)}
-            onPasteCancel={closePaste}
-            onSaveAsMemo={() => saveAskAsMemo(m.id)}
-          />
-        ))}
+        {visibleMessages.map((m) =>
+          m.role === 'assistant' ? (
+            <AssistantBubble key={m.id} message={m} />
+          ) : (
+            <MemoMessageBubble
+              key={m.id}
+              message={m}
+              onRetry={() => retryBubble(m.id)}
+              onDiscard={() => discardBubble(m.id)}
+              onPaste={() => openPaste(m.id)}
+              onDelete={() => softDelete(m.id)}
+              pasteOpen={pasteOpenForId === m.id}
+              pasteDraft={pasteDraft}
+              setPasteDraft={setPasteDraft}
+              onPasteSubmit={() => submitPaste(m.id)}
+              onPasteCancel={closePaste}
+              onSaveAsMemo={() => saveAskAsMemo(m.id)}
+            />
+          ),
+        )}
       </div>
     </div>
   );
@@ -125,6 +129,84 @@ function WingmicAvatar() {
     >
       W
     </span>
+  );
+}
+
+// ─── Assistant bubble ────────────────────────────────────────────────────
+
+// The capture conversation's agent turn (spec art_LkglG0Xb "Chat-first
+// capture"). Streams the assistant reply token by token; typing dots cover
+// the gap before the first token lands. Layout mirrors WelcomeAgent's
+// avatar + left-anchored card so every agent surface reads as one identity.
+// The streamed text replaces nothing — the capture bubble above it already
+// shows the entities; this is the conversational layer on top.
+function AssistantBubble({ message: m }: { message: ThreadMessage }) {
+  const text = m.streamText ?? '';
+  const streaming = !m.streamDone;
+  return (
+    <div
+      data-testid="assistant-bubble"
+      style={{ alignSelf: 'flex-start', maxWidth: '92%', width: '100%' }}
+    >
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+        <WingmicAvatar />
+        <div
+          aria-live="polite"
+          style={{
+            flex: 1,
+            padding: '12px 14px',
+            borderRadius: '4px 14px 14px 14px',
+            background: 'var(--surface-2)',
+            border: '1px solid var(--border-mid)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+          }}
+        >
+          {text ? (
+            <p
+              data-testid="assistant-stream"
+              style={{
+                fontSize: 14.5,
+                lineHeight: 1.55,
+                color: 'var(--text-85)',
+                whiteSpace: 'pre-wrap',
+                margin: 0,
+              }}
+            >
+              {text}
+              {streaming ? <span style={{ opacity: 0.5 }}>▍</span> : null}
+            </p>
+          ) : streaming ? (
+            <span
+              aria-label="assistant is thinking"
+              style={{ display: 'inline-flex', gap: 4, padding: '3px 0' }}
+            >
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  style={{
+                    width: 5,
+                    height: 5,
+                    borderRadius: '50%',
+                    background: 'var(--text-40)',
+                    animation: `wm-pulse-d 1.2s ${i * 0.2}s ease-in-out infinite`,
+                  }}
+                />
+              ))}
+            </span>
+          ) : null}
+          {m.followUp ? (
+            <span
+              className="serif"
+              style={{ fontStyle: 'italic', fontSize: 13.5, color: accent }}
+            >
+              ↪ {m.followUp}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
 

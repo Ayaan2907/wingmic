@@ -324,7 +324,9 @@ describe('ChatClient', () => {
     });
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      // 1: transcription POST. 2: the best-effort assistant turn that
+      // starts after commit success (see CaptureProvider).
+      expect(fetchMock).toHaveBeenCalledTimes(2);
     });
     const call = fetchMock.mock.calls[0] as unknown as [unknown, RequestInit];
     const init = call[1];
@@ -332,9 +334,13 @@ describe('ChatClient', () => {
     expect(init.body).toBeInstanceOf(FormData);
     const fd = init.body as FormData;
     expect(fd.get('audio')).toBeInstanceOf(Blob);
+    const assistantCall = fetchMock.mock.calls[1] as unknown as [string];
+    expect(assistantCall[0]).toContain('/api/chat/assistant');
 
     await waitFor(() => {
-      expect(mutateAsyncMock).toHaveBeenCalled();
+      // Exactly one commit — the assistant turn is an extra fetch, never a
+      // second commit.
+      expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
       // First call positional arg = the tRPC input (stable bubble id for idempotency)
       expect(mutateAsyncMock.mock.calls[0]?.[0]).toEqual(
         expect.objectContaining({
