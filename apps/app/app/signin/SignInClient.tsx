@@ -2,10 +2,11 @@
 
 import { useState, type FormEvent } from 'react';
 import { signIn } from '@/lib/auth-client';
+import { colors, shadows } from '@wingmic/design-tokens';
+
+const accent = colors.accent;
 
 type Status = 'idle' | 'sending' | 'sent' | 'error';
-
-const accent = '#FFC452';
 
 export default function SignInClient({
   next = '/chat',
@@ -50,10 +51,11 @@ export default function SignInClient({
         style={{
           width: '100%',
           maxWidth: 420,
-          padding: 32,
-          borderRadius: 16,
+          padding: 36,
+          borderRadius: 24,
           background: 'var(--surface-1)',
           border: '1px solid var(--border-soft)',
+          boxShadow: shadows.overlay,
         }}
       >
         <div
@@ -72,10 +74,10 @@ export default function SignInClient({
         <h1
           style={{
             fontSize: 32,
-            fontWeight: 800,
-            letterSpacing: '-0.025em',
-            lineHeight: 1.05,
-            marginBottom: 12,
+            fontWeight: 700,
+            letterSpacing: '-0.028em',
+            lineHeight: 1.1,
+            marginBottom: 14,
           }}
         >
           sign in.{' '}
@@ -86,9 +88,9 @@ export default function SignInClient({
         <p
           style={{
             fontSize: 14.5,
-            lineHeight: 1.55,
+            lineHeight: 1.6,
             color: 'var(--text-55)',
-            marginBottom: 24,
+            marginBottom: 28,
           }}
         >
           drop your email — we send a one-tap link that signs you in for the next 30 days.
@@ -97,13 +99,13 @@ export default function SignInClient({
         {status === 'sent' ? (
           <div
             style={{
-              padding: 16,
-              borderRadius: 10,
+              padding: 18,
+              borderRadius: 14,
               background: 'rgba(134, 239, 172, 0.08)',
               border: '1px solid rgba(134, 239, 172, 0.25)',
-              color: '#86efac',
+              color: colors.second,
               fontSize: 14,
-              lineHeight: 1.5,
+              lineHeight: 1.6,
             }}
           >
             link sent to <strong>{email}</strong>. check your inbox — expires in 10 minutes.
@@ -119,12 +121,13 @@ export default function SignInClient({
               required
               autoComplete="email"
               style={{
+                minHeight: 52,
                 padding: '14px 16px',
-                borderRadius: 10,
+                borderRadius: 14,
                 background: 'var(--surface-2)',
                 border: '1px solid var(--border-mid)',
                 color: 'var(--ink)',
-                fontSize: 15,
+                fontSize: 16,
                 fontFamily: 'inherit',
                 outline: 'none',
               }}
@@ -133,16 +136,17 @@ export default function SignInClient({
               type="submit"
               disabled={status === 'sending'}
               style={{
+                minHeight: 52,
                 padding: '14px 20px',
-                borderRadius: 10,
+                borderRadius: 999,
                 background: accent,
                 color: '#000',
                 fontWeight: 700,
                 fontSize: 15,
-                border: '1.5px solid #000',
-                boxShadow: '4px 4px 0 #000',
+                boxShadow: shadows.button,
                 cursor: status === 'sending' ? 'wait' : 'pointer',
                 opacity: status === 'sending' ? 0.7 : 1,
+                transition: 'box-shadow 150ms var(--ease-relaxed, ease-out)',
               }}
             >
               {status === 'sending' ? 'sending...' : 'send sign-in link →'}
@@ -151,10 +155,10 @@ export default function SignInClient({
               <div
                 style={{
                   fontSize: 13,
-                  color: '#FF6B6B',
-                  padding: '8px 12px',
-                  borderRadius: 8,
-                  background: 'rgba(255, 107, 107, 0.08)',
+                  color: colors.alarm,
+                  padding: '10px 14px',
+                  borderRadius: 12,
+                  background: 'rgba(255, 107, 107, 0.06)',
                   border: '1px solid rgba(255, 107, 107, 0.25)',
                 }}
               >
@@ -228,13 +232,11 @@ function LinkedInComingSoonButton() {
           gap: 10,
           minHeight: 48,
           padding: '14px 20px',
-          borderRadius: 10,
+          borderRadius: 999,
           background: LINKEDIN_BLUE,
           color: '#fff',
           fontWeight: 700,
           fontSize: 15,
-          border: '1.5px solid #000',
-          boxShadow: '4px 4px 0 #000',
           cursor: 'not-allowed',
           opacity: 0.55,
         }}

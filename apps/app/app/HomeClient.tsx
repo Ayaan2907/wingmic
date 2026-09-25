@@ -20,12 +20,13 @@ import Link from 'next/link';
 import { trpc } from '@/lib/trpc/client';
 import { PersonAvatar } from './_components/entity/EntityAvatar';
 import { ActCard } from './_components/ActCard';
+import { colors, shadows } from '@wingmic/design-tokens';
 
 // ── Tokens ──────────────────────────────────────────────────────────────
-// Mirror the accent palette used elsewhere in apps/app (capture, entity).
-const accent = '#FFC452';
-const second = '#86efac';
-const third = '#FF8FAB';
+// Single source of truth: packages/design-tokens.
+const accent = colors.accent;
+const second = colors.second;
+const third = colors.third;
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -85,17 +86,18 @@ export default function HomeClient({ userName, initialData }: HomeClientProps) {
       <section
         className="surface-wrap surface-wrap-compact"
         style={{
-          paddingTop: 16,
+          paddingTop: 20,
           paddingBottom: 8,
           boxSizing: 'border-box',
+          animation: 'wm-fade var(--dur-slow, 420ms) var(--ease-relaxed, ease-out) both',
         }}
       >
         <h1
           data-testid="home-greeting"
           style={{
-            font: '800 clamp(28px, 8.2vw, 38px)/1.05 var(--font-sans)',
-            letterSpacing: '-0.03em',
-            margin: '0 0 16px',
+            font: '700 clamp(28px, 8.2vw, 38px)/1.1 var(--font-sans)',
+            letterSpacing: '-0.028em',
+            margin: '0 0 20px',
           }}
         >
           hey,{' '}
@@ -156,7 +158,7 @@ function Header({ userName }: { userName: string | null }) {
             minWidth: 48,
             minHeight: 48,
             padding: '0 12px',
-            borderRadius: 8,
+            borderRadius: 12,
             background: 'var(--surface-1)',
             border: '1px solid var(--border-soft)',
             color: 'var(--text-55)',
@@ -178,7 +180,7 @@ function Header({ userName }: { userName: string | null }) {
           style={{
             minWidth: 48,
             minHeight: 48,
-            borderRadius: 8,
+            borderRadius: 12,
             background: 'var(--surface-1)',
             border: '1px solid var(--border-soft)',
             display: 'inline-flex',
@@ -186,13 +188,11 @@ function Header({ userName }: { userName: string | null }) {
             justifyContent: 'center',
             color: 'var(--text-55)',
             textDecoration: 'none',
-            fontSize: 10,
-            letterSpacing: 0.5,
-            textTransform: 'uppercase',
+            fontSize: 14,
             flexShrink: 0,
           }}
         >
-          set
+          ⚙
         </Link>
       </div>
     </header>
@@ -209,10 +209,10 @@ function ImportsCue() {
       style={{
         display: 'block',
         marginBottom: 20,
-        padding: '16px',
-        borderRadius: 14,
-        border: `1.5px dashed ${accent}66`,
-        background: `${accent}0d`,
+        padding: '18px',
+        borderRadius: 18,
+        border: `1px dashed ${accent}59`,
+        background: `${accent}0a`,
         textDecoration: 'none',
         color: 'inherit',
       }}
@@ -220,7 +220,7 @@ function ImportsCue() {
       <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
         import contacts →
       </div>
-      <div className="mono" style={{ fontSize: 11, color: 'var(--text-55)', lineHeight: 1.4 }}>
+      <div className="mono" style={{ fontSize: 11, color: 'var(--text-55)', lineHeight: 1.5 }}>
         LinkedIn Connections.csv or a .vcf — cold-start your graph.
       </div>
     </Link>
@@ -251,10 +251,11 @@ function StatsRow({ today, week }: { today: number; week: number }) {
         <div
           key={s.l}
           style={{
-            padding: '16px 14px 12px',
-            borderRadius: 14,
-            background: 'var(--surface-1, rgba(255,255,255,0.02))',
-            border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
+            padding: '18px 16px 14px',
+            borderRadius: 18,
+            background: 'var(--surface-1)',
+            border: '1px solid var(--border-soft)',
+            boxShadow: shadows.card,
             display: 'flex',
             flexDirection: 'column',
             gap: 6,
@@ -266,9 +267,9 @@ function StatsRow({ today, week }: { today: number; week: number }) {
               fontStyle: 'italic',
               fontWeight: 400,
               fontSize: 'clamp(44px, 12vw, 56px)',
-              lineHeight: 0.85,
+              lineHeight: 0.9,
               color: s.c,
-              letterSpacing: '-0.04em',
+              letterSpacing: '-0.03em',
               fontVariantNumeric: 'tabular-nums',
             }}
           >
@@ -311,13 +312,13 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
       {items.length === 0 ? (
         <div
           style={{
-            padding: 16,
-            borderRadius: 14,
-            background: 'var(--surface-1, rgba(255,255,255,0.02))',
-            border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
+            padding: 18,
+            borderRadius: 18,
+            background: 'var(--surface-1)',
+            border: '1px solid var(--border-soft)',
             color: 'var(--text-55)',
             fontSize: 13.5,
-            lineHeight: 1.55,
+            lineHeight: 1.6,
           }}
           data-testid="home-activity-empty"
         >
@@ -329,9 +330,9 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
             listStyle: 'none',
             padding: 0,
             margin: 0,
-            background: 'var(--surface-1, rgba(255,255,255,0.02))',
-            border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
-            borderRadius: 14,
+            background: 'var(--surface-1)',
+            border: '1px solid var(--border-soft)',
+            borderRadius: 18,
           }}
         >
           {items.map((item, i) => (
@@ -339,7 +340,7 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
               key={item.id}
               style={{
                 borderBottom:
-                  i < items.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                  i < items.length - 1 ? '1px solid var(--border-soft)' : 'none',
               }}
             >
               <Link
@@ -349,8 +350,8 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
                   display: 'flex',
                   alignItems: 'flex-start',
                   gap: 12,
-                  minHeight: 56,
-                  padding: '12px 14px',
+                  minHeight: 60,
+                  padding: '14px 16px',
                   textDecoration: 'none',
                   color: 'inherit',
                 }}
@@ -364,8 +365,8 @@ function ActivityList({ items }: { items: HomeRecentItem[] }) {
                 style={{
                   flex: 1,
                   minWidth: 0,
-                  fontSize: 13.5,
-                  lineHeight: 1.45,
+                  fontSize: 14,
+                  lineHeight: 1.55,
                   color: 'var(--text-85)',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -478,11 +479,11 @@ function HomeActsPanel({ fallbackCount }: { fallbackCount: number }) {
           display: 'flex',
           alignItems: 'center',
           gap: 10,
-          padding: '12px 14px',
-          borderRadius: 12,
+          padding: '14px 16px',
+          borderRadius: 16,
           marginBottom: 20,
-          background: `linear-gradient(90deg, ${accent}1a, transparent)`,
-          border: `1px solid ${accent}4d`,
+          background: `linear-gradient(90deg, ${accent}14, transparent)`,
+          border: `1px solid ${accent}38`,
         }}
       >
         <span
@@ -561,8 +562,8 @@ function HomeActsPanel({ fallbackCount }: { fallbackCount: number }) {
                 fontSize: 11,
                 color: accent,
                 minHeight: 40,
-                padding: '0 10px',
-                borderRadius: 8,
+                padding: '0 14px',
+                borderRadius: 999,
                 background: `${accent}12`,
                 border: `1px solid ${accent}4d`,
                 cursor: 'pointer',
@@ -575,13 +576,13 @@ function HomeActsPanel({ fallbackCount }: { fallbackCount: number }) {
         ) : previewActs.length === 0 ? (
           <div
             style={{
-              padding: 16,
-              borderRadius: 14,
-              background: 'var(--surface-1, rgba(255,255,255,0.02))',
-              border: '1px dashed var(--border-soft, rgba(255,255,255,0.06))',
+              padding: 18,
+              borderRadius: 18,
+              background: 'var(--surface-1)',
+              border: '1px dashed var(--border-soft)',
               color: 'var(--text-55)',
               fontSize: 13.5,
-              lineHeight: 1.55,
+              lineHeight: 1.6,
             }}
             data-testid="home-acts-empty"
           >
