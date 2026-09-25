@@ -1,4 +1,4 @@
-import { accent, blue, violet } from '@/app/chat/_components/tokens';
+import { colors } from '@wingmic/design-tokens';
 import {
   graphNodeCaption,
   graphNodeInitials,
@@ -9,7 +9,12 @@ import {
 } from './graph-node-label';
 import type { GraphNode, LinkRel, NodeKind } from './graph-types';
 
-// Canvas 2d cannot resolve CSS variables — keep hex only.
+// Canvas 2d cannot resolve CSS variables — keep hex only (imported from the
+// token package so the palette stays single-sourced).
+const accent = colors.accent;
+const blue = colors.info.blue;
+const violet = colors.info.violet;
+
 export const KIND_COLOR: Record<NodeKind, string> = {
   person: accent,
   company: blue,

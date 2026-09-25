@@ -77,8 +77,8 @@ export function CommandPalette() {
         alignItems: 'flex-start',
         justifyContent: 'center',
         paddingTop: '18vh',
-        background: 'rgba(0,0,0,0.6)',
-        backdropFilter: 'blur(4px)',
+        background: 'rgba(0,0,0,0.5)',
+        backdropFilter: 'blur(6px)',
       }}
     >
       <div
@@ -88,9 +88,9 @@ export function CommandPalette() {
           width: 'min(560px, 92vw)',
           background: 'var(--bg-raised)',
           border: '1px solid var(--border-mid)',
-          borderRadius: 18,
-          boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
-          padding: 14,
+          borderRadius: 24,
+          boxShadow: 'var(--shadow-overlay)',
+          padding: 18,
         }}
       >
         <input
@@ -108,7 +108,8 @@ export function CommandPalette() {
             border: 'none',
             color: 'var(--ink)',
             fontFamily: 'JetBrains Mono, monospace',
-            fontSize: 14,
+            fontSize: 15,
+            padding: '10px 4px',
           }}
         />
       </div>
