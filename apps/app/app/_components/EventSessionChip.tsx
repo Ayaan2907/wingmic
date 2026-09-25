@@ -11,13 +11,14 @@
 //   none + no ICS → nothing (the settings nudge already owns that story)
 //   expiry     → quiet "left <event>" toast, auto-dismissed
 //
-// Design system v2: mono chrome text, single amber accent, one serif italic
-// word in the picker title, 44px option rows, soft drop shadow on the sheet
-// (card) — never the hard offset button shadow.
+// Design system v3 (relaxed premium): mono chrome text, single amber accent,
+// one serif italic word in the picker title, 44px option rows, soft layered
+// overlay shadow on the sheet — no hard offsets anywhere.
 
 import * as React from 'react';
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc/client';
+import { shadows, radii, motion } from '@wingmic/design-tokens';
 import { useEventSession } from './EventSessionProvider';
 import { eventKey, type EventSessionEvent } from './eventSession';
 
@@ -127,10 +128,12 @@ export function EventSessionChip() {
             gap: 8,
             margin: '12px auto 0',
             padding: '10px 14px',
-            borderRadius: 999,
+            borderRadius: radii.pill,
             border: '1px solid var(--border-acc)',
             background: 'rgba(255,196,82,0.08)',
             color: 'var(--text-85)',
+            boxShadow: shadows.contact,
+            transition: `box-shadow ${motion.duration.fast} ${motion.ease.out}, border-color ${motion.duration.fast} ${motion.ease.out}`,
             cursor: 'pointer',
             minHeight: 40,
             font: '600 12px Inter, system-ui, sans-serif',
@@ -195,11 +198,12 @@ export function EventSessionChip() {
             padding: '8px 14px',
             background: 'var(--bg-raised)',
             border: '1px solid var(--border-mid)',
-            borderRadius: 999,
+            borderRadius: radii.pill,
             color: 'var(--text-70)',
             fontSize: 11,
             zIndex: 60,
             whiteSpace: 'nowrap',
+            boxShadow: shadows.raised,
           }}
         >
           {state.toast}
@@ -280,10 +284,10 @@ function SheetFrame({
             maxWidth: 480,
             margin: '0 12px calc(env(safe-area-inset-bottom, 0px) + 84px)',
             background: 'var(--bg-raised)',
-            border: '1px solid var(--border-mid)',
-            borderRadius: 16,
-            // Card — soft drop, never the hard offset button shadow.
-            boxShadow: '0 -8px 32px rgba(0,0,0,0.5)',
+            border: '1px solid var(--border-soft)',
+            borderRadius: radii.xl,
+            // Sheet — v3 layered overlay shadow.
+            boxShadow: shadows.overlay,
             padding: 16,
             display: 'flex',
             flexDirection: 'column',
@@ -354,13 +358,14 @@ function EventSessionPicker({
                 justifyContent: 'space-between',
                 gap: 10,
                 minHeight: 44,
-                padding: '10px 12px',
-                borderRadius: 10,
+                padding: '10px 14px',
+                borderRadius: radii.sm,
                 background: 'var(--surface-1)',
                 border: '1px solid var(--border-soft)',
                 color: 'var(--text-85)',
                 cursor: 'pointer',
                 textAlign: 'left',
+                transition: `border-color ${motion.duration.fast} ${motion.ease.out}`,
                 font: '600 13.5px Inter, system-ui, sans-serif',
               }}
             >
@@ -425,12 +430,13 @@ function EventSessionReview({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              borderRadius: 10,
+              borderRadius: radii.md,
               background: 'var(--accent)',
               color: '#000',
-              border: '1.5px solid #000',
-              // Button — hard offset shadow, per design system v2.
-              boxShadow: '3px 3px 0 #000',
+              border: 'none',
+              // Button — v3 soft elevation, lifts on press.
+              boxShadow: shadows.button,
+              transition: `box-shadow ${motion.duration.fast} ${motion.ease.out}`,
               textDecoration: 'none',
               font: '700 12.5px Inter, system-ui, sans-serif',
             }}
