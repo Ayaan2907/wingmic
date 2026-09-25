@@ -17,6 +17,11 @@ import { TRPCError } from '@trpc/server';
 import { db } from '@wingmic/db';
 import type { TRPCContext } from '@/lib/trpc/context';
 import {
+  ANALYTICS_EVENTS,
+  type ApiCallProperties,
+} from '@/lib/analytics/events';
+import { trackAnalyticsEvent } from '@/lib/analytics/server';
+import {
   authenticateApiKey,
   type ApiScope,
   type AuthenticatedApiKey,
@@ -77,6 +82,22 @@ export async function withApiKey(
   scope: ApiScope,
   run: (ctx: V1Context) => Promise<unknown>,
 ): Promise<Response> {
+  // api_call granularity: per static endpoint (/api/v1 has no dynamic
+  // segments, so the pathname is a bounded enum). Emitted only for requests
+  // holding a valid key — a known user exists and 401 abuse noise is not
+  // product signal. 403/429/5xx with a valid key still count: key health.
+  const route = new URL(req.url).pathname;
+  let authedUserId: string | null = null;
+  const trackApiCall = (status: number): void => {
+    if (!authedUserId) return;
+    const properties: ApiCallProperties = {
+      method: req.method,
+      route,
+      scope,
+      status,
+    };
+    trackAnalyticsEvent(authedUserId, ANALYTICS_EVENTS.apiCall, properties);
+  };
   try {
     const raw = bearerKey(req);
     if (!raw) {
@@ -86,6 +107,7 @@ export async function withApiKey(
     if (!key) {
       throw new ApiRequestError(401, 'unauthorized', 'invalid or revoked key');
     }
+    authedUserId = key.userId;
 
     const rl = await consumeRateLimit(db, key.id);
     if (!rl.allowed) {
@@ -108,9 +130,12 @@ export async function withApiKey(
     }
 
     const result = await run({ userId: key.userId, key, headers: req.headers });
+    trackApiCall(200);
     return NextResponse.json(result, { status: 200 });
   } catch (err) {
-    return toApiResponse(err);
+    const res = toApiResponse(err);
+    trackApiCall(res.status);
+    return res;
   }
 }
 
