@@ -255,4 +255,32 @@ describe('seedBay idempotency', () => {
       .where(eq(places.id, 'seed:golden-gate-bridge'));
     expect(bridge.firstSeenAt.toISOString()).toBe('2026-09-24T12:00:00.000Z');
   });
+
+  it('never blanks enrichment columns written by other writers', async () => {
+    const { db } = await freshDb();
+    await seedBay(db, loadBaySeedDir(BAY_SEED_DIR, NOW));
+    // simulate the embedder and the promotion flow — they own these columns
+    await db
+      .update(places)
+      .set({ embedding: Array.from({ length: 1536 }, () => 0.5) })
+      .where(eq(places.id, 'seed:golden-gate-bridge'));
+    await db
+      .update(bayEvents)
+      .set({
+        embedding: Array.from({ length: 1536 }, () => 0.25),
+        canonicalEventId: 'evt_promoted_1',
+      })
+      .where(eq(bayEvents.id, 'seed:exploratorium-after-dark'));
+    // second run: incoming rows carry no enrichment — re-seed must preserve it
+    await seedBay(db, loadBaySeedDir(BAY_SEED_DIR, NOW));
+    const [place] = await db.select().from(places).where(eq(places.id, 'seed:golden-gate-bridge'));
+    expect(place.embedding?.length).toBe(1536);
+    const [ev] = await db
+      .select()
+      .from(bayEvents)
+      .where(eq(bayEvents.id, 'seed:exploratorium-after-dark'));
+    // the promotion link survives a re-ingest — nothing silently deleted
+    expect(ev.canonicalEventId).toBe('evt_promoted_1');
+    expect(ev.embedding?.length).toBe(1536);
+  });
 });

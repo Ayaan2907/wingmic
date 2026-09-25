@@ -285,7 +285,9 @@ async function seedPlaces(db: DB, incoming: NewPlace[]): Promise<SeedMergeSummar
       lat: sql`excluded.lat`,
       lng: sql`excluded.lng`,
       source: sql`excluded.source`,
-      embedding: sql`excluded.embedding`,
+      // enrichment columns — the embedder owns these; a seed re-run never
+      // nulls what another writer stored
+      embedding: sql`coalesce(excluded.embedding, places.embedding)`,
       firstSeenAt: sql`excluded.first_seen_at`,
       fetchedAt: sql`excluded.fetched_at`,
     },
@@ -304,7 +306,9 @@ async function seedEvents(db: DB, incoming: NewBayEvent[]): Promise<SeedMergeSum
   await db.insert(bayEvents).values(rows).onConflictDoUpdate({
     target: bayEvents.id,
     set: {
-      canonicalEventId: sql`excluded.canonical_event_id`,
+      // canonicalEventId (promotion) and embedding (the embedder) are owned by
+      // other writers — a re-ingest refreshes content, never blanks enrichment
+      canonicalEventId: sql`coalesce(excluded.canonical_event_id, bay_events.canonical_event_id)`,
       source: sql`excluded.source`,
       externalId: sql`excluded.external_id`,
       title: sql`excluded.title`,
@@ -318,7 +322,7 @@ async function seedEvents(db: DB, incoming: NewBayEvent[]): Promise<SeedMergeSum
       startsAt: sql`excluded.starts_at`,
       endsAt: sql`excluded.ends_at`,
       expiresAt: sql`excluded.expires_at`,
-      embedding: sql`excluded.embedding`,
+      embedding: sql`coalesce(excluded.embedding, bay_events.embedding)`,
       firstSeenAt: sql`excluded.first_seen_at`,
       fetchedAt: sql`excluded.fetched_at`,
     },
