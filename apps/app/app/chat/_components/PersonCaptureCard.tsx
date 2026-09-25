@@ -3,6 +3,7 @@
 import type { Route } from 'next';
 import Link from 'next/link';
 import { accent, blue, second, violet } from './tokens';
+import { shadows, radii } from '@wingmic/design-tokens';
 import { canonicalizeLinkedin, linkedinHandle } from '@wingmic/extractor/linkedin';
 
 export type PersonCaptureAction = {
@@ -53,11 +54,12 @@ export function PersonCaptureCard({
         display: 'flex',
         gap: 10,
         alignItems: 'flex-start',
-        padding: '10px 12px',
-        borderRadius: 12,
+        padding: '11px 14px',
+        borderRadius: radii.md,
         background: 'var(--surface-2)',
-        border: selected ? `1.5px solid ${accent}` : '1px solid var(--border-soft)',
-        boxShadow: selected ? '2px 2px 0 #000' : 'none',
+        border: selected ? `1px solid ${accent}` : '1px solid var(--border-soft)',
+        boxShadow: selected ? shadows.contact : 'none',
+        transition: 'box-shadow 150ms cubic-bezier(0.22, 1, 0.36, 1)',
       }}
     >
       <span
@@ -65,7 +67,7 @@ export function PersonCaptureCard({
         style={{
           width: 36,
           height: 36,
-          borderRadius: 8,
+          borderRadius: radii.sm,
           background: accent,
           color: '#000',
           display: 'inline-flex',
@@ -75,7 +77,7 @@ export function PersonCaptureCard({
           fontSize: 12,
           fontFamily: 'Inter, system-ui, sans-serif',
           flexShrink: 0,
-          border: '1.5px solid #000',
+          boxShadow: shadows.contact,
         }}
       >
         {monogram}
@@ -181,7 +183,7 @@ function GhostAction({
       aria-label={ariaLabel}
       onClick={onClick}
       style={{
-        padding: 0,
+        padding: '6px 4px',
         background: 'transparent',
         border: 'none',
         color: 'var(--text-55)',
