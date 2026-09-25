@@ -106,7 +106,7 @@ export function EventSessionChip() {
             background: 'transparent',
             color: 'var(--text-55)',
             cursor: 'pointer',
-            minHeight: 40,
+            minHeight: 44,
             font: '600 12px Inter, system-ui, sans-serif',
           }}
         >
@@ -135,7 +135,7 @@ export function EventSessionChip() {
             boxShadow: shadows.contact,
             transition: `box-shadow ${motion.duration.fast} ${motion.ease.out}, border-color ${motion.duration.fast} ${motion.ease.out}`,
             cursor: 'pointer',
-            minHeight: 40,
+            minHeight: 44,
             font: '600 12px Inter, system-ui, sans-serif',
           }}
         >

@@ -828,6 +828,7 @@ function PasteInline({
           onClick={onSubmit}
           disabled={!draft.trim()}
           style={{
+            minHeight: 44,
             padding: '9px 16px',
             borderRadius: radii.md,
             background: accent,
@@ -847,6 +848,7 @@ function PasteInline({
           type="button"
           onClick={onCancel}
           style={{
+            minHeight: 44,
             padding: '8px 14px',
             borderRadius: 10,
             background: 'transparent',

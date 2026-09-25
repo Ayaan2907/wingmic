@@ -150,6 +150,7 @@ function ChatComposer() {
               aria-label="leave photo unassigned"
               onClick={choosePhotoUnassigned}
               style={{
+                minHeight: 44,
                 padding: '8px 12px',
                 borderRadius: 999,
                 border: '1px solid var(--border-soft)',
