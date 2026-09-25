@@ -22,6 +22,11 @@ export const LUMA_HOST = "https://api.luma.com";
 export const PAGE_SIZE = 25;
 export const MAX_PAGES = 3;
 export const PAGE_DELAY_MS = 1000;
+// bounds every source fetch: a hung connection (half-open socket, no response) must
+// reject into the per-source error path instead of pinning the run — the module-level
+// single-flight flag only clears in the finally, so an unbounded await would wedge
+// every later runIngest in the process behind "ingest already running".
+export const FETCH_TIMEOUT_MS = 15_000;
 
 interface LumaPage {
   entries?: unknown[];
@@ -29,8 +34,11 @@ interface LumaPage {
   next_cursor?: string;
 }
 
-async function getJson(url: string, fetchImpl: FetchImpl): Promise<LumaPage> {
-  const res = await fetchImpl(url, { headers: { accept: "application/json" } });
+async function getJson(url: string, fetchImpl: FetchImpl, timeoutMs: number): Promise<LumaPage> {
+  const res = await fetchImpl(url, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
   if (!res.ok) throw new Error(`luma http ${res.status}`);
   return (await res.json()) as LumaPage;
 }
@@ -84,10 +92,12 @@ export async function lumaSource({
   fetchImpl = fetch,
   now,
   cities,
+  fetchTimeoutMs = FETCH_TIMEOUT_MS,
 }: {
   fetchImpl?: FetchImpl;
   now: string;
   cities: string[];
+  fetchTimeoutMs?: number;
 }): Promise<IngestSourceResult> {
   const out: IngestSourceResult = { name: "luma", records: [], errors: [] };
   for (const city of cities) {
@@ -99,7 +109,7 @@ export async function lumaSource({
           `${LUMA_HOST}/discover/get-paginated-events?pagination_limit=${PAGE_SIZE}` +
           `&city_slug=${encodeURIComponent(city)}` +
           (cursor ? `&pagination_cursor=${encodeURIComponent(cursor)}` : "");
-        data = await getJson(url, fetchImpl);
+        data = await getJson(url, fetchImpl, fetchTimeoutMs);
       } catch (e) {
         out.errors.push(`luma ${city} page ${page + 1}: ${(e as Error).message}`);
         break;
@@ -144,6 +154,7 @@ export interface RunIngestOptions {
   dryRun?: boolean;
   only?: string | null;
   fetchImpl?: FetchImpl;
+  fetchTimeoutMs?: number;
   dataDir: string;
   now?: string;
   cities?: string[];
@@ -157,6 +168,7 @@ export async function runIngest({
   dryRun = false,
   only = null,
   fetchImpl = fetch,
+  fetchTimeoutMs = FETCH_TIMEOUT_MS,
   dataDir,
   now = new Date().toISOString(),
   cities = ["sf"],
@@ -166,7 +178,7 @@ export async function runIngest({
   try {
     const sources: Record<string, () => Promise<IngestSourceResult>> = {
       seed: () => seedSource(),
-      luma: () => lumaSource({ fetchImpl, now, cities }),
+      luma: () => lumaSource({ fetchImpl, now, cities, fetchTimeoutMs }),
       eventbrite: () => eventbriteSource(),
     };
     const names = only ? [only] : Object.keys(sources);

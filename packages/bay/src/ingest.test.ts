@@ -151,6 +151,23 @@ describe("runIngest", () => {
     const luma = summary.sources.find((s) => s.name === "luma");
     expect(luma && luma.fetched).toBe(3); // MAX_PAGES per city, even when has_more
   });
+
+  it("bounds hung fetches so the single-flight flag always clears", async () => {
+    // a hung connection modeled like real fetch: the promise never settles on its
+    // own, only when the abort signal fires (getJson passes AbortSignal.timeout).
+    const hung = (async (_url: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new Error("source fetch timed out")));
+      })) as typeof fetch;
+    const dir = mkdtempSync(join(tmpdir(), "bay-ingest7-"));
+    const first = await runIngest({ dataDir: dir, now: NOW, cities: ["sf"], fetchImpl: hung, fetchTimeoutMs: 20 });
+    const luma = first.sources.find((s) => s.name === "luma");
+    expect(luma && luma.errors.length).toBeGreaterThan(0); // the dead source contributes an error, not a failed run
+    expect(luma && luma.errors[0]).toMatch(/timed out/i); // the rejection came from the timeout
+    // the flag cleared: a second run starts instead of throwing "ingest already running"
+    const second = await runIngest({ dataDir: dir, now: NOW, fetchImpl: async () => new Response("{}", { status: 200 }) });
+    expect(second.sources.length).toBeGreaterThan(0);
+  });
 });
 
 describe("store io", () => {
