@@ -3,7 +3,7 @@
 import type { Route } from 'next';
 import Link from 'next/link';
 import { accent, blue, second, violet } from './tokens';
-import { shadows, radii } from '@wingmic/design-tokens';
+import { shadows, radii, motion } from '@wingmic/design-tokens';
 import { canonicalizeLinkedin, linkedinHandle } from '@wingmic/extractor/linkedin';
 
 export type PersonCaptureAction = {
@@ -59,7 +59,7 @@ export function PersonCaptureCard({
         background: 'var(--surface-2)',
         border: selected ? `1px solid ${accent}` : '1px solid var(--border-soft)',
         boxShadow: selected ? shadows.contact : 'none',
-        transition: 'box-shadow 150ms cubic-bezier(0.22, 1, 0.36, 1)',
+        transition: `box-shadow ${motion.duration.fast} ${motion.ease.out}`,
       }}
     >
       <span
@@ -183,6 +183,8 @@ function GhostAction({
       aria-label={ariaLabel}
       onClick={onClick}
       style={{
+        minHeight: 44,
+        minWidth: 44,
         padding: '6px 4px',
         background: 'transparent',
         border: 'none',

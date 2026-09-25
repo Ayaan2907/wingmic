@@ -20,7 +20,7 @@ import { ChatThread, UndoChip } from './_components/ChatThread';
 import { ChatEntityRail } from './_components/ChatEntityRail';
 import { CameraCapture } from './_components/CameraCapture';
 import { accent } from './_components/tokens';
-import { shadows, radii } from '@wingmic/design-tokens';
+import { shadows, radii, motion } from '@wingmic/design-tokens';
 import type { ChatInitialItem } from './_components/types';
 
 interface ChatClientProps {
@@ -132,6 +132,7 @@ function ChatComposer() {
                 type="button"
                 onClick={() => choosePhotoBind(choice)}
                 style={{
+                  minHeight: 44,
                   padding: '8px 12px',
                   borderRadius: 999,
                   border: '1px solid var(--border-soft)',
@@ -271,7 +272,7 @@ function ChatComposer() {
           background: 'var(--bg-card)',
           border: dropping ? `1px solid ${accent}` : '1px solid var(--border-soft)',
           boxShadow: shadows.button,
-          transition: `border-color 150ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 150ms cubic-bezier(0.22, 1, 0.36, 1)`,
+          transition: `border-color ${motion.duration.fast} ${motion.ease.out}, box-shadow ${motion.duration.fast} ${motion.ease.out}`,
           pointerEvents: 'auto',
         }}
       >

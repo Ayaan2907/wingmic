@@ -23,9 +23,7 @@
 
 import { useCapture } from './CaptureProvider';
 import { shadows } from '@wingmic/design-tokens';
-
-const accent = '#FFC452';
-const coral = '#FF6B6B';
+import { accent, coral } from '../chat/_components/tokens';
 
 const PHANTOM_BOTTOM = 'calc(var(--chat-composer-bottom) + 88px)';
 

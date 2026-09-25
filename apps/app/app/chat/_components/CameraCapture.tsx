@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { snapshotVideoToJpeg } from '@/lib/chat/captureCamera';
 import { readQrFromVideo } from '@/lib/chat/readQr';
 import { accent } from './tokens';
-import { shadows, radii } from '@wingmic/design-tokens';
+import { shadows, radii, motion } from '@wingmic/design-tokens';
 
 type Facing = 'environment' | 'user';
 
@@ -320,7 +320,7 @@ export function CameraCapture({
             border: 'none',
             background: accent,
             boxShadow: shadows.raised,
-            transition: `transform 150ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 150ms cubic-bezier(0.22, 1, 0.36, 1)`,
+            transition: `transform ${motion.duration.fast} ${motion.ease.out}, box-shadow ${motion.duration.fast} ${motion.ease.out}`,
             cursor: snapDisabled ? 'default' : 'pointer',
             opacity: snapDisabled ? 0.4 : 1,
           }}

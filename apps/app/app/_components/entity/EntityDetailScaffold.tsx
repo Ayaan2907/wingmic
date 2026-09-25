@@ -16,7 +16,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { PersonAvatar, CompanyTile, EventDiamond } from './EntityAvatar';
 import { accent, third, blue, violet } from '@/app/chat/_components/tokens';
-import { shadows, radii } from '@wingmic/design-tokens';
+import { shadows, radii, motion } from '@wingmic/design-tokens';
 
 export type EntityKind = 'person' | 'company' | 'event' | 'topic';
 
@@ -513,7 +513,7 @@ function CtaRow({
           font: '700 13px Inter, system-ui, sans-serif',
           border: 'none',
           boxShadow: shadows.button,
-          transition: `box-shadow 150ms cubic-bezier(0.22, 1, 0.36, 1)`,
+          transition: `box-shadow ${motion.duration.fast} ${motion.ease.out}`,
           cursor: primaryInactive ? 'not-allowed' : 'pointer',
           opacity: primaryInactive ? 0.85 : 1,
         }}
