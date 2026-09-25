@@ -118,7 +118,7 @@ function WingmicAvatar() {
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#fff',
+        color: '#000',
         fontFamily: 'Newsreader, Georgia, serif',
         fontStyle: 'italic',
         fontSize: 14,
