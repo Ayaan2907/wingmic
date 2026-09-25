@@ -19,6 +19,7 @@ import type {
   FailureCode,
 } from './types';
 import { accent, coral, third, violet, blue } from './tokens';
+import { shadows, radii, motion } from '@wingmic/design-tokens';
 
 function fmtMs(ms: number | null): string {
   if (ms == null) return '—';
@@ -112,9 +113,8 @@ function WingmicAvatar() {
         width: 28,
         height: 28,
         background: accent,
-        border: '1.5px solid #000',
-        boxShadow: '2px 2px 0 #000',
-        borderRadius: 6,
+        borderRadius: radii.sm,
+        boxShadow: shadows.contact,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -154,10 +154,11 @@ function AssistantBubble({ message: m }: { message: ThreadMessage }) {
           aria-live="polite"
           style={{
             flex: 1,
-            padding: '12px 14px',
-            borderRadius: '4px 14px 14px 14px',
+            padding: '13px 16px',
+            borderRadius: '6px 18px 18px 18px',
             background: 'var(--surface-2)',
-            border: '1px solid var(--border-mid)',
+            border: '1px solid var(--border-soft)',
+            boxShadow: shadows.card,
             display: 'flex',
             flexDirection: 'column',
             gap: 8,
@@ -231,10 +232,11 @@ function WelcomeAgent() {
         <div style={{ maxWidth: 340 }}>
           <div
             style={{
-              padding: '12px 14px',
-              borderRadius: '4px 14px 14px 14px',
+              padding: '13px 16px',
+              borderRadius: '6px 18px 18px 18px',
               background: 'var(--surface-2)',
-              border: '1px solid var(--border-mid)',
+              border: '1px solid var(--border-soft)',
+              boxShadow: shadows.card,
               fontSize: 14.5,
               lineHeight: 1.55,
               color: 'var(--text-85)',
@@ -344,16 +346,16 @@ function MessageBubble(props: MessageBubbleProps) {
         <div
           style={{
             alignSelf: 'flex-end',
-            padding: '14px 16px',
-            borderRadius: '18px 18px 4px 18px',
+            padding: '15px 18px',
+            borderRadius: '20px 20px 6px 20px',
             background: accent,
-            color: '#fff',
-            border: '1.5px solid #000',
-            boxShadow: '3px 3px 0 #000',
+            color: 'rgba(0,0,0,0.87)',
+            boxShadow: shadows.card,
             display: 'flex',
             flexDirection: 'column',
             gap: 10,
             position: 'relative',
+            animation: `wm-rise ${motion.duration.base} ${motion.ease.out}`,
           }}
         >
           <BubbleHeader m={m} onDelete={props.onDelete} />
@@ -364,7 +366,7 @@ function MessageBubble(props: MessageBubbleProps) {
               style={{
                 fontSize: 15.5,
                 lineHeight: 1.55,
-                color: '#fff',
+                color: 'rgba(0,0,0,0.87)',
                 whiteSpace: 'pre-wrap',
                 margin: 0,
               }}
@@ -516,7 +518,7 @@ function BubbleHeader({ m, onDelete }: { m: ThreadMessage; onDelete: () => void 
         display: 'flex',
         justifyContent: 'space-between',
         fontSize: 10,
-        color: 'rgba(255,255,255,0.75)',
+        color: 'rgba(0,0,0,0.6)',
         letterSpacing: 1,
         textTransform: 'uppercase',
       }}
@@ -529,7 +531,7 @@ function BubbleHeader({ m, onDelete }: { m: ThreadMessage; onDelete: () => void 
           aria-label="delete memo"
           style={{
             background: 'transparent',
-            color: 'rgba(255,255,255,0.75)',
+            color: 'rgba(0,0,0,0.6)',
             border: 'none',
             cursor: 'pointer',
             font: 'inherit',
@@ -543,7 +545,7 @@ function BubbleHeader({ m, onDelete }: { m: ThreadMessage; onDelete: () => void 
 }
 
 function BubbleFooter({ m }: { m: ThreadMessage }) {
-  const meta = 'rgba(255,255,255,0.65)';
+  const meta = 'rgba(0,0,0,0.52)';
   if (m.status === 'uploading' || m.status === 'transcribing') {
     const kb = m.audioBlob ? Math.round(m.audioBlob.size / 1024) : 0;
     const dur = (m.duration / 1000).toFixed(1);
@@ -603,7 +605,7 @@ function Skeleton() {
             height: 10,
             borderRadius: 6,
             background:
-              'linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.04) 100%)',
+              'linear-gradient(90deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.16) 50%, rgba(0,0,0,0.08) 100%)',
             backgroundSize: '200% 100%',
             animation: 'wm-shimmer 1.6s linear infinite',
             animationDelay: `${i * 120}ms`,
@@ -826,13 +828,14 @@ function PasteInline({
           onClick={onSubmit}
           disabled={!draft.trim()}
           style={{
-            padding: '8px 14px',
-            borderRadius: 10,
+            padding: '9px 16px',
+            borderRadius: radii.md,
             background: accent,
             color: '#000',
             fontWeight: 700,
-            border: '1.5px solid #000',
-            boxShadow: '3px 3px 0 #000',
+            border: 'none',
+            boxShadow: shadows.button,
+            transition: `box-shadow ${motion.duration.fast} ${motion.ease.out}`,
             cursor: 'pointer',
             opacity: draft.trim() ? 1 : 0.5,
             font: '700 12.5px Inter, system-ui, sans-serif',
@@ -885,10 +888,11 @@ function GraphCard({ message, result }: { message: ThreadMessage; result: GraphR
     <div
       style={{
         marginTop: 8,
-        padding: 14,
-        borderRadius: 14,
+        padding: 16,
+        borderRadius: radii.md,
         background: 'var(--surface-1)',
         border: '1px solid var(--border-soft)',
+        boxShadow: shadows.card,
         display: 'flex',
         flexDirection: 'column',
         gap: 12,
@@ -1173,10 +1177,10 @@ function BoundEventChip({ event }: { event: { eventId: string; name: string } })
         display: 'inline-flex',
         alignItems: 'center',
         gap: 6,
-        padding: '4px 10px',
-        borderRadius: 999,
-        background: 'rgba(0,0,0,0.22)',
-        color: '#fff',
+        padding: '4px 11px',
+        borderRadius: radii.pill,
+        background: 'rgba(0,0,0,0.10)',
+        color: 'rgba(0,0,0,0.8)',
         fontSize: 10,
         letterSpacing: 0.5,
       }}
