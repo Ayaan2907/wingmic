@@ -276,7 +276,11 @@ export const interactionAttachments = sqliteTable(
     entityId: text('entity_id').references(() => entities.id, { onDelete: 'set null' }),
     eventId: text('event_id').references(() => events.id, { onDelete: 'set null' }),
     mimeType: text('mime_type').notNull().default('image/jpeg'),
-    jpegBase64: text('jpeg_base64').notNull(),
+    // Storage-backed rows (post object-storage migration) carry a key and keep
+    // jpegBase64 null; legacy rows hold base64 until the one-time migration
+    // moves their bytes into the object store and nulls this column.
+    storageKey: text('storage_key'),
+    jpegBase64: text('jpeg_base64'),
     byteSize: integer('byte_size').notNull(),
     createdAt: ts('created_at'),
   },
@@ -473,7 +477,7 @@ export const usageDaily = sqliteTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     /** UTC calendar day, YYYY-MM-DD. */
     day: text('day').notNull(),
-    kind: text('kind', { enum: ['recording', 'message', 'image'] }).notNull(),
+    kind: text('kind', { enum: ['recording', 'message', 'image', 'assistant'] }).notNull(),
     count: integer('count').notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.userId, t.day, t.kind] })],
@@ -526,6 +530,55 @@ export const connectionRequests = sqliteTable('connection_request', {
   createdAt: ts('created_at'),
 });
 
+// ─── Public API keys (Bearer auth for /api/v1) ─────────────────────────
+// Raw keys are shown exactly once at creation and stored only as sha256
+// digests — never persisted raw, never logged. Scopes are a JSON array of
+// the strings in API_SCOPES (apps/app/lib/api/keys.ts).
+
+export const apiKeys = sqliteTable(
+  'api_key',
+  {
+    id: id(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Display name chosen at creation ("cli", "ayaan-map"). */
+    name: text('name').notNull(),
+    /** Non-secret key prefix shown in the dashboard (e.g. wk_live_9f3ab2…). */
+    prefix: text('prefix').notNull(),
+    /** sha256 hex of the full raw key — lookup index, never a reversible secret. */
+    keyHash: text('key_hash').notNull(),
+    /** JSON array of granted scopes, e.g. ["graph:read","search:read"]. */
+    scopes: text('scopes').notNull(),
+    createdAt: ts('created_at'),
+    lastUsedAt: integer('last_used_at', { mode: 'timestamp' }),
+    /** Set on revoke; revoked keys fail auth permanently (no un-revoke). */
+    revokedAt: integer('revoked_at', { mode: 'timestamp' }),
+  },
+  (t) => [
+    uniqueIndex('api_key_hash_idx').on(t.keyHash),
+    index('api_key_user_idx').on(t.userId),
+  ],
+);
+
+// ─── Per-key rate limiting (fixed-window counter, DB-backed) ───────────
+// Consumed via consumeRateLimit() in apps/app/lib/api/rateLimit.ts. One row
+// per (key, windowStart); the atomic upsert makes concurrent requests count
+// correctly and the counter survives deploys — see docs/api.md.
+
+export const apiKeyRateWindows = sqliteTable(
+  'api_rate_window',
+  {
+    keyId: text('key_id')
+      .notNull()
+      .references(() => apiKeys.id, { onDelete: 'cascade' }),
+    /** Epoch seconds of the fixed window start. */
+    windowStart: integer('window_start').notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.keyId, t.windowStart] })],
+);
+
 // ─── Index name constants ──────────────────────────────────────────────
 // Keep in sync with drizzle/0002_vector_top_k_entity_embedding.sql. Used by
 // recall router's raw `vector_top_k(...)` call — migration rename without
@@ -551,3 +604,5 @@ export type EntityMerge = typeof entityMerges.$inferSelect;
 export type Act = typeof acts.$inferSelect;
 export type NewAct = typeof acts.$inferInsert;
 export type IcsSnapshot = typeof icsSnapshots.$inferSelect;
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type NewApiKey = typeof apiKeys.$inferInsert;

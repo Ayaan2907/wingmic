@@ -1,12 +1,12 @@
 # Wingmic — Design System
 
-> **v2 — synthesized from Claude Design bundle 2026-05-24 (handle: IeDyiNzPI2mu5WRJRWuuKQ)**
+> **v3 — relaxed premium (2026-09-24).** Supersedes the v2 hard-offset rules: soft diffused layered elevation, generous air, calmer contrast, rounder radii, subtle purposeful motion (reduced-motion aware), amber as candlelight rather than warning. Encoded in `packages/design-tokens` — that package is the styling source of truth; this doc describes it.
 >
-> **Source of truth (v2):** `design/v2/screens.md` (mobile-first screens + desktop layouts mapped to lib-* components) + the upstream Claude Design library `Wingmic Component Library.html` from which v2 was extracted.
+> **Source of truth:** `packages/design-tokens` (runtime tokens) + `design/v2/screens.md` for layout structure. The upstream Claude Design library `Wingmic Component Library.html` remains historical reference from which v2 was extracted.
 > Earlier homepage/video/prototype HTMLs from v1 are superseded.
-> Use this file as the **default design system for every artifact in this project** — homepage, prototype, product app, decks. When in doubt, match the component library.
+> Use this file as the **default design system for every artifact in this project** — homepage, prototype, product app, decks. When in doubt, match the tokens package.
 
-The aesthetic is **editorial brutalist + terminal**: warm hand-set type colliding with monospace UI chrome, sticker tape and scribble underlines pinned to a clean dark canvas, a living graph background that hums rather than shouts. It should feel like something a developer made *and* a designer art-directed — not slick SaaS, not generic AI.
+The aesthetic is **relaxed premium**: a warm dark canvas that breathes — generous air, soft diffused elevation, calm contrast carried by surface tinting rather than stark borders, and one amber signature used sparingly, like candlelight. Editorial type stays (Inter, JetBrains Mono chrome, Instrument Serif italic twist); weights and tracking relax away from terminal-brutalist. Motion is subtle and purposeful — gentle fades, soft rises, a breathing orb — never bouncy, always collapsed under `prefers-reduced-motion`. It should feel composed and expensive, not loud: something a developer made *and* a designer art-directed — not slick SaaS, not generic AI.
 
 ---
 
@@ -83,14 +83,16 @@ Editorial brutalist + terminal. Warm dark `#0a0a0a` page (never pure black) with
 ### Surfaces (translucent, on `--bg-page`)
 
 ```css
---surface-1:     rgba(255,255,255,0.025);   /* card base */
---surface-2:     rgba(255,255,255,0.04);    /* card hover / nested */
---surface-3:     rgba(255,255,255,0.06);    /* input / pill */
---border-soft:   rgba(255,255,255,0.06);
---border-mid:    rgba(255,255,255,0.10);
---border-hard:   rgba(255,255,255,0.15);
+--surface-1:     rgba(255,255,255,0.04);    /* card base — v3 calmer tint carries separation */
+--surface-2:     rgba(255,255,255,0.06);    /* card hover / nested */
+--surface-3:     rgba(255,255,255,0.09);    /* input / pill */
+--accent-soft:   rgba(255,196,82,0.12);     /* amber candlelight tint fill */
+--accent-faint:  rgba(255,196,82,0.06);     /* amber whisper fill */
+--border-soft:   rgba(255,255,255,0.05);
+--border-mid:    rgba(255,255,255,0.08);
+--border-hard:   rgba(255,255,255,0.12);
 --border-acc:    rgba(255,196,82,0.4);      /* status / live badge */
---border-blk:    #000;                       /* 1.5px on primary buttons */
+--border-blk:    #000;                       /* reserved — no longer on primary buttons (v3) */
 ```
 
 ### Text on dark
@@ -370,20 +372,20 @@ A canvas-rendered force graph (60 nodes, ≤160px connection radius, 0.65 alpha,
 **Variants**:
 | Variant | Background | FG | Border | Shadow |
 |---|---|---|---|---|
-| `primary`     | `--accent` `#FFC452`    | `#000` | `1.5px solid #000` | `4px 4px 0 #000` |
-| `destructive` | `--alarm`  `#FF6B6B`    | `#000` | `1.5px solid #000` | `4px 4px 0 #000` |
-| `secondary`   | `#ffffff`               | `#000` | `1px solid rgba(255,255,255,0.15)` | none |
-| `ghost`       | transparent             | `#fff` | `1.5px solid rgba(255,255,255,0.22)` | none |
+| `primary`     | `--accent` `#FFC452`    | `#000` | none | `--shadow-button` (soft layered) |
+| `destructive` | `--alarm`  `#FF6B6B`    | `#000` | none | `--shadow-button` (soft layered) |
+| `secondary`   | `--surface-3`           | `#fff` | `1px solid var(--border-mid)` | none |
+| `ghost`       | transparent             | `#fff` | `1px solid var(--border-mid)` | none |
 | `mono`        | `--bg-card` `#08080d`   | `--accent` | `1px solid rgba(255,196,82,0.4)` | none — font: mono |
 
 Disabled: opacity `0.45`, `pointer-events: none`.
-Hover (primary): `translate(-1px, -1px)` + shadow `4px → 5px` over `0.12s ease-out`.
+Hover (primary): shadow lifts `--shadow-button → --shadow-button-hover` over `--dur-fast var(--ease-relaxed)` — the element itself does not move.
 Loading: same silhouette, inline 14×14 spinner (`border: 2px solid rgba(0,0,0,0.25)`, top `#000`, `wm-spin 0.8s linear infinite`), caption changes to gerund (`Sending…`).
 
 **Icon button (chrome)**: round, **44px hit target**, four flavors:
-- Subtle: `rgba(255,255,255,0.05)` bg + `1px rgba(255,255,255,0.08)` border + white icon.
-- Primary brutal: amber bg + `1.5px #000` border + `3px 3px 0 #000` shadow + black icon.
-- Ghost: transparent + `1.5px rgba(255,255,255,0.22)` border.
+- Subtle: `var(--surface-3)` bg + `1px var(--border-soft)` border + white icon.
+- Primary: amber bg + no border + `--shadow-button` + black icon.
+- Ghost: transparent + `1px var(--border-mid)` border.
 - Destructive: `rgba(255,107,107,0.12)` bg + `1px rgba(255,107,107,0.4)` border + alarm-red icon.
 
 ### Inputs
@@ -440,7 +442,7 @@ States: `resting` · `filled` (check glyph trailing, second-color) · `focused` 
 
 ### Avatars
 
-Round (chat) or square (entity / acts tile, `borderRadius: Math.round(size * 0.28)`). Initial in `Inter 800 black`, sized `Math.round(size * 0.4)`. Color hashed deterministically from the initial across `[accent, second, third, blue, violet]`. Sizes used: `24 / 28 / 32 / 36 / 40 / 44 / 56 / 72`. Stacked variant for participants — overlap `-10px` with `2px solid var(--bg-page)` border, `+N` chip at end.
+Round (chat) or square (entity / acts tile, `borderRadius: Math.round(size * 0.28)`). Initial in `Inter 700` (v3 relaxed from 800), sized `Math.round(size * 0.4)`. Color hashed deterministically from the initial across `[accent, second, third, blue, violet]`. Soft contact shadow (`0 2px 8px rgba(6,6,10,0.3)`) replaces the v2 hard offset. Sizes used: `24 / 28 / 32 / 36 / 40 / 44 / 56 / 72`. Stacked variant for participants — overlap `-10px` with `2px solid var(--bg-page)` border, `+N` chip at end.
 
 ### Mic orb (the centerpiece)
 
@@ -816,4 +818,4 @@ See table in §6 → "Entity detail pages".
 
 ### 14.4 Things that don't change between breakpoints
 
-The atoms. Buttons keep the 4px offset shadow. Pills keep the alpha recipe. Voice bars stay 22 × 3px @ 38px max. The mic orb's seven states are pixel-identical mobile ↔ desktop. **Don't redesign atoms per breakpoint** — if a button needs to be smaller, use the `sm` size, don't make a new one.
+The atoms. Buttons keep the soft layered elevation — never a hard offset. Pills keep the alpha recipe. Voice bars stay 22 × 3px @ 38px max. The mic orb's seven states are pixel-identical mobile ↔ desktop. **Don't redesign atoms per breakpoint** — if a button needs to be smaller, use the `sm` size, don't make a new one.

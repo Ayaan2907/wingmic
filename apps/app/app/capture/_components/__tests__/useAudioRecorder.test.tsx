@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { cleanup, renderHook, act } from '@testing-library/react';
+
+// unmount the hook's pending scheduler work before env teardown — react-dom
+// reads window.event in a delayed commit callback and crashes when jsdom is
+// already gone (same latent leak as PersonCaptureCard.test.tsx)
+afterEach(cleanup);
 
 // ── jsdom shims for MediaRecorder + getUserMedia + AudioContext ────────
 class FakeMediaRecorder extends EventTarget {

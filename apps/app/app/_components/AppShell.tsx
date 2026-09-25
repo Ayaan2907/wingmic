@@ -21,10 +21,9 @@ import {
   type BottomTabKey,
 } from './BottomTabBar';
 import { CommandPalette } from './CommandPalette';
+import { EventSessionChip } from './EventSessionChip';
+import { CHROMELESS_ROUTES } from './EventSessionProvider';
 import { trpc } from '@/lib/trpc/client';
-
-// Routes that own their full viewport — no app chrome.
-const CHROMELESS = ['/signin', '/onboarding'];
 
 function activeFor(pathname: string): BottomTabKey | null {
   if (pathname === '/') return 'home';
@@ -48,7 +47,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? '/';
   const { recorder, beginCapture } = useCapture();
 
-  const chromeless = CHROMELESS.some((p) => pathname.startsWith(p));
+  const chromeless = CHROMELESS_ROUTES.some((p) => pathname.startsWith(p));
   const settings = trpc.settings.get.useQuery(undefined, {
     enabled: !chromeless && !pathname.startsWith('/settings'),
     staleTime: 5 * 60_000,
@@ -70,6 +69,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         skip to content
       </a>
       <div className="app-content" id="main-content">
+        {/* The global session chip — replaces the chat-local open-event chip.
+            Renders nothing while loading or with no calendar set. */}
+        <EventSessionChip />
         {showCalendarNudge ? <CalendarSettingsNudge /> : null}
         {children}
       </div>

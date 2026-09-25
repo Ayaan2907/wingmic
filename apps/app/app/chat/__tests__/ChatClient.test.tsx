@@ -16,13 +16,22 @@ vi.mock('next/navigation', () => ({
 }));
 
 // ── Mock tRPC client ────────────────────────────────────────────────────
-const { mutateAsyncMock, deleteMutateMock, restoreMutateMock, recallFetchMock, createDraftMutate } =
+const { mutateAsyncMock, deleteMutateMock, restoreMutateMock, recallFetchMock, createDraftMutate, eventsBindMutate, eventsCurrentResponse } =
   vi.hoisted(() => ({
     mutateAsyncMock: vi.fn(),
     deleteMutateMock: vi.fn(),
     restoreMutateMock: vi.fn(),
     recallFetchMock: vi.fn(),
     createDraftMutate: vi.fn(),
+    eventsBindMutate: vi.fn(),
+    // Stable module-level reference: the provider's response effect keys on
+    // data identity, and a fresh object per render would loop the reducer.
+    // Typed loosely (unknown session) so individual tests can stage any
+    // EventSessionResponse shape.
+    eventsCurrentResponse: { session: null, candidates: [] } as {
+      session: unknown;
+      candidates: unknown[];
+    },
   }));
 
 const { compressImageMock } = vi.hoisted(() => ({
@@ -68,6 +77,19 @@ vi.mock('@/lib/trpc/client', () => ({
     recall: {
       query: {
         fetch: recallFetchMock,
+      },
+    },
+    events: {
+      current: {
+        useQuery: () => ({
+          data: eventsCurrentResponse,
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+      bind: {
+        useMutation: () => ({ mutateAsync: eventsBindMutate, isPending: false }),
       },
     },
     settings: {
@@ -302,7 +324,9 @@ describe('ChatClient', () => {
     });
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      // 1: transcription POST. 2: the best-effort assistant turn that
+      // starts after commit success (see CaptureProvider).
+      expect(fetchMock).toHaveBeenCalledTimes(2);
     });
     const call = fetchMock.mock.calls[0] as unknown as [unknown, RequestInit];
     const init = call[1];
@@ -310,9 +334,13 @@ describe('ChatClient', () => {
     expect(init.body).toBeInstanceOf(FormData);
     const fd = init.body as FormData;
     expect(fd.get('audio')).toBeInstanceOf(Blob);
+    const assistantCall = fetchMock.mock.calls[1] as unknown as [string];
+    expect(assistantCall[0]).toContain('/api/chat/assistant');
 
     await waitFor(() => {
-      expect(mutateAsyncMock).toHaveBeenCalled();
+      // Exactly one commit — the assistant turn is an extra fetch, never a
+      // second commit.
+      expect(mutateAsyncMock).toHaveBeenCalledTimes(1);
       // First call positional arg = the tRPC input (stable bubble id for idempotency)
       expect(mutateAsyncMock.mock.calls[0]?.[0]).toEqual(
         expect.objectContaining({
@@ -980,8 +1008,8 @@ describe('ChatClient', () => {
         },
       ],
     });
-    expect(screen.getByTestId('open-event-chip').textContent).toContain(
-      'open source summit · open',
+    expect(screen.getByTestId('event-session-chip').textContent).toContain(
+      'open source summit',
     );
   });
 
@@ -1162,6 +1190,75 @@ describe('ChatClient', () => {
     await waitFor(() => {
       expect(screen.getByText('first memo')).toBeTruthy();
     });
+  });
+
+  it('the linking bubble carries the global session chip — "→ at <event>"', async () => {
+    // The session resolves with a canonical row id before capture starts;
+    // the ref snapshots only canonical events (targetEventId must be a row).
+    eventsCurrentResponse.session = {
+      state: 'bound',
+      event: {
+        id: 'ev_ics_nexa',
+        name: 'nexa summit',
+        location: null,
+        url: null,
+        dateRangeStart: null,
+        dateRangeEnd: null,
+        allDay: false,
+      },
+      source: 'ics-auto',
+    };
+    try {
+      fakeRecorder.audioBlob = new Blob(['chip take'], { type: 'audio/webm' });
+      let resolveCommit!: (value: unknown) => void;
+      mutateAsyncMock.mockReturnValue(
+        new Promise((res) => {
+          resolveCommit = res;
+        }),
+      );
+      (globalThis as { fetch: typeof fetch }).fetch = vi.fn(async () =>
+        new Response(JSON.stringify({ transcript: 'chip memo', durationMs: 400 }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ) as unknown as typeof fetch;
+
+      renderChat({ userName: 'ada' });
+      const btn = screen.getByRole('button', { name: /record voice memo/i });
+
+      await act(async () => {
+        fireEvent.click(btn);
+      });
+      await act(async () => {
+        setStatusHook?.('encoding');
+        await Promise.resolve();
+      });
+      await act(async () => {
+        setStatusHook?.('ready');
+        await Promise.resolve();
+      });
+
+      // Chip visible while still linking (commit pending — D2: context shows
+      // during the wait, not only after).
+      await waitFor(() => {
+        expect(screen.getByTestId('bubble-bound-event').textContent).toContain('nexa summit');
+      });
+      expect(screen.getByTestId('bubble-bound-event').textContent).toContain('→ at');
+
+      resolveCommit({
+        extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+        newEntities: 0,
+        matchedEntities: 0,
+        interactionId: 'int-chip',
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId('bubble-bound-event')).toBeTruthy();
+      });
+      // The commit carried the session's canonical event id.
+      expect(mutateAsyncMock.mock.calls[0]?.[0]).toMatchObject({ targetEventId: 'ev_ics_nexa' });
+    } finally {
+      eventsCurrentResponse.session = null;
+    }
   });
 
   // PR β₁-D rolled back the armRecord URL-param approach: recording now

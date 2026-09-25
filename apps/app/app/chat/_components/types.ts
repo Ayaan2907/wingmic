@@ -36,6 +36,17 @@ export interface AskMatch {
   score: number;
 }
 
+/**
+ * Per-field provenance (spec: every entity field carries provenance).
+ * `source` is who produced the value — 'user' (said in the capture),
+ * 'enrichment' (web/enrichment facts), 'import' (vcard/linkedin import).
+ * `confidence` is the entity_fact confidence the field came from.
+ */
+export interface FieldProvenance {
+  source: 'user' | 'enrichment' | 'import';
+  confidence: number;
+}
+
 export interface AskResult {
   matches: AskMatch[];
   durationMs: number;
@@ -50,6 +61,12 @@ export interface GraphResult {
       companyHint: string | null;
       topics: string[];
       linkedin?: string | null;
+      /** Per-field provenance when known (hydrated from entity_fact confidences). */
+      fieldProvenance?: {
+        role?: FieldProvenance;
+        companyHint?: FieldProvenance;
+        linkedin?: FieldProvenance;
+      };
     }>;
     companies: Array<{ name: string }>;
     events: Array<{ name: string }>;
@@ -77,8 +94,17 @@ export interface GraphResult {
   attachments?: Array<{
     id: string;
     entityId: string | null;
-    jpegBase64: string;
+    jpegBase64: string | null;
   }>;
+  /**
+   * Entity-level provenance from capture.commit (live) or hydration
+   * (prefetch). Live captures are 'user'; per-field detail rides on the
+   * person rows above.
+   */
+  provenance?: {
+    source: 'user' | 'enrichment' | 'import';
+    persons: Array<{ entityId: string; created: boolean; confidence: number }>;
+  };
 }
 
 export interface ThreadMessage {
@@ -102,6 +128,20 @@ export interface ThreadMessage {
   ask?: AskResult | null;
   /** Local preview of a pending / just-committed JPEG. */
   previewJpegBase64?: string | null;
+  /**
+   * The current-event session this capture was bound to — frozen when the
+   * pipeline entered `linking`, rendered as the bubble's inline chip
+   * ("→ at NEXA summit", D2 visual half). Optional for seeded bubbles.
+   */
+  boundEvent?: { eventId: string; name: string } | null;
+  /** 'assistant' bubbles stream the capture-conversation reply (default 'user'). */
+  role?: 'user' | 'assistant';
+  /** Assistant-only: streamed reply text so far. */
+  streamText?: string;
+  /** Assistant-only: true once the done/error SSE event arrived. */
+  streamDone?: boolean;
+  /** Assistant-only: the deterministic follow-up question, when one is warranted. */
+  followUp?: string | null;
 }
 
 export interface ChatInitialItem {

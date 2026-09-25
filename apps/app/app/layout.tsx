@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
 import { TRPCProvider } from '@/lib/trpc/client';
+import { EventSessionProvider } from './_components/EventSessionProvider';
 import { CaptureProvider } from './_components/CaptureProvider';
 import { AppShell } from './_components/AppShell';
 import { RecordingOverlay } from './_components/RecordingOverlay';
@@ -53,11 +54,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body>
         <TRPCProvider>
-          <CaptureProvider>
-            <AppShell>{children}</AppShell>
-            <RecordingOverlay />
-            <ServiceWorkerRegistrar />
-          </CaptureProvider>
+          {/* Session above capture: EventSessionProvider feeds the chip and
+              the capture pipeline (targetEventId) — both consume it. */}
+          <EventSessionProvider>
+            <CaptureProvider>
+              <AppShell>{children}</AppShell>
+              <RecordingOverlay />
+              <ServiceWorkerRegistrar />
+            </CaptureProvider>
+          </EventSessionProvider>
         </TRPCProvider>
       </body>
     </html>

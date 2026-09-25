@@ -15,7 +15,10 @@ vi.mock('next/link', () => ({
 }));
 
 // HomeClient now calls acts.list — stub tRPC so shell composition tests
-// don't need a real provider.
+// don't need a real provider. events.current returns a stable module-level
+// response: the EventSessionProvider's response effect keys on data identity.
+const eventsCurrentResponse = { session: null, candidates: [] };
+
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     acts: {
@@ -35,6 +38,19 @@ vi.mock('@/lib/trpc/client', () => ({
           data: { calendarIcsUrl: calendarNudgeUrl },
           isLoading: false,
         }),
+      },
+    },
+    events: {
+      current: {
+        useQuery: () => ({
+          data: eventsCurrentResponse,
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+      bind: {
+        useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
       },
     },
     useUtils: () => ({

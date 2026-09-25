@@ -66,7 +66,8 @@ const ENTITY_TEST_DDL = `
         entity_id TEXT,
         event_id TEXT,
         mime_type TEXT DEFAULT 'image/jpeg' NOT NULL,
-        jpeg_base64 TEXT NOT NULL,
+        storage_key TEXT,
+        jpeg_base64 TEXT,
         byte_size INTEGER NOT NULL,
         created_at INTEGER NOT NULL
       );

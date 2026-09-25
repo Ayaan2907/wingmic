@@ -8,6 +8,7 @@ import { onboardingRouter } from './onboarding';
 import { actsRouter } from './acts';
 import { importsRouter } from './imports';
 import { eventsRouter } from './events';
+import { apiKeysRouter } from './apiKeys';
 
 /**
  * Root tRPC router. Capture + recall wedges plus the `ping` / `me`
@@ -28,6 +29,8 @@ export const appRouter = router({
   onboarding: onboardingRouter,
   acts: actsRouter,
   imports: importsRouter,
+  apiKeys: apiKeysRouter,
+  events: eventsRouter,
 });
 
 export type AppRouter = typeof appRouter;

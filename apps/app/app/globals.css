@@ -15,15 +15,33 @@
   --info-blue: #7dd3fc;
   --info-violet: #a78bfa;
 
-  --surface-1: rgba(255, 255, 255, 0.025);
-  --surface-2: rgba(255, 255, 255, 0.04);
-  --surface-3: rgba(255, 255, 255, 0.06);
+  --surface-1: rgba(255, 255, 255, 0.04);
+  --surface-2: rgba(255, 255, 255, 0.06);
+  --surface-3: rgba(255, 255, 255, 0.09);
 
-  --border-soft: rgba(255, 255, 255, 0.06);
-  --border-mid: rgba(255, 255, 255, 0.1);
-  --border-hard: rgba(255, 255, 255, 0.15);
+  --border-soft: rgba(255, 255, 255, 0.05);
+  --border-mid: rgba(255, 255, 255, 0.08);
+  --border-hard: rgba(255, 255, 255, 0.12);
   --border-acc: rgba(255, 196, 82, 0.4);
   --border-blk: #000;
+
+  /* v3 relaxed premium — softened amber applications (candlelight, not warning) */
+  --accent-soft: rgba(255, 196, 82, 0.12);
+  --accent-faint: rgba(255, 196, 82, 0.06);
+
+  /* v3 relaxed premium — soft diffused layered elevation (no hard offsets) */
+  --shadow-card: 0 1px 2px rgba(6, 6, 10, 0.28), 0 8px 24px rgba(6, 6, 10, 0.3), 0 24px 56px rgba(6, 6, 10, 0.22);
+  --shadow-raised: 0 2px 4px rgba(6, 6, 10, 0.3), 0 12px 32px rgba(6, 6, 10, 0.36), 0 32px 72px rgba(6, 6, 10, 0.26);
+  --shadow-overlay: 0 4px 8px rgba(6, 6, 10, 0.32), 0 20px 48px rgba(6, 6, 10, 0.44), 0 48px 96px rgba(6, 6, 10, 0.32);
+  --shadow-button: 0 1px 2px rgba(6, 6, 10, 0.32), 0 6px 18px rgba(6, 6, 10, 0.22);
+  --shadow-button-hover: 0 2px 4px rgba(6, 6, 10, 0.32), 0 10px 28px rgba(6, 6, 10, 0.28);
+  --shadow-glow-accent: 0 0 0 1px rgba(255, 196, 82, 0.2), 0 8px 32px rgba(255, 196, 82, 0.1), 0 0 64px rgba(255, 196, 82, 0.08);
+
+  /* v3 motion — durations and easings (reduced-motion collapses these globally) */
+  --dur-fast: 150ms;
+  --dur-base: 240ms;
+  --dur-slow: 420ms;
+  --ease-relaxed: cubic-bezier(0.22, 1, 0.36, 1);
 
   --text-100: #ffffff;
   --text-85: rgba(255, 255, 255, 0.85);
@@ -282,6 +300,29 @@ a:focus-visible {
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* ── v3 motion: subtle entrance + ambient breathe ──────────────────────
+   Screen-level micro-motion, applied via inline styles. Kept in globals so
+   reduced-motion collapse above (and the token durations) always govern. */
+@keyframes wm-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes wm-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
   }
 }
 
