@@ -94,7 +94,7 @@ export interface GraphResult {
   attachments?: Array<{
     id: string;
     entityId: string | null;
-    jpegBase64: string;
+    jpegBase64: string | null;
   }>;
   /**
    * Entity-level provenance from capture.commit (live) or hydration
