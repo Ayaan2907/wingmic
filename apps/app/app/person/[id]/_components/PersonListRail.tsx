@@ -11,6 +11,7 @@ import type { Route } from 'next';
 import { useParams } from 'next/navigation';
 import { trpc } from '@/lib/trpc/client';
 import { accent } from '@/app/chat/_components/tokens';
+import { shadows, radii } from '@wingmic/design-tokens';
 
 export function PersonListRail() {
   const params = useParams();
@@ -65,11 +66,12 @@ export function PersonListRail() {
                     alignItems: 'center',
                     gap: 10,
                     padding: '10px 8px',
-                    borderRadius: 10,
+                    borderRadius: radii.sm,
                     textDecoration: 'none',
                     color: 'inherit',
                     background: active ? `${accent}22` : 'transparent',
                     border: active ? `1px solid ${accent}55` : '1px solid transparent',
+                    transition: `background 150ms cubic-bezier(0.22, 1, 0.36, 1), border-color 150ms cubic-bezier(0.22, 1, 0.36, 1)`,
                   }}
                 >
                   <span
@@ -79,6 +81,7 @@ export function PersonListRail() {
                       borderRadius: '50%',
                       background: accent,
                       color: '#000',
+                      boxShadow: shadows.contact,
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
