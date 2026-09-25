@@ -55,6 +55,7 @@ describe('enrichEventsAfterCommit', () => {
 
     await enrichEventsAfterCommit({
       db: db as never,
+      userId: 'test-user',
       eventIds: ['ev_eth'],
       capturedAt: new Date('2026-08-20T00:00:00Z'),
       provider,
@@ -78,6 +79,7 @@ describe('enrichEventsAfterCommit', () => {
     ]);
     await enrichEventsAfterCommit({
       db: db as never,
+      userId: 'test-user',
       eventIds: ['ev_eth'],
       capturedAt: new Date('2026-08-20T00:00:00Z'),
       provider: { id: 'tavily', search, extract: async () => [] },
@@ -98,6 +100,7 @@ describe('enrichEventsAfterCommit', () => {
     ]);
     await enrichEventsAfterCommit({
       db: db as never,
+      userId: 'test-user',
       eventIds: ['ev_eth'],
       capturedAt: new Date('2026-08-20T00:00:00Z'),
       provider: { id: 'tavily', search, extract },
@@ -125,6 +128,7 @@ describe('enrichEventsAfterCommit', () => {
 
     await enrichEventsAfterCommit({
       db: db as never,
+      userId: 'test-user',
       eventIds: ['ev_eth'],
       capturedAt: new Date('2026-08-20T00:00:00Z'),
       provider: { id: 'tavily', search, extract },
@@ -150,6 +154,7 @@ describe('enrichEventsAfterCommit', () => {
     await expect(
       enrichEventsAfterCommit({
         db: db as never,
+        userId: 'test-user',
         eventIds: ['ev_eth'],
         capturedAt: new Date('2026-08-20T00:00:00Z'),
         provider: { id: 'tavily', search, extract: async () => [] },
@@ -180,6 +185,7 @@ describe('enrichEventsAfterCommit', () => {
 
     await enrichEventsAfterCommit({
       db: db as never,
+      userId: 'test-user',
       eventIds: ['ev_eth'],
       capturedAt: new Date('2026-08-20T00:00:00Z'),
       provider: { id: 'tavily', search, extract: async () => [] },
@@ -195,6 +201,7 @@ describe('enrichEventsAfterCommit', () => {
     const search = vi.fn(async () => []);
     await enrichEventsAfterCommit({
       db: db as never,
+      userId: 'test-user',
       eventIds: ['ev_eth'],
       capturedAt: new Date('2026-08-20T00:00:00Z'),
       provider: { id: 'tavily', search, extract: async () => [] },
@@ -207,6 +214,7 @@ describe('enrichEventsAfterCommit', () => {
     await expect(
       enrichEventsAfterCommit({
         db: db as never,
+        userId: 'test-user',
         eventIds: ['ev_eth'],
         capturedAt: new Date(),
         provider: null,
