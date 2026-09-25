@@ -352,12 +352,13 @@ a:focus-visible {
   background: rgba(10, 10, 10, 0.92);
   backdrop-filter: blur(20px);
   border: 1px solid var(--border-soft);
-  border-radius: 16px;
+  border-radius: 20px;
   display: flex;
   align-items: flex-start;
   z-index: 50;
   touch-action: manipulation;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.42);
+  box-shadow: 0 2px 4px rgba(6, 6, 10, 0.3), 0 12px 32px rgba(6, 6, 10, 0.36),
+    0 32px 72px rgba(6, 6, 10, 0.26);
 }
 
 /* Content gets bottom room for the bar on mobile. */

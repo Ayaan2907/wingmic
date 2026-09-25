@@ -101,20 +101,21 @@ function CalendarSettingsNudge() {
       style={{
         display: 'block',
         margin: '12px auto 0',
-        padding: '14px',
+        padding: '16px 18px',
         maxWidth: 720,
         width: 'calc(100% - 32px)',
-        borderRadius: 12,
-        border: '1.5px dashed rgba(255,196,82,0.4)',
-        background: 'rgba(255,196,82,0.05)',
+        borderRadius: 16,
+        border: '1px dashed rgba(255,196,82,0.35)',
+        background: 'rgba(255,196,82,0.04)',
+        boxShadow: 'var(--shadow-card, 0 8px 24px rgba(6,6,10,0.3))',
         textDecoration: 'none',
         color: 'inherit',
       }}
     >
-      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, letterSpacing: '-0.01em' }}>
         add a public calendar in settings →
       </div>
-      <div className="mono" style={{ fontSize: 11, color: 'var(--text-55)', lineHeight: 1.4 }}>
+      <div className="mono" style={{ fontSize: 11, color: 'var(--text-55)', lineHeight: 1.5 }}>
         we only fetch events that calendar already publishes.
       </div>
     </Link>
