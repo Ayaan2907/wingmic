@@ -1,0 +1,28 @@
+{
+  "name": "@wingmic/bay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "the bay core: persona weights, the data contract, and the deterministic scoring engine - zero runtime dependencies",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "src"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --sourcemap",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@wingmic/config-tsconfig": "workspace:*",
+    "tsup": "^8.0.0",
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.5"
+  }
+}
