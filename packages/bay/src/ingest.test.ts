@@ -154,15 +154,18 @@ describe("runIngest", () => {
 });
 
 describe("store io", () => {
-  it("falls back to seed when no store exists and surfaces read errors", async () => {
+  it("falls back to seed when no store exists and surfaces a broken one", async () => {
     const dir = mkdtempSync(join(tmpdir(), "bay-io1-"));
     const seeded = loadStoreOrSeed(dir, "events");
     expect(seeded.fromStore).toBe(false);
     expect(seeded.records.length).toBeGreaterThan(0);
 
+    // a corrupt runtime store does not silently swap to seed: the file exists, so its
+    // brokenness surfaces as an empty record set plus the read errors (never swallowed).
     writeFileSync(join(dir, "events.json"), "{not json");
     const broken = loadStoreOrSeed(dir, "events");
-    expect(broken.fromStore).toBe(false);
+    expect(broken.fromStore).toBe(true);
+    expect(broken.records).toEqual([]);
     expect(broken.errors.length).toBeGreaterThan(0);
   });
 

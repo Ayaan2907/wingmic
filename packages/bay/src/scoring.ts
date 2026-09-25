@@ -19,8 +19,10 @@
 import type {
   BayRecord,
   ChatFn,
+  FitRank,
   HeuristicResult,
   Meet,
+  ProfileQuality,
   ScoreCard,
   Verdict,
   ViewerProfile,
@@ -36,7 +38,7 @@ const STOP = new Set(
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-const tokenize = (text: unknown): string[] =>
+export const tokenize = (text: unknown): string[] =>
   String(text || "")
     .toLowerCase()
     .normalize("NFKD")
@@ -518,12 +520,14 @@ export async function llmScore({
   const anchored = round2(clamp(clamp(go, 0, 1), heuristic.go - 0.15, heuristic.go + 0.15));
   const reasons = strArr(j.reasons, 4, 200);
   const meet = (Array.isArray(j.meet) ? j.meet : [])
-    .map((m) => {
+    .map((m): Meet | null => {
       if (!m || typeof m !== "object") return null;
       const r = m as Record<string, unknown>;
-      return { who: oneLine(r.who, 120), why: oneLine(r.why, 200), starter: oneLine(r.starter, 200) };
+      const who = oneLine(r.who, 120);
+      if (!who) return null;
+      return { who, why: oneLine(r.why, 200) ?? "", starter: oneLine(r.starter, 200) ?? null };
     })
-    .filter((m): m is Meet => Boolean(m && m.who))
+    .filter((m): m is Meet => m !== null)
     .slice(0, 3);
   if (!reasons.length) throw new Error("model returned no usable reasons");
 

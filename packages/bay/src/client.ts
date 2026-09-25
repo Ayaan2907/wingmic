@@ -14,37 +14,38 @@ import type { BayRecord, Meet, VerifyResult, WingmicClient } from "./types.js";
 import { WingmicAuthError } from "./types.js";
 import { eventText, tokenize } from "./scoring.js";
 
-// mock fixtures, carried from the old client: a demo profile + demo people. every
-// surface that renders these must label them as a demo network — the honesty rule.
+// mock fixtures, carried verbatim from the old client: a demo profile + demo people
+// with topic words. overlap is a plain token match against the event, so the same
+// event always produces the same list. every surface that renders these must label
+// them as a demo network — the honesty rule.
 export const MOCK_PROFILE = {
-  kind: "throwaway" as const,
+  kind: "wingmic" as const,
   name: "sam rivera",
-  headline: "product engineer exploring the bay, likes small rooms and real demos",
-  roles: ["product engineer"],
-  topics: ["agents", "hackathon", "builders"],
-  goals: ["meet builders", "see what ships"],
-  links: {},
-  raw: "product engineer exploring the bay. likes small rooms and real demos.",
+  headline: "ml engineer at a 12 person infra startup, weighing a founder move",
+  roles: ["ml engineer", "founding engineer"],
+  topics: ["ai agents", "developer tools", "inference infra", "edge configs"],
+  goals: ["find a cofounder", "meet builders shipping fast"],
+  links: { linkedin: "https://www.linkedin.com/in/sam-rivera-mock" },
 };
 
 export const MOCK_PEOPLE = [
   {
-    id: "mock-dex",
-    name: "dex morales",
+    who: "dex morales",
     topics: ["agents", "hackathon", "builders"],
-    events: ["hackathon demo night"],
+    why: "built the agent eval harness you kept citing",
+    starter: "ask what they have shipped since the last demo night",
   },
   {
-    id: "mock-priya",
-    name: "priya nair",
+    who: "priya nair",
     topics: ["inference", "infra", "developers"],
-    events: ["inference infra meetup"],
+    why: "runs the platform work your last two projects leaned on",
+    starter: "ask how they sized inference for the last launch",
   },
   {
-    id: "mock-lena",
-    name: "lena ohara",
+    who: "lena kwan",
     topics: ["founders", "startups", "cofounder"],
-    events: ["founders coffee"],
+    why: "made the founder move you are weighing",
+    starter: "ask what they would do differently in the first 90 days",
   },
 ];
 
@@ -60,27 +61,23 @@ export class MockWingmicClient implements WingmicClient {
       roles: [...MOCK_PROFILE.roles],
       topics: [...MOCK_PROFILE.topics],
       goals: [...MOCK_PROFILE.goals],
-      links: {},
+      links: { ...MOCK_PROFILE.links },
     };
   }
 
-  // same overlap logic the old mock ran: who from the fixture list shows up in the
-  // event's own words, strongest first, capped at 3.
+  // same overlap logic the old mock ran: people whose topic words hit the event's own
+  // words, strongest match first, capped at 3. people who miss stay out of it: the
+  // demo must not pretend the network is bigger than it is.
   async networkOverlap(_token: string, ctx: { event: BayRecord; k?: number }): Promise<Meet[]> {
     const words = new Set(tokenize(eventText(ctx.event)));
-    const hits = MOCK_PEOPLE.map((person) => {
-      const shared = person.topics.filter((t) => words.has(t));
-      return shared.length
-        ? {
-            who: person.name,
-            why: `you share: ${shared.join(", ")}`,
-            starter: "ask what they are working on",
-          }
-        : null;
-    }).filter((m): m is Meet => Boolean(m));
-    hits.sort((a, b) => b.why.length - a.why.length);
-    const k = Math.max(1, Math.min(ctx.k ?? 3, 3));
-    return hits.slice(0, k);
+    return MOCK_PEOPLE.map((p) => {
+      const hits = p.topics.flatMap((t) => tokenize(t)).filter((w) => words.has(w)).length;
+      return { p, hits };
+    })
+      .filter((x) => x.hits > 0)
+      .sort((a, b) => b.hits - a.hits)
+      .slice(0, Math.max(1, Math.min(ctx.k ?? 3, 3)))
+      .map((x) => ({ who: x.p.who, why: x.p.why, starter: x.p.starter }));
   }
 
   async verify(token: string): Promise<VerifyResult> {
