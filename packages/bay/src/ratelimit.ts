@@ -1,74 +1,82 @@
 // packages/bay/src/ratelimit.ts
-// per-identity sliding-window limiter with an optional daily cap. pure bookkeeping:
-// callers bring the identity (clientIp below) and own the storage decision. the old
-// implementation was in-memory and documented the trade ("one instance only; move to
-// redis, keep the interface") - the interface is what ports here; the wingmic router
-// can back it with the same store its api keys already use.
-// ported from ayaan-site api/_ratelimit.js (1bca780): same window math, same fields.
+// Per-ip sliding window, in memory. Good enough for one instance of a personal
+// site. If this ever runs on more than one instance, move the buckets to redis
+// and keep the interface. Ported byte-for-byte from ayaan-site api/_ratelimit.js
+// (1bca780): same keys, same semantics, same refusal behavior.
+// pure module: no env, no fetch, no log. the caller wires the request in.
 
-export interface RateLimitRequest {
-  headers: Record<string, unknown>;
-  socket?: { remoteAddress?: string | null };
+export interface RatedRequest {
+  headers: Record<string, unknown> | { get(name: string): string | null | undefined };
+  socket?: { remoteAddress?: string | null } | null;
 }
 
-// the caller's ip, for per-ip limits. x-forwarded-for first hop wins; "unknown" is
-// honest when nothing identifies the caller.
-export function clientIp(req: RateLimitRequest): string {
-  const fwd = String(req.headers["x-forwarded-for"] || "")
+export function clientIp(req: { headers: Record<string, unknown>; socket?: { remoteAddress?: string | null } | null }): string {
+  const raw = req.headers["x-forwarded-for"];
+  const fwd = String(raw || "")
     .split(",")[0]
     .trim();
   return fwd || (req.socket && req.socket.remoteAddress) || "unknown";
 }
 
-export interface Take {
-  allowed: boolean;
-  remaining: number;
-}
-
-// sliding window over in-window hits. count > perHour refuses without recording the
-// hit: a refused request does not consume capacity.
+// limiter({ perHour }) -> { take(ip) -> true if allowed, remaining(ip) }
 export function limiter({
   perHour,
-  windowMs = 60 * 60 * 1000,
-  now = Date.now(),
+  windowMs = 3600e3,
+  now = Date.now,
 }: {
   perHour: number;
   windowMs?: number;
-  now?: number;
-} = {}): { take: (t?: number) => Take; size: () => number } {
-  const hits: number[] = [];
-  const take = (t: number = Date.now()): Take => {
-    const cutoff = t - windowMs;
-    while (hits.length && hits[0] <= cutoff) hits.shift();
-    if (hits.length >= perHour) return { allowed: false, remaining: 0 };
-    hits.push(t);
-    return { allowed: true, remaining: perHour - hits.length };
+  now?: () => number;
+}): {
+  take(ip: string): boolean;
+  remaining(ip: string): number;
+  size(): number;
+} {
+  const hits = new Map<string, number[]>();
+  const prune = (ip: string): number[] => {
+    const t = now();
+    const kept = (hits.get(ip) || []).filter((x) => t - x < windowMs);
+    if (kept.length) hits.set(ip, kept);
+    else hits.delete(ip);
+    return kept;
   };
-  take(now);
-  return { take, size: () => hits.length };
+  return {
+    take(ip) {
+      const kept = prune(ip);
+      if (kept.length >= perHour) return false;
+      kept.push(now());
+      hits.set(ip, kept);
+      return true;
+    },
+    remaining(ip) {
+      return Math.max(0, perHour - prune(ip).length);
+    },
+    size() {
+      return hits.size;
+    },
+  };
 }
 
-export interface DailyTake {
-  allowed: boolean;
-  used: number;
-}
-
-// daily cap keyed to the utc date; resets at midnight utc.
+// dailyCap(n) -> { take() -> true if under today's global cap }
 export function dailyCap(
   n: number,
   now: () => Date = () => new Date(),
-): { take: () => DailyTake; used: () => number } {
-  let day = now().toISOString().slice(0, 10);
-  let used = 0;
-  const take = (): DailyTake => {
-    const today = now().toISOString().slice(0, 10);
-    if (today !== day) {
-      day = today;
-      used = 0;
-    }
-    if (used >= n) return { allowed: false, used };
-    used++;
-    return { allowed: true, used };
+): { take(): boolean; used(): number } {
+  let day = "";
+  let count = 0;
+  return {
+    take() {
+      const today = now().toISOString().slice(0, 10);
+      if (today !== day) {
+        day = today;
+        count = 0;
+      }
+      if (count >= n) return false;
+      count++;
+      return true;
+    },
+    used() {
+      return count;
+    },
   };
-  return { take, used: () => used };
 }

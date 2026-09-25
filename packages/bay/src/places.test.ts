@@ -1,66 +1,71 @@
-// pins from tests/places.test.mjs (5 tests): every curated place carries a first-person
-// note - "never a bare pin" - and the vocabulary stays normalizable.
+// pins from tests/places.test.mjs (5 tests), ported faithfully: the map eats this
+// file at open. keep the shape honest: real geojson points, bay area bounds, a fixed
+// category enum, and a note on every dot. never a bare pin.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { CANON, canonCat } from "./personas.js";
-import { normalizeRecord } from "./contract.js";
-
 const here = dirname(fileURLToPath(import.meta.url));
 const file = join(here, "data", "places.json");
-const geo = JSON.parse(readFileSync(file, "utf8")) as { features?: unknown[] };
+const places = JSON.parse(readFileSync(file, "utf8")) as {
+  type?: string;
+  features?: Array<{
+    type?: string;
+    geometry?: { type?: string; coordinates?: unknown[] };
+    properties?: Record<string, unknown>;
+  }>;
+};
+const features = places.features ?? [];
+const CATS = ["startup", "office", "housing", "sports", "tour"];
+const BOUNDS = { lng: [-123.6, -121.6], lat: [36.8, 38.4] };
 
 describe("places.json", () => {
-  it("is a GeoJSON FeatureCollection with features", () => {
-    expect(Array.isArray(geo.features)).toBe(true);
-    expect(geo.features.length).toBeGreaterThan(0);
-  });
-
-  it("carries the required core fields on every feature", () => {
-    for (const f of geo.features) {
-      const p = f as { properties?: Record<string, unknown>; geometry?: { coordinates?: unknown } };
-      expect(p.properties, "feature missing properties").toBeTruthy();
-      expect(p.geometry && Array.isArray(p.geometry.coordinates), "feature missing coordinates").toBe(true);
+  it("is a geojson featurecollection of point features", () => {
+    expect(places.type).toBe("FeatureCollection");
+    expect(Array.isArray(features) && features.length >= 10, "a map with three dots is a stub").toBe(true);
+    for (const f of features) {
+      expect(f.type).toBe("Feature");
+      expect(f.geometry?.type).toBe("Point");
+      expect(
+        Array.isArray(f.geometry?.coordinates) && (f.geometry?.coordinates?.length ?? 0) === 2,
+        "coordinates are [lng, lat]",
+      ).toBe(true);
     }
   });
 
-  it("never ships a bare pin: every place has a first-person note", () => {
-    for (const f of geo.features) {
-      const p = f as { properties: { note?: unknown; name?: unknown } };
-      expect(typeof p.properties.note).toBe("string");
-      expect((p.properties.note as string).length).toBeGreaterThan(0);
-      expect(typeof p.properties.name).toBe("string");
+  it("every coordinate is a real bay area lng/lat, in bounds", () => {
+    for (const f of features) {
+      const [lng, lat] = (f.geometry?.coordinates ?? []) as [number, number];
+      expect(typeof lng === "number" && typeof lat === "number", `non-numeric coordinate on ${f.properties?.id}`).toBe(true);
+      expect(lng > BOUNDS.lng[0]! && lng < BOUNDS.lng[1]!, `lng ${lng} out of the bay (${f.properties?.id})`).toBe(true);
+      expect(lat > BOUNDS.lat[0]! && lat < BOUNDS.lat[1]!, `lat ${lat} out of the bay (${f.properties?.id})`).toBe(true);
     }
   });
 
-  it("uses the singular vocabulary the CANON fold expects", () => {
-    const cats = new Set(
-      geo.features.map((f) => (f as { properties: { cat: string } }).properties.cat),
-    );
-    for (const c of cats) expect(CANON[c as keyof typeof CANON] || canonCat(c)).toBeTruthy();
+  it("every place has a category from the layer enum and a real note", () => {
+    for (const f of features) {
+      const p = (f.properties ?? {}) as Record<string, unknown>;
+      expect(p && typeof p === "object", "every feature carries properties").toBe(true);
+      expect(CATS.includes(String(p.cat)), `bad category "${p.cat}" on ${p.id}`).toBe(true);
+      expect(typeof p.name === "string" && (p.name as string).trim().length > 0, `nameless place: ${p.id}`).toBe(true);
+      expect(typeof p.note === "string" && (p.note as string).trim().length >= 20, `bare pin: ${p.id} needs a real note`).toBe(true);
+      if (p.source !== undefined) expect(typeof p.source, `bad source on ${p.id}`).toBe("string");
+    }
   });
 
-  it("every feature normalizes into the contract as a place", () => {
-    for (const f of geo.features) {
-      const p = f as {
-        properties: { id?: string; name: string; cat: string; note: string; source?: string };
-        geometry: { coordinates: [number, number] };
-      };
-      const n = normalizeRecord({
-        id: p.properties.id || `seed:${p.properties.name}`,
-        type: "place",
-        category: canonCat(p.properties.cat),
-        title: p.properties.name,
-        note: p.properties.note,
-        source: p.properties.source || "seed",
-        lat: p.geometry.coordinates[1],
-        lng: p.geometry.coordinates[0],
-        fetchedAt: "2026-01-09T00:00:00.000Z",
-        firstSeenAt: "2026-01-09T00:00:00.000Z",
-      });
-      expect(n.ok, `place ${p.properties.name} failed: ${!n.ok && n.error}`).toBe(true);
+  it("ids are unique so the map can address every dot", () => {
+    const ids = features.map((f) => f.properties && f.properties.id);
+    for (const id of ids) {
+      expect(typeof id === "string" && (id as string).length > 0, "every place needs an id").toBe(true);
+    }
+    expect(new Set(ids).size).toBe(ids.length); // duplicate ids
+  });
+
+  it("every category in the enum is used, so no layer ships empty", () => {
+    const used = new Set(features.map((f) => f.properties?.cat));
+    for (const c of CATS) {
+      expect(used.has(c), `layer "${c}" has no places`).toBe(true);
     }
   });
 });

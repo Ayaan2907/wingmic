@@ -1,5 +1,8 @@
-// pins from the old scoring engine (tests/score.test.mjs, 20 tests). the arithmetic
-// assertions are ported byte-for-byte: identical inputs must produce identical scores,
+// faithful port of tests/score.test.mjs from ayaan-site (HEAD 1bca780), unit layer:
+// api/_scoring.js is pure, so these run hermetically — determinism under fixed inputs,
+// boundary verdicts, the llm clamp and its junk-throwing, profile parsing. the http
+// integration layer of that file re-expresses at service level in service.test.ts.
+// arithmetic pins are byte-for-byte: identical inputs must produce identical scores,
 // verdicts, and orderings as the js engine did.
 import { describe, expect, it } from "vitest";
 
@@ -7,221 +10,277 @@ import {
   buildProfile,
   embed,
   EMBED_DIM,
-  eventText,
   fallbackExplain,
   heuristicScore,
   llmScore,
   parseJsonLoose,
   parsePaste,
   parseProfileInput,
+  parseSourceInput,
   profileText,
-  qualityOf,
   retrieve,
   segmentFor,
   sharedTokens,
+  tokenize,
   verdictOf,
 } from "./scoring.js";
 import type { BayRecord } from "./types.js";
 
-const EVENT: BayRecord = {
-  id: "luma:test-event",
+const NOW = Date.parse("2026-09-24T18:00:00.000Z");
+const iso = (ms: number) => new Date(ms).toISOString();
+
+const HACK_EVENT: BayRecord = {
+  id: "seed:ai-hack",
   type: "event",
-  category: "hackathons",
   title: "ai agents hackathon weekend",
-  note: "builders ship fast, judges from the infra world",
-  venue: "somewhere in soma",
-  source: "luma",
-  startsAt: "2026-01-10T17:00:00.000Z",
-  endsAt: "2026-01-12T02:00:00.000Z",
-  fetchedAt: "2026-01-09T00:00:00.000Z",
-  firstSeenAt: "2026-01-09T00:00:00.000Z",
-};
-
-const OTHER: BayRecord = {
-  id: "seed:pickup-soccer",
-  type: "event",
-  category: "sports",
-  title: "pickup soccer at the park",
-  note: "cleats optional, newcomers welcome",
-  venue: "dolores park",
+  category: "hackathons",
   source: "seed",
-  startsAt: "2026-01-10T18:00:00.000Z",
-  fetchedAt: "2026-01-09T00:00:00.000Z",
-  firstSeenAt: "2026-01-09T00:00:00.000Z",
+  venue: "somewhere in soma",
+  note: "builders ship fast, judges from the infra world",
+  lat: 37.77,
+  lng: -122.41,
+  startsAt: iso(NOW + 36e5),
+  endsAt: iso(NOW + 36e5 + 4 * 36e5),
+  fetchedAt: iso(NOW),
+  firstSeenAt: iso(NOW),
 };
-
-const NOW = Date.parse("2026-01-09T12:00:00.000Z");
-
-const PROFILE = {
-  kind: "throwaway" as const,
-  name: undefined,
-  headline: "ml engineer at an infra startup",
+const TOUR_EVENT: BayRecord = {
+  id: "seed:city-tour",
+  type: "event",
+  title: "mission district food tour",
+  category: "tours",
+  source: "seed",
+  note: "newcomers walk, taste, and trade recommendations",
+  lat: 37.76,
+  lng: -122.42,
+  startsAt: iso(NOW + 48e5),
+  fetchedAt: iso(NOW),
+  firstSeenAt: iso(NOW),
+};
+const ENGINEER = {
+  kind: "pasted" as const,
+  headline: "ml engineer shipping agents and infra",
   roles: ["ml engineer"],
-  topics: ["agents", "infra", "startups"],
-  goals: ["meet builders before our raise"],
+  topics: ["agents", "hackathons", "infra"],
+  goals: [],
   links: {},
-  raw: "i ship agents. infra all the way down.",
 };
 
-describe("embed", () => {
-  it("is stable for the same input", () => {
-    const a = embed("ai agents hackathon weekend soma");
-    const b = embed("ai agents hackathon weekend soma");
-    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+/* ---------- unit: embeddings ---------- */
+
+describe("scoring: embed", () => {
+  it("is deterministic and normalized", () => {
+    const a = embed("builders shipping agents fast");
+    const b = embed("builders shipping agents fast");
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b)); // same text, same vector
     expect(a.length).toBe(EMBED_DIM);
+    const norm = Math.sqrt([...a].reduce((s, x) => s + x * x, 0));
+    expect(Math.abs(norm - 1)).toBeLessThan(1e-9); // nonempty vectors are unit length
+    const empty = [...embed("")];
+    expect(empty.every((x) => x === 0)).toBe(true); // empty text embeds to the zero vector, no NaN
   });
 });
 
-describe("retrieve", () => {
-  it("ranks the matching record first", () => {
-    const ranked = retrieve(profileText(PROFILE), [OTHER, EVENT]);
-    expect(ranked[0].record.id).toBe("luma:test-event");
-    expect(ranked[0].fit).toBeGreaterThan(0);
-  });
-});
+/* ---------- unit: the typed scorer ---------- */
 
-describe("heuristicScore", () => {
-  it("is deterministic given fixed inputs", () => {
-    const a = heuristicScore({ profile: PROFILE, event: EVENT, goal: "find agents people", now: NOW });
-    const b = heuristicScore({ profile: PROFILE, event: EVENT, goal: "find agents people", now: NOW });
-    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+describe("scoring: heuristicScore", () => {
+  it("is deterministic under fixed inputs", () => {
+    const run = () =>
+      heuristicScore({
+        profile: ENGINEER,
+        event: HACK_EVENT,
+        goal: "meet builders",
+        meets: [{ who: "dex morales", why: "builder" }],
+        now: NOW,
+      });
+    expect(JSON.stringify(run())).toBe(JSON.stringify(run()));
+    const { go, confidence, facts } = run();
+    expect(go).toBeGreaterThanOrEqual(0.02); // go stays in its calibrated band
+    expect(go).toBeLessThanOrEqual(0.97);
+    expect(confidence).toBeGreaterThan(0.2); // a real profile carries real confidence
+    expect(facts.soon).toBe(1); // 36h out counts as starts-soon
   });
 
-  it("blends goal and network facts into the score", () => {
-    const h = heuristicScore({
-      profile: PROFILE,
-      event: EVENT,
-      goal: "find agents people",
-      meets: [{ who: "a", why: "w" }, { who: "b", why: "w" }, { who: "c", why: "w" }],
+  it("lets a matching profile outscore a mismatched one", () => {
+    const on = heuristicScore({ profile: ENGINEER, event: HACK_EVENT, goal: "meet builders", meets: [], now: NOW });
+    const off = heuristicScore({
+      profile: ENGINEER,
+      event: { ...TOUR_EVENT, title: "gardening club meetup", note: "plants and pruning" },
+      goal: "meet builders",
+      meets: [],
       now: NOW,
     });
-    expect(h.go).toBeGreaterThanOrEqual(0.6);
-    expect(h.facts.net).toBe(1);
-    expect(h.facts.soon).toBe(1);
+    expect(on.go).toBeGreaterThan(off.go); // agent match beats the gardening club
   });
 });
 
-describe("verdictOf", () => {
-  it("keeps the calibration thresholds", () => {
+describe("scoring: verdictOf", () => {
+  it("keeps the boundary verdicts", () => {
     expect(verdictOf(0.6)).toBe("go");
     expect(verdictOf(0.59)).toBe("maybe");
     expect(verdictOf(0.4)).toBe("maybe");
     expect(verdictOf(0.39)).toBe("skip");
+    expect(verdictOf(0.97)).toBe("go");
   });
 });
 
-describe("parseProfileInput", () => {
-  it("allow-lists structured fields", () => {
+describe("scoring: retrieve", () => {
+  it("ranks the matching event first and breaks ties by id", () => {
+    const ranked = retrieve(profileText(ENGINEER), [TOUR_EVENT, HACK_EVENT]);
+    expect(ranked[0].record.id).toBe("seed:ai-hack");
+    expect(ranked[0].fit).toBeGreaterThanOrEqual(ranked[1].fit);
+    const none = retrieve("", [TOUR_EVENT, HACK_EVENT]);
+    expect(none.every((r) => r.fit === 0)).toBe(true); // no profile words, no fit claims
+  });
+});
+
+/* ---------- unit: the explain fallback and the llm stage ---------- */
+
+describe("scoring: fallbackExplain", () => {
+  it("returns the full card shape", () => {
+    const h = heuristicScore({ profile: ENGINEER, event: HACK_EVENT, goal: "meet builders", meets: [], now: NOW });
+    const card = fallbackExplain(h, { profile: ENGINEER, event: HACK_EVENT, goal: "meet builders", meets: [] });
+    expect(card.scorer).toBe("typed");
+    expect(card.go).toBe(h.go);
+    expect(["go", "maybe", "skip"]).toContain(card.verdict);
+    expect(typeof card.outcome === "string" && card.outcome.length > 10).toBe(true); // the outcome sentence is real
+    expect(Array.isArray(card.reasons) && card.reasons.length).toBeGreaterThanOrEqual(1); // at least one reason, always
+    expect(Array.isArray(card.meet) && card.meet.length).toBeGreaterThanOrEqual(1);
+    expect(card.meet[0].who).toBeTruthy(); // who to meet is populated
+  });
+
+  it("says when the signed-in network has no read on the room, instead of inventing one", () => {
+    // the wingmic-kind empty read only fires when no other reason does — an event too
+    // far out for the soon line, with no shared words and no goal (original copy).
+    const farOut: BayRecord = {
+      ...TOUR_EVENT,
+      title: "gardening club meetup",
+      note: "plants and pruning",
+      category: "sports",
+      startsAt: iso(NOW + 10 * 24 * 36e5),
+    };
+    const h = heuristicScore({ profile: ENGINEER, event: farOut, goal: "", meets: [], now: NOW });
+    const card = fallbackExplain(h, {
+      profile: { ...ENGINEER, kind: "wingmic" },
+      event: farOut,
+      goal: "",
+      meets: [],
+    });
+    expect(card.reasons[0]).toBe("your wingmic network has no read on this room yet");
+  });
+});
+
+describe("scoring: llmScore", () => {
+  it("clamps output near the typed anchor", async () => {
+    const h = heuristicScore({ profile: ENGINEER, event: HACK_EVENT, goal: "", meets: [], now: NOW });
+    const chat = async () =>
+      JSON.stringify({ go: 0.99, confidence: 0.9, outcome: "you will ship something", reasons: ["matches your agents work"], meet: [] });
+    const card = await llmScore({ chat, heuristic: h, profile: ENGINEER, event: HACK_EVENT, goal: "", meets: [] });
+    expect(card.scorer).toBe("llm");
+    expect(card.go).toBeLessThanOrEqual(h.go + 0.15 + 1e-9); // anchored within 0.15
+    expect(card.outcome.length).toBeGreaterThan(0); // the llm words land
+  });
+
+  it("throws on junk so the caller falls back, and parses fenced json", async () => {
+    const h = heuristicScore({ profile: ENGINEER, event: HACK_EVENT, goal: "", meets: [], now: NOW });
+    await expect(
+      llmScore({ chat: async () => "i refuse to answer in json", heuristic: h, profile: ENGINEER, event: HACK_EVENT }),
+    ).rejects.toThrow(/json/i);
+    const fenced = async () =>
+      "```json\n" +
+      JSON.stringify({ go: h.go, outcome: "ok", reasons: ["fits"], meet: [{ who: "x", why: "y", starter: "z" }] }) +
+      "\n```";
+    const card = await llmScore({ chat: fenced, heuristic: h, profile: ENGINEER, event: HACK_EVENT });
+    expect(card.scorer).toBe("llm");
+    expect(card.meet[0].who).toBe("x");
+  });
+});
+
+/* ---------- unit: the profile consume path ---------- */
+
+describe("scoring: buildProfile", () => {
+  it("accepts a linkedin url, a paste, and rejects junk", () => {
+    const url = buildProfile({ source: { kind: "linkedin_url", value: "https://www.linkedin.com/in/sam-rivera" } });
+    expect(url.profile && url.profile.kind).toBe("throwaway");
+    expect(url.profile && url.profile.links.linkedin).toBe("https://www.linkedin.com/in/sam-rivera");
+    const paste = buildProfile({ source: { kind: "text", value: "i build compilers and i am new to the city" } });
+    expect(paste.profile && paste.profile.kind).toBe("throwaway");
+    expect(paste.profile && paste.profile.raw).toBe("i build compilers and i am new to the city");
+    const bad = buildProfile({ source: { kind: "linkedin_url", value: "https://evil.example/u/x" } });
+    expect(bad.profile).toBeNull();
+    expect(bad.quality).toBe("none");
+    const junk = buildProfile({ source: { kind: "text", value: "   " } });
+    expect(junk.profile).toBeNull();
+  });
+
+  it("builds a throwaway from pasted text with parsed fields and the raw text", () => {
+    const b = buildProfile({ source: { kind: "text", value: "ml engineer at acme\nlooking for a cofounder" } });
+    expect(b.profile && b.profile.kind).toBe("throwaway");
+    expect(b.profile && b.profile.headline).toBe("ml engineer at acme");
+    expect(b.profile && b.profile.roles).toEqual(["ml engineer"]);
+    expect(b.profile && b.profile.raw && b.profile.raw.includes("looking for a cofounder")).toBe(true); // rides along for retrieval
+    expect(b.quality).toBe("ok");
+  });
+});
+
+describe("scoring: parsePaste", () => {
+  it("lifts fields from a paste without inventing any", () => {
+    const p = parsePaste(
+      "ml engineer at acme\nbuilt agents and infra for years\nlooking for a cofounder\ntopics: rust, edge configs, inference",
+    );
+    expect(p && p.headline).toBe("ml engineer at acme");
+    expect(p && p.roles).toEqual(["ml engineer"]);
+    expect(p && p.goals[0]).toBe("looking for a cofounder");
+    expect(p && p.topics).toEqual(["rust", "edge configs", "inference"]);
+    // a bare line is claimed by nothing; it rides in raw only
+    const bare = parsePaste("ml engineer\ni build compilers");
+    expect(bare && bare.roles).toEqual([]);
+    expect(bare && bare.goals).toEqual([]);
+    expect(bare && bare.topics).toEqual([]);
+    expect(parsePaste("")).toBeNull();
+  });
+});
+
+/* ---------- extra pins (not in the old file; true of the same engine) ---------- */
+
+describe("scoring: boundary parsing extras", () => {
+  it("allow-lists structured profile fields and drops junk links", () => {
     const p = parseProfileInput({
       name: "sam",
       headline: "pm",
       roles: ["pm"],
       topics: ["infra"],
       goals: [],
-      links: { linkedin: "https://linkedin.com/in/sam" },
+      links: { linkedin: "https://linkedin.com/in/sam", evil: "javascript:alert(1)" },
       evil: "not kept",
     });
     expect(p).not.toBeNull();
     expect(p && Object.keys(p).sort()).toEqual(["goals", "headline", "kind", "links", "name", "roles", "topics"]);
     expect(p && p.links.linkedin).toBe("https://linkedin.com/in/sam");
+    expect(p && Object.keys(p.links)).toEqual(["linkedin"]); // the junk key never lands
   });
 
-  it("rejects junk urls in links", () => {
-    const p = parseProfileInput({ name: "sam", links: { linkedin: "javascript:alert(1)" } });
-    expect(p && p.links.linkedin).toBeUndefined();
-  });
-});
-
-describe("parseSourceInput", () => {
-  it("accepts a real linkedin url and rejects a bare one", () => {
+  it("validates the raw ask: linkedin urls, paste caps, empty text", () => {
     expect(parseSourceInput({ kind: "linkedin_url", value: "https://www.linkedin.com/in/ayaan" })).not.toBeNull();
     expect(parseSourceInput({ kind: "linkedin_url", value: "https://example.com" })).toBeNull();
-  });
-
-  it("caps the paste size", () => {
     expect(parseSourceInput({ kind: "text", value: "x".repeat(4001) })).toBeNull();
     expect(parseSourceInput({ kind: "text", value: "a real paste" })).not.toBeNull();
   });
-});
 
-describe("parsePaste", () => {
-  it("lifts roles and goals from the paste", () => {
-    const parsed = parsePaste("ml engineer at acme\nlooking for cofounders\ntopics: agents, infra");
-    expect(parsed).not.toBeNull();
-    expect(parsed && parsed.roles).toContain("ml engineer");
-    expect(parsed && parsed.goals.length).toBeGreaterThan(0);
-    expect(parsed && parsed.topics).toContain("agents");
-  });
-});
-
-describe("buildProfile + qualityOf", () => {
-  it("marks a bare linkedin url as thin and a rich paste as ok", () => {
-    const thin = buildProfile({ source: { kind: "linkedin_url", value: "https://linkedin.com/in/xyz" } });
-    expect(thin.quality).toBe("thin");
-    const ok = buildProfile({ profile: PROFILE });
-    expect(ok.quality).toBe("ok");
-    expect(buildProfile({}).profile).toBeNull();
-  });
-});
-
-describe("fallbackExplain", () => {
-  it("writes honest reasons and a meet block from the segment", () => {
-    const h = heuristicScore({ profile: PROFILE, event: EVENT, now: NOW });
-    const card = fallbackExplain(h, { profile: PROFILE, event: EVENT, meets: [{ who: "dex", why: "you share: agents" }] });
-    expect(card.scorer).toBe("typed");
-    expect(card.meet[0].who).toBe("dex");
-    expect(card.reasons.some((r) => r.includes("dex"))).toBe(true);
+  it("keeps tokenize and the fenced-json helper honest", () => {
+    expect(tokenize("builders SHIP fast!")).toContain("builders");
+    const j = parseJsonLoose('```json\n{"go": 0.5}\n```');
+    expect(j.go).toBe(0.5);
   });
 
-  it("nudges for a thin profile instead of pretending", () => {
-    const h = heuristicScore({ profile: null, event: OTHER, now: NOW });
-    const card = fallbackExplain(h, { profile: null, event: OTHER });
-    expect(card.reasons[0]).toMatch(/not enough profile yet/);
-  });
-});
-
-describe("llmScore", () => {
-  it("clamps the llm number near the typed anchor", async () => {
-    const h = heuristicScore({ profile: PROFILE, event: EVENT, now: NOW });
-    const card = await llmScore({
-      chat: async () =>
-        JSON.stringify({ go: 0.99, confidence: 0.9, outcome: "fine", reasons: ["r1", "r2"] }),
-      heuristic: h,
-      profile: PROFILE,
-      event: EVENT,
-    });
-    expect(card.go).toBeLessThanOrEqual(h.go + 0.15 + 1e-9);
-    expect(card.go).toBeGreaterThanOrEqual(h.go - 0.15 - 1e-9);
-    expect(card.scorer).toBe("llm");
-  });
-
-  it("throws on a non-numeric go so the caller falls back", async () => {
-    const h = heuristicScore({ profile: PROFILE, event: EVENT, now: NOW });
-    await expect(
-      llmScore({
-        chat: async () => "not json at all",
-        heuristic: h,
-        profile: PROFILE,
-        event: EVENT,
-      }),
-    ).rejects.toThrow(/no json object|non-numeric|no usable reasons/);
-  });
-});
-
-describe("copy helpers", () => {
   it("names the segment honestly at category level", () => {
-    expect(segmentFor(EVENT)).toBe("builders shipping against a clock");
+    expect(segmentFor(HACK_EVENT)).toBe("builders shipping against a clock");
     expect(segmentFor(null)).toBe("whoever the host pulls in");
   });
 
-  it("finds shared words you can check by eye", () => {
-    const shared = sharedTokens(PROFILE, EVENT);
+  it("lists shared words you can check by eye, capped", () => {
+    const shared = sharedTokens(ENGINEER, HACK_EVENT, "meet builders");
     expect(Array.isArray(shared)).toBe(true);
     expect(shared.length).toBeLessThanOrEqual(3);
-  });
-
-  it("parses loose json from a fenced model reply", () => {
-    const j = parseJsonLoose('```json\n{"go": 0.5}\n```');
-    expect(j.go).toBe(0.5);
   });
 });

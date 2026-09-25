@@ -25,6 +25,7 @@ import {
   heuristicScore,
   llmScore,
   profileText,
+  qualityOf,
   retrieve,
   tokenize,
 } from "./scoring.js";
@@ -36,6 +37,7 @@ import { overlapSafely } from "./client.js";
 export const READ_CACHE_CONTROL = "public, s-maxage=900, stale-while-revalidate=3600";
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{8,256}$/;
+const EVENT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9:_-]{0,119}$/;
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 /* ---------- the read model (the old storeHandler, minus http) ---------- */
@@ -120,9 +122,8 @@ export async function scoreEvent(input: ScoreEventInput, deps: ScoreEventDeps): 
   const now = deps.now ?? Date.now();
 
   // 1. the ask: event id, viewer, goal.
-  if (typeof input.eventId !== "string" || !input.eventId.trim())
-    return { ok: false, error: "bad_request" };
-  const eventId = input.eventId.trim();
+  const eventId = String(input.eventId || "");
+  if (!EVENT_ID_RE.test(eventId)) return { ok: false, error: "bad_request" };
 
   const token =
     typeof input.wingmicToken === "string" && TOKEN_RE.test(input.wingmicToken)
@@ -132,16 +133,18 @@ export async function scoreEvent(input: ScoreEventInput, deps: ScoreEventDeps): 
   const personaId = typeof input.personaId === "string" && input.personaId ? input.personaId : null;
   if (input.personaId != null && input.personaId !== "" && !resolvePersona(personaId))
     return { ok: false, error: "bad_persona" };
-  const goal = typeof input.goal === "string" ? input.goal.slice(0, 400) : "";
+  const goal = typeof input.goal === "string" ? input.goal.trim().slice(0, 400) : "";
 
-  // 2. the event. 404 unknown; 410 known-but-over - nothing is silently deleted.
-  const live = deps.events.filter((e) => e.type === "event");
+  // 2. the event, resolved from the live set with the same serve-time expiry rule as
+  // the read side: 404 unknown; 410 known-but-over — nothing is silently deleted.
+  const known = deps.events.find((e) => e.id === eventId);
+  const { live } = liveFilter(deps.events, now);
   const event = live.find((e) => e.id === eventId);
-  if (!event) return { ok: false, error: "unknown_event" };
+  if (!event) return { ok: false, error: known ? "expired_event" : "unknown_event" };
 
   // 3. the viewer: wingmic boundary first, then the throwaway client-side profile.
   let profile: ViewerProfile | null = null;
-  let kind = "throwaway";
+  let kind: ViewerProfile["kind"] = "throwaway";
   if (token) {
     const client = deps.client;
     if (!client) return { ok: false, error: "wingmic_unavailable" };
@@ -149,8 +152,10 @@ export async function scoreEvent(input: ScoreEventInput, deps: ScoreEventDeps): 
     try {
       wp = await client.getProfile(token);
     } catch (e) {
+      // a dead key is a credential problem; any other client failure is an outage —
+      // surface it as 503-shaped, never as a 500 (the boundary degrades, it does not throw).
       if (e instanceof WingmicAuthError) return { ok: false, error: "wingmic_auth" };
-      throw e;
+      return { ok: false, error: "wingmic_unavailable" };
     }
     if (!wp && client.selfProfile !== false)
       return { ok: false, error: "wingmic_auth", message: "that wingmic key did not resolve; sign in again" };
@@ -169,6 +174,7 @@ export async function scoreEvent(input: ScoreEventInput, deps: ScoreEventDeps): 
       };
     }
     profile = built.profile;
+    kind = built.profile.kind;
   }
 
   // 4. rank: fit of this event across the live set, so "why this one" has a number
@@ -193,11 +199,12 @@ export async function scoreEvent(input: ScoreEventInput, deps: ScoreEventDeps): 
   }
 
   // 6. type first, then explain: the llm may move the words, never the anchor beyond
-  // its clamp. no key (or a failed call) -> deterministic templates.
+  // its clamp. no key (or a failed call) -> deterministic templates. the response's
+  // `ai` reflects configuration, as the old route reported it — the honest signal for
+  // which engine produced the words is the card's own `scorer` field.
   const goalText = combineGoal(personaId, goal);
   const h = heuristicScore({ profile, event, goal: goalText, meets, now, fit: fit ? fit.fit : null });
   let score: ScoreCard;
-  let ai = false;
   if (deps.chat) {
     try {
       score = await llmScore({
@@ -210,7 +217,6 @@ export async function scoreEvent(input: ScoreEventInput, deps: ScoreEventDeps): 
         meets,
         fitRank: fit,
       });
-      ai = true;
     } catch {
       // a score never fails because the explainer did
       score = fallbackExplain(h, { profile, event, goal: goalText, meets });
@@ -231,21 +237,9 @@ export async function scoreEvent(input: ScoreEventInput, deps: ScoreEventDeps): 
     },
     score,
     fit,
-    profile: { kind, quality: profileQualityOf(profile) },
-    ai,
+    profile: { kind, quality: qualityOf(profile) },
+    ai: Boolean(deps.chat),
   };
-}
-
-// duplicated quality math would be drift; reuse the scorer's own calibration.
-function profileQualityOf(p: ViewerProfile | null) {
-  const q = p || ({} as ViewerProfile);
-  const signals =
-    (q.topics || []).length +
-    (q.roles || []).length +
-    (q.goals || []).length +
-    (q.headline ? 1 : 0) +
-    (q.raw && q.raw.length > 40 ? 2 : 0);
-  return signals >= 3 ? ("ok" as const) : ("thin" as const);
 }
 
 // round-trip helper the router may use to normalize numbers in responses.
