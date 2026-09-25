@@ -276,7 +276,11 @@ export const interactionAttachments = sqliteTable(
     entityId: text('entity_id').references(() => entities.id, { onDelete: 'set null' }),
     eventId: text('event_id').references(() => events.id, { onDelete: 'set null' }),
     mimeType: text('mime_type').notNull().default('image/jpeg'),
-    jpegBase64: text('jpeg_base64').notNull(),
+    // Storage-backed rows (post object-storage migration) carry a key and keep
+    // jpegBase64 null; legacy rows hold base64 until the one-time migration
+    // moves their bytes into the object store and nulls this column.
+    storageKey: text('storage_key'),
+    jpegBase64: text('jpeg_base64'),
     byteSize: integer('byte_size').notNull(),
     createdAt: ts('created_at'),
   },

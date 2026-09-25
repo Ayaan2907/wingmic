@@ -21,16 +21,10 @@ export function createObjectStore(config: ObjectStorageConfig): ObjectStore {
 
 /**
  * Environment-shaped input — accepts `process.env`, apps/app's parsed env,
- * or a test fixture. Structural so this package stays dependency-free.
+ * or a test fixture. A string-index Record so host environments like
+ * `process.env` (whose index signature has no named keys) assign cleanly.
  */
-export type ObjectStorageEnv = {
-  OBJECT_STORAGE_ENDPOINT?: string;
-  OBJECT_STORAGE_BUCKET?: string;
-  OBJECT_STORAGE_REGION?: string;
-  OBJECT_STORAGE_ACCESS_KEY_ID?: string;
-  OBJECT_STORAGE_SECRET_ACCESS_KEY?: string;
-  OBJECT_STORAGE_LOCAL_ROOT?: string;
-};
+export type ObjectStorageEnv = Record<string, string | undefined>;
 
 export const DEFAULT_LOCAL_ROOT = '.object-storage';
 

@@ -5,6 +5,7 @@ import { router, protectedProcedure } from '../trpc';
 import type { DB } from '@wingmic/db';
 import * as schema from '@wingmic/db/schema';
 import { linkedinProfileHref } from '@/lib/acts/linkedinHref';
+import { hydrateAttachmentBase64 } from '@/lib/storage/attachments';
 import { namesOverlap } from '@/lib/entity/namesOverlap';
 import { mergePersonEntities, undoPersonMerge } from '@/lib/entity/mergePerson';
 import { webSearchProviderFromEnv } from '@/lib/web-search';
@@ -732,6 +733,7 @@ async function attachCaptureMedia(
       entityId: true,
       eventId: true,
       jpegBase64: true,
+      storageKey: true,
     },
   });
   const byInteraction = new Map<string, typeof rows>();
@@ -740,21 +742,23 @@ async function attachCaptureMedia(
     list.push(row);
     byInteraction.set(row.interactionId, list);
   }
-  return interactions.map((i) => {
-    const atts = byInteraction.get(i.id) ?? [];
-    const preferred =
-      atts.find((a) => opts.entityId && a.entityId === opts.entityId) ??
-      atts.find((a) => opts.eventId && a.eventId === opts.eventId) ??
-      atts[0];
-    return {
-      interactionId: i.id,
-      capturedAt: (toDate(i.capturedAt) ?? new Date()).toISOString(),
-      transcript: i.transcript ?? '',
-      topics: opts.topicsByInteraction?.get(i.id) ?? [],
-      ...(opts.eventName ? { eventName: opts.eventName } : {}),
-      jpegBase64: preferred?.jpegBase64 ?? null,
-    };
-  });
+  return Promise.all(
+    interactions.map(async (i) => {
+      const atts = byInteraction.get(i.id) ?? [];
+      const preferred =
+        atts.find((a) => opts.entityId && a.entityId === opts.entityId) ??
+        atts.find((a) => opts.eventId && a.eventId === opts.eventId) ??
+        atts[0];
+      return {
+        interactionId: i.id,
+        capturedAt: (toDate(i.capturedAt) ?? new Date()).toISOString(),
+        transcript: i.transcript ?? '',
+        topics: opts.topicsByInteraction?.get(i.id) ?? [],
+        ...(opts.eventName ? { eventName: opts.eventName } : {}),
+        jpegBase64: preferred ? await hydrateAttachmentBase64(preferred) : null,
+      };
+    }),
+  );
 }
 
 // ────────────────────────────────────────────────────────────────────
