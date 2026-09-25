@@ -8,6 +8,11 @@ import { resolveIntroEntityIds, collapseActionsForCapture } from '@/lib/acts/map
 import { scheduleActDrafting } from '@/lib/acts/scheduleActDrafting';
 import { webSearchProviderFromEnv } from '@/lib/web-search';
 import { enrichPersonsAfterCommit } from '@/lib/enrich/enrichPersons';
+import {
+  attachmentKeyForUser,
+  getAttachmentStore,
+  hydrateAttachmentBase64,
+} from '@/lib/storage/attachments';
 import { enrichEventsAfterCommit } from '@/lib/enrich/enrichEvents';
 import { scheduleEnrich } from '@/lib/enrich/schedule';
 import { MAX_ATTACHMENT_BYTES } from '@/lib/chat/compressImage';
@@ -27,7 +32,12 @@ import type { DB } from '@wingmic/db';
 export type CaptureAttachment = {
   id: string;
   entityId: string | null;
-  jpegBase64: string;
+  /**
+   * Base64 for the wire. Fresh inserts hydrate from the in-memory bytes;
+   * existing rows hydrate from the object store. Null means the bytes are
+   * temporarily unavailable (missing object) — the UI renders a fallback.
+   */
+  jpegBase64: string | null;
 };
 
 /**
@@ -42,6 +52,7 @@ const FACT_CONFIDENCE_INFERRED = 80;
 type ValidatedCaptureAttachment = {
   jpegBase64: string;
   byteSize: number;
+  bytes: Buffer;
 };
 
 function validateCaptureAttachment(
@@ -72,11 +83,19 @@ function validateCaptureAttachment(
     throw new TRPCError({ code: 'BAD_REQUEST', message: 'photo couldnt be read' });
   }
 
-  return { jpegBase64, byteSize: bytes.byteLength };
+  return { jpegBase64, byteSize: bytes.byteLength, bytes };
 }
 
+/**
+ * Image bytes live in object storage under a content-addressed key; the row
+ * carries the key, never base64 (legacy rows keep inline base64 until the
+ * one-time data migration moves them). The returned wire shape still exposes
+ * base64 — hydrated from memory here, or from the store for existing rows —
+ * so capture surfaces are unchanged.
+ */
 async function persistCaptureAttachment(args: {
   db: DB;
+  userId: string;
   interactionId: string;
   entityId: string | null;
   eventId: string | null;
@@ -84,9 +103,24 @@ async function persistCaptureAttachment(args: {
 }): Promise<CaptureAttachment[]> {
   const existing = await args.db.query.interactionAttachments.findMany({
     where: eq(schema.interactionAttachments.interactionId, args.interactionId),
-    columns: { id: true, entityId: true, jpegBase64: true },
+    columns: { id: true, entityId: true, jpegBase64: true, storageKey: true },
   });
-  if (existing.length > 0 || !args.attachment) return existing;
+  if (existing.length > 0 || !args.attachment) {
+    return Promise.all(
+      existing.map(async (row) => ({
+        id: row.id,
+        entityId: row.entityId,
+        jpegBase64: await hydrateAttachmentBase64(row),
+      })),
+    );
+  }
+
+  const bytes = args.attachment.bytes;
+  const storageKey = attachmentKeyForUser(args.userId, bytes);
+  // Upload before insert: a failed store put must not leave a row pointing at
+  // an object that never landed. A put that succeeds but is not inserted only
+  // orphans a content-addressed object, which no reader can reach.
+  await getAttachmentStore().put({ key: storageKey, body: bytes, contentType: 'image/jpeg' });
 
   const inserted = await args.db
     .insert(schema.interactionAttachments)
@@ -95,15 +129,19 @@ async function persistCaptureAttachment(args: {
       entityId: args.entityId,
       eventId: args.eventId,
       mimeType: 'image/jpeg',
-      jpegBase64: args.attachment.jpegBase64,
+      storageKey,
+      jpegBase64: null,
       byteSize: args.attachment.byteSize,
     })
     .returning({
       id: schema.interactionAttachments.id,
       entityId: schema.interactionAttachments.entityId,
-      jpegBase64: schema.interactionAttachments.jpegBase64,
     });
-  return inserted;
+  return inserted.map((row) => ({
+    id: row.id,
+    entityId: row.entityId,
+    jpegBase64: args.attachment!.jpegBase64,
+  }));
 }
 
 export const captureRouter = router({
@@ -187,6 +225,7 @@ export const captureRouter = router({
             ];
             const attachmentRows = await persistCaptureAttachment({
               db: ctx.db,
+              userId: ctx.user.id,
               interactionId: existing.id,
               entityId: entityIds.length === 1 ? entityIds[0]! : null,
               eventId: null,
@@ -380,6 +419,7 @@ export const captureRouter = router({
           preferredEventId ?? (result.eventIds.length === 1 ? result.eventIds[0]! : null);
         const attachments = await persistCaptureAttachment({
           db: ctx.db,
+          userId: ctx.user.id,
           interactionId: result.interactionId,
           entityId: attachmentEntityId,
           eventId: attachmentEventId,

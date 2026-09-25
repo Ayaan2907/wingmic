@@ -28,6 +28,7 @@
     "@wingmic/db": "workspace:*",
     "@wingmic/design-tokens": "workspace:*",
     "@wingmic/extractor": "workspace:*",
+    "@wingmic/storage": "workspace:*",
     "ai": "^6.0.174",
     "assemblyai": "^4.33.3",
     "better-auth": "^1.6.9",

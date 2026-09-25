@@ -5,6 +5,7 @@ import { router, protectedProcedure } from '../trpc';
 import type { DB } from '@wingmic/db';
 import * as schema from '@wingmic/db/schema';
 import { linkedinProfileHref } from '@/lib/acts/linkedinHref';
+import { hydrateAttachmentBase64List } from '@/lib/storage/attachments';
 import { namesOverlap } from '@/lib/entity/namesOverlap';
 import { mergePersonEntities, undoPersonMerge } from '@/lib/entity/mergePerson';
 import { webSearchProviderFromEnv } from '@/lib/web-search';
@@ -733,6 +734,7 @@ async function attachCaptureMedia(
       entityId: true,
       eventId: true,
       jpegBase64: true,
+      storageKey: true,
     },
   });
   const byInteraction = new Map<string, typeof rows>();
@@ -741,21 +743,26 @@ async function attachCaptureMedia(
     list.push(row);
     byInteraction.set(row.interactionId, list);
   }
-  return interactions.map((i) => {
+  const preferredRows = interactions.map((i) => {
     const atts = byInteraction.get(i.id) ?? [];
-    const preferred =
+    return (
       atts.find((a) => opts.entityId && a.entityId === opts.entityId) ??
       atts.find((a) => opts.eventId && a.eventId === opts.eventId) ??
-      atts[0];
-    return {
-      interactionId: i.id,
-      capturedAt: (toDate(i.capturedAt) ?? new Date()).toISOString(),
-      transcript: i.transcript ?? '',
-      topics: opts.topicsByInteraction?.get(i.id) ?? [],
-      ...(opts.eventName ? { eventName: opts.eventName } : {}),
-      jpegBase64: preferred?.jpegBase64 ?? null,
-    };
+      atts[0] ??
+      null
+    );
   });
+  // One deduped, error-tolerant pass — identical photos fetch once and a
+  // flaky store GET degrades to null instead of failing every interaction.
+  const hydratedList = await hydrateAttachmentBase64List(preferredRows);
+  return interactions.map((i, idx) => ({
+    interactionId: i.id,
+    capturedAt: (toDate(i.capturedAt) ?? new Date()).toISOString(),
+    transcript: i.transcript ?? '',
+    topics: opts.topicsByInteraction?.get(i.id) ?? [],
+    ...(opts.eventName ? { eventName: opts.eventName } : {}),
+    jpegBase64: hydratedList[idx] ?? null,
+  }));
 }
 
 // ────────────────────────────────────────────────────────────────────
