@@ -63,6 +63,15 @@ const serverSchema = z.object({
   WEB_SEARCH_PROVIDER: z.enum(['tavily', 'exa', 'none']).default('tavily'),
   TAVILY_API_KEY: z.string().min(1).optional(),
   EXA_API_KEY: z.string().min(1).optional(),
+
+  // ── Product analytics (PostHog, server-side posthog-node) ─────────────
+  // Locked taxonomy lives in lib/analytics/events.ts. Unset → analytics is
+  // a silent no-op (zero-secrets boot, local dev, tests).
+  POSTHOG_KEY: z.string().min(1).optional(),
+  POSTHOG_HOST: z.string().url().optional(),
+  // Fallback so deployments that only configure the public key still get
+  // server-side capture.
+  NEXT_PUBLIC_POSTHOG_KEY: z.string().min(1).optional(),
 });
 
 // ── Client schema ───────────────────────────────────────────────────────

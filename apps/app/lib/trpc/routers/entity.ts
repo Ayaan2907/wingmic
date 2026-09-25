@@ -197,6 +197,7 @@ export const entityRouter = router({
       try {
         const { wroteFactKeys } = await enrichPersonFacts({
           db: ctx.db,
+          userId: ctx.user.id,
           entityId: input.entityId,
           person,
           provider,

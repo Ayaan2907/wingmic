@@ -3,6 +3,8 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { magicLink } from 'better-auth/plugins';
 import { Resend } from 'resend';
 import { env } from './config/env';
+import { ANALYTICS_EVENTS } from './analytics/events';
+import { trackAnalyticsEvent } from './analytics/server';
 import { db } from '@wingmic/db';
 import { sendMagicLinkEmail } from './email/magic-link';
 import * as schema from '@wingmic/db/schema';
@@ -32,6 +34,20 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: false,
+  },
+  databaseHooks: {
+    user: {
+      // signup — locked taxonomy. Fires exactly when a user row is created;
+      // magic-link is the only auth method, so the method property is a
+      // constant. distinctId is the opaque user id — never the email.
+      create: {
+        after: async (user) => {
+          trackAnalyticsEvent(user.id, ANALYTICS_EVENTS.signup, {
+            method: 'magic_link',
+          });
+        },
+      },
+    },
   },
   plugins: [
     magicLink({

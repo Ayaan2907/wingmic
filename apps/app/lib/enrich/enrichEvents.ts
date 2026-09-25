@@ -2,11 +2,14 @@ import type { DB } from '@wingmic/db';
 import * as schema from '@wingmic/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { buildWebSearchQuery, isBlockedExtractUrl, type WebSearchProvider } from '@/lib/web-search';
+import { ANALYTICS_EVENTS } from '@/lib/analytics/events';
+import { trackAnalyticsEvent } from '@/lib/analytics/server';
 import { parseEventFields } from './parseEventFields';
 import { fetchCalendarIcs, matchIcsEvent, parseIcsEvents } from './parseIcs';
 
 export async function enrichEventsAfterCommit(opts: {
   db: DB;
+  userId: string;
   eventIds: string[];
   capturedAt: Date;
   provider: WebSearchProvider | null;
@@ -115,12 +118,33 @@ export async function enrichEventsAfterCommit(opts: {
           patch.externalSource = parsed.external.source;
           patch.externalId = parsed.external.id;
         }
-      } catch {
+      } catch (err) {
         // Calendar data is still useful when the provider is unavailable.
+        trackAnalyticsEvent(opts.userId, ANALYTICS_EVENTS.enrichmentRun, {
+          kind: 'event',
+          status: 'error',
+          fields: 0,
+        });
+        console.error('[enrich] event enrichment failed:', event.id, err);
       }
     }
 
-    if (Object.keys(patch).length === 0) continue;
+    if (Object.keys(patch).length === 0) {
+      // The unit ran (ICS/provider work completed) but found nothing to
+      // patch — emit ok/fields:0 so a degraded non-throwing provider stays
+      // visible in the error-share widget, symmetric with the person path.
+      trackAnalyticsEvent(opts.userId, ANALYTICS_EVENTS.enrichmentRun, {
+        kind: 'event',
+        status: 'ok',
+        fields: 0,
+      });
+      continue;
+    }
     await db.update(schema.events).set(patch).where(eq(schema.events.id, event.id));
+    trackAnalyticsEvent(opts.userId, ANALYTICS_EVENTS.enrichmentRun, {
+      kind: 'event',
+      status: 'ok',
+      fields: Object.keys(patch).length,
+    });
   }
 }
