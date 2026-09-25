@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, it, expect } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
+import { shadows } from '@wingmic/design-tokens';
 
 afterEach(() => cleanup());
 import {
@@ -119,36 +120,40 @@ describe('EntityAvatar primitives', () => {
     });
   });
 
-  describe('brutal-chrome border + shadow guards', () => {
-    // jsdom normalizes #000 → rgb(0,0,0) in border; we check width+style are set.
-    it('PersonAvatar has 1.5px solid border and 3px shadow', () => {
+  describe('soft-elevation guards (v3 relaxed premium)', () => {
+    // v3 replaced the brutalist hard-offset chrome with soft diffused contact
+    // elevation — these guards keep the old hard edges from creeping back.
+    // Assert against the token itself so value tweaks don't break the guard.
+    const softShadow = shadows.contact;
+
+    it('PersonAvatar wears soft contact shadow, no hard offset', () => {
       const { getByTestId } = render(<PersonAvatar name="test" />);
       const el = getByTestId('entity-person');
-      expect(el.style.border).toContain('1.5px solid');
-      expect(el.style.boxShadow).toContain('3px 3px 0');
+      expect(el.style.boxShadow).toBe(softShadow);
+      expect(el.style.boxShadow).not.toContain('3px 3px 0');
     });
 
-    it('CompanyTile has 1.5px solid border and 3px shadow', () => {
+    it('CompanyTile wears soft contact shadow, no hard offset', () => {
       const { getByTestId } = render(<CompanyTile name="test" />);
       const el = getByTestId('entity-company');
-      expect(el.style.border).toContain('1.5px solid');
-      expect(el.style.boxShadow).toContain('3px 3px 0');
+      expect(el.style.boxShadow).toBe(softShadow);
+      expect(el.style.boxShadow).not.toContain('3px 3px 0');
     });
 
-    it('EventDiamond inner shape has 1.5px solid border and 3px shadow', () => {
+    it('EventDiamond inner shape wears soft contact shadow, no hard offset', () => {
       const { getByTestId } = render(<EventDiamond name="test" />);
       const outer = getByTestId('entity-event');
       // inner diamond is the first child div
       const inner = outer.querySelector('div') as HTMLElement;
-      expect(inner.style.border).toContain('1.5px solid');
-      expect(inner.style.boxShadow).toContain('3px 3px 0');
+      expect(inner.style.boxShadow).toBe(softShadow);
+      expect(inner.style.boxShadow).not.toContain('3px 3px 0');
     });
 
-    it('PinTile has 1.5px solid border and 3px shadow', () => {
+    it('PinTile wears soft contact shadow, no hard offset', () => {
       const { getByTestId } = render(<PinTile />);
       const el = getByTestId('entity-pin');
-      expect(el.style.border).toContain('1.5px solid');
-      expect(el.style.boxShadow).toContain('3px 3px 0');
+      expect(el.style.boxShadow).toBe(softShadow);
+      expect(el.style.boxShadow).not.toContain('3px 3px 0');
     });
   });
 

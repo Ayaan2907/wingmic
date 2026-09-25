@@ -1,21 +1,23 @@
-// EntityAvatar — per-kind visual templates (PR α v16)
+// EntityAvatar — per-kind visual templates (PR α v16, v3 relaxed premium)
 //
-// Source of truth: design/v2/library/lib-entities.jsx + lib-shared.jsx Avatar/EntityTag.
+// Source of truth: packages/design-tokens (palette + elevation) and
+// design/v2/library/lib-entities.jsx + lib-shared.jsx Avatar/EntityTag for shape.
 // Plan reference: docs/superpowers/plans/* §18 v16.
 //
 // These are static primitives. v9 (home) and PR β (detail pages, graph, search)
 // will consume them. Do not wire into screens here.
 
 import * as React from 'react';
+import { colors, shadows } from '@wingmic/design-tokens';
 
 type Accent = 'amber' | 'mint' | 'pink' | 'blue' | 'violet';
 
 const ACCENT_HEX: Record<Accent, string> = {
-  amber: '#ffc452', // --accent
-  mint: '#86efac', // --second
-  pink: '#ff8fab', // --third
-  blue: '#7dd3fc', // --info-blue
-  violet: '#a78bfa', // --info-violet
+  amber: colors.accent, // --accent
+  mint: colors.second, // --second
+  pink: colors.third, // --third
+  blue: colors.info.blue, // --info-blue
+  violet: colors.info.violet, // --info-violet
 };
 
 const ACCENT_ORDER: Accent[] = ['amber', 'mint', 'pink', 'blue', 'violet'];
@@ -41,7 +43,7 @@ function firstLetter(name: string): string {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// PersonAvatar — round 72px, italic-serif initial, brutal shadow.
+// PersonAvatar — round 72px, italic-serif initial, soft contact shadow.
 // Consumed in v9 home contact rows + PR β person detail hero.
 // ────────────────────────────────────────────────────────────────────
 export interface PersonAvatarProps {
@@ -72,8 +74,7 @@ export function PersonAvatar({
         borderRadius: 999,
         background: ACCENT_HEX[a],
         color: '#000',
-        border: '1.5px solid #000',
-        boxShadow: '3px 3px 0 #000',
+        boxShadow: shadows.contact,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -89,7 +90,7 @@ export function PersonAvatar({
 }
 
 // ────────────────────────────────────────────────────────────────────
-// CompanyTile — 64×64 brutal square, mono uppercase initial.
+// CompanyTile — 64×64 tile, mono uppercase initial, soft contact shadow.
 // Consumed in PR β company detail hero + graph nodes.
 // ────────────────────────────────────────────────────────────────────
 export interface CompanyTileProps {
@@ -110,11 +111,10 @@ export function CompanyTile({ name, size = 64, accent = 'blue', domain, style }:
       style={{
         width: size,
         height: size,
-        borderRadius: 4,
+        borderRadius: 14,
         background: ACCENT_HEX[accent],
         color: '#000',
-        border: '1.5px solid #000',
-        boxShadow: '3px 3px 0 #000',
+        boxShadow: shadows.contact,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -169,8 +169,7 @@ export function EventDiamond({
           width: size * 0.7,
           height: size * 0.7,
           background: ACCENT_HEX[accent],
-          border: '1.5px solid #000',
-          boxShadow: '3px 3px 0 #000',
+          boxShadow: shadows.contact,
           transform: 'rotate(45deg)',
           display: 'flex',
           alignItems: 'center',
@@ -181,7 +180,7 @@ export function EventDiamond({
           style={{
             transform: 'rotate(-45deg)',
             color: '#000',
-            font: `800 ${Math.round(size * 0.35)}px/1 ${FONT_SANS}`,
+            font: `700 ${Math.round(size * 0.35)}px/1 ${FONT_SANS}`,
             letterSpacing: '-0.02em',
           }}
         >
@@ -214,9 +213,9 @@ export function TopicGlyph({ name, size = 24, style }: TopicGlyphProps) {
         justifyContent: 'center',
         width: size,
         height: size,
-        background: 'var(--surface-2, rgba(255,255,255,0.04))',
+        background: 'var(--surface-2)',
         color: '#a78bfa',
-        borderRadius: 4,
+        borderRadius: 8,
         font: `500 ${Math.round(size * 0.55)}px/1 ${FONT_MONO}`,
         flexShrink: 0,
         ...style,
@@ -248,11 +247,10 @@ export function PinTile({ size = 32, style }: PinTileProps) {
         justifyContent: 'center',
         width: size,
         height: size,
-        background: 'var(--surface-2, rgba(255,255,255,0.04))',
+        background: 'var(--surface-2)',
         color: '#ffc452',
-        border: '1.5px solid #000',
-        boxShadow: '3px 3px 0 #000',
-        borderRadius: 4,
+        boxShadow: shadows.contact,
+        borderRadius: 8,
         font: `500 ${Math.round(size * 0.55)}px/1 ${FONT_MONO}`,
         flexShrink: 0,
         ...style,

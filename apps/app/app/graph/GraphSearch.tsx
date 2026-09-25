@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useMemo, useState } from 'react';
+import { shadows } from '@wingmic/design-tokens';
 import { KIND_COLOR } from './graph-style';
 import { GraphNodeAvatar } from './GraphNodeAvatar';
 import type { GraphNode } from './graph-types';
@@ -58,9 +59,9 @@ export function GraphSearch({
         style={{
           width: '100%',
           boxSizing: 'border-box',
-          padding: '6px 12px',
+          padding: '8px 14px',
           borderRadius: 999,
-          background: 'rgba(10,10,10,0.85)',
+          background: 'var(--surface-2)',
           border: '1px solid var(--border-soft)',
           color: 'var(--ink)',
           fontSize: 11,
@@ -84,10 +85,10 @@ export function GraphSearch({
             listStyle: 'none',
             maxHeight: 260,
             overflowY: 'auto',
-            borderRadius: 12,
-            background: 'var(--bg-elev, #111)',
+            borderRadius: 16,
+            background: 'var(--bg-raised)',
             border: '1px solid var(--border-soft)',
-            boxShadow: '0 12px 32px rgba(0,0,0,0.55)',
+            boxShadow: shadows.raised,
           }}
         >
           {hits.length === 0 ? (
@@ -112,9 +113,9 @@ export function GraphSearch({
                     alignItems: 'center',
                     gap: 10,
                     width: '100%',
-                    padding: '7px 8px',
+                    padding: '8px 10px',
                     border: 'none',
-                    borderRadius: 8,
+                    borderRadius: 10,
                     background: 'transparent',
                     color: 'var(--ink)',
                     cursor: 'pointer',
@@ -127,7 +128,7 @@ export function GraphSearch({
                       style={{
                         display: 'block',
                         fontSize: 13,
-                        fontWeight: 650,
+                        fontWeight: 600,
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
