@@ -22,6 +22,7 @@
 // slide-cancel hint, which only applies to the held-finger gesture.
 
 import { useCapture } from './CaptureProvider';
+import { shadows } from '@wingmic/design-tokens';
 
 const accent = '#FFC452';
 const coral = '#FF6B6B';
