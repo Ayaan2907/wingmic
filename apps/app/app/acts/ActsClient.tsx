@@ -11,7 +11,9 @@
 import * as React from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { ActCard } from '@/app/_components/ActCard';
-import { accent } from '@/app/chat/_components/tokens';
+import { colors } from '@wingmic/design-tokens';
+
+const accent = colors.accent;
 
 export function ActsClient() {
   const utils = trpc.useUtils();
@@ -156,11 +158,12 @@ export function ActsClient() {
 
       <section
         style={{
-          padding: '16px clamp(14px, 4vw, 20px) 0',
+          padding: '20px clamp(14px, 4vw, 20px) 0',
           maxWidth: 680,
           width: '100%',
           margin: '0 auto',
           boxSizing: 'border-box',
+          animation: 'wm-fade var(--dur-slow, 420ms) var(--ease-relaxed, ease-out) both',
         }}
       >
         <div
@@ -184,16 +187,17 @@ export function ActsClient() {
                 onClick={() => setFilter(key)}
                 className="mono"
                 style={{
-                  minHeight: 34,
-                  padding: '6px 12px',
+                  minHeight: 40,
+                  padding: '8px 16px',
                   borderRadius: 999,
-                  border: active ? `1.5px solid ${accent}` : '1px solid var(--border-soft)',
-                  background: active ? `${accent}22` : 'var(--surface-1)',
+                  border: active ? `1px solid ${accent}59` : '1px solid var(--border-soft)',
+                  background: active ? `${accent}14` : 'var(--surface-1)',
                   color: active ? accent : 'var(--text-55)',
                   fontSize: 11,
                   letterSpacing: 1,
                   textTransform: 'uppercase',
                   cursor: 'pointer',
+                  transition: 'border-color 240ms var(--ease-relaxed, ease-out), background 240ms var(--ease-relaxed, ease-out)',
                 }}
               >
                 {label}
@@ -209,14 +213,14 @@ export function ActsClient() {
             display: 'flex',
             alignItems: 'center',
             gap: 10,
-            padding: '12px 14px',
-            borderRadius: 12,
-            marginBottom: 20,
+            padding: '14px 16px',
+            borderRadius: 16,
+            marginBottom: 24,
             fontSize: 12,
-            lineHeight: 1.45,
+            lineHeight: 1.55,
             color: 'var(--text-85)',
-            background: `linear-gradient(90deg, ${accent}1a, transparent)`,
-            border: `1px solid ${accent}4d`,
+            background: `linear-gradient(90deg, ${accent}14, transparent)`,
+            border: `1px solid ${accent}38`,
           }}
         >
           <span
@@ -227,6 +231,7 @@ export function ActsClient() {
               borderRadius: '50%',
               background: accent,
               flexShrink: 0,
+              animation: 'wm-pulse-d 1.6s infinite',
             }}
           />
           <span>
@@ -243,8 +248,8 @@ export function ActsClient() {
           <div
             data-testid="acts-error"
             style={{
-              padding: 16,
-              borderRadius: 14,
+              padding: 18,
+              borderRadius: 18,
               border: '1px solid var(--border-soft)',
               background: 'var(--surface-1)',
             }}
@@ -273,19 +278,19 @@ export function ActsClient() {
           <div
             data-testid="acts-empty"
             style={{
-              padding: 16,
-              borderRadius: 14,
-              background: 'var(--surface-1, rgba(255,255,255,0.02))',
-              border: '1px dashed var(--border-soft, rgba(255,255,255,0.06))',
+              padding: 18,
+              borderRadius: 18,
+              background: 'var(--surface-1)',
+              border: '1px dashed var(--border-soft)',
               color: 'var(--text-55)',
               fontSize: 13.5,
-              lineHeight: 1.55,
+              lineHeight: 1.6,
             }}
           >
             no drafts yet — capture a memo that names a follow-up, intro, or a dated meeting.
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} data-testid="acts-list">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="acts-list">
             {acts.map((a) => (
               <ActCard
                 key={a.id}

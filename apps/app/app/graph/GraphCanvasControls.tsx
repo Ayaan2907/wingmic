@@ -5,22 +5,23 @@ import type { GraphSpacingPreset } from './graph-force';
 
 const btnStyle: CSSProperties = {
   padding: '8px 10px',
-  minHeight: 36,
-  minWidth: 36,
-  borderRadius: 8,
+  minHeight: 40,
+  minWidth: 40,
+  borderRadius: 12,
   border: '1px solid var(--border-soft)',
-  background: 'var(--surface-2, rgba(255,255,255,0.06))',
+  background: 'var(--surface-2)',
   color: 'var(--text-55)',
   fontSize: 11,
   cursor: 'pointer',
   lineHeight: 1,
+  transition: 'border-color 240ms var(--ease-relaxed, ease-out), background 240ms var(--ease-relaxed, ease-out)',
 };
 
 const activeBtnStyle: CSSProperties = {
   ...btnStyle,
-  borderColor: 'rgba(255,196,82,0.45)',
+  borderColor: 'rgba(255,196,82,0.35)',
   color: 'var(--accent)',
-  background: 'rgba(255,196,82,0.1)',
+  background: 'rgba(255,196,82,0.08)',
 };
 
 type Props = {
@@ -87,9 +88,9 @@ export function GraphCanvasControls({
           display: 'flex',
           gap: 4,
           padding: 4,
-          borderRadius: 8,
+          borderRadius: 12,
           border: '1px solid var(--border-soft)',
-          background: 'var(--bg-elev, rgba(0,0,0,0.4))',
+          background: 'var(--surface-2)',
         }}
         role="group"
         aria-label="node spacing"

@@ -8,7 +8,7 @@ import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ForceGraphMethods } from 'react-force-graph-2d';
-import { accent } from '@/app/chat/_components/tokens';
+import { colors, shadows } from '@wingmic/design-tokens';
 import { trpc } from '@/lib/trpc/client';
 import { GraphCanvasControls } from './GraphCanvasControls';
 import { GraphHoverCard } from './GraphHoverCard';
@@ -38,6 +38,7 @@ export type { GraphData, GraphLink, GraphNode, LinkRel, NodeKind };
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), { ssr: false });
 
 const ZOOM_STEP = 1.28;
+const accent = colors.accent;
 
 export function GraphClient({ data }: { data: GraphData }) {
   const router = useRouter();
@@ -223,9 +224,9 @@ export function GraphClient({ data }: { data: GraphData }) {
               marginBottom: 14,
             }}
           >
-            graph
+            ◆ graph
           </div>
-          <p style={{ color: 'var(--text-55)', fontSize: 15, lineHeight: 1.55 }}>
+          <p style={{ color: 'var(--text-55)', fontSize: 15, lineHeight: 1.6 }}>
             no connections yet.{' '}
             <span className="serif" style={{ fontStyle: 'italic', color: accent }}>
               tap the mic to capture someone.
@@ -254,13 +255,14 @@ export function GraphClient({ data }: { data: GraphData }) {
                     fontSize: 11,
                     letterSpacing: 1,
                     textTransform: 'uppercase',
-                    padding: '5px 11px',
-                    minHeight: 32,
+                    padding: '8px 14px',
+                    minHeight: 40,
                     borderRadius: 999,
                     border: `1px solid ${on ? KIND_COLOR[kind] : 'var(--border-soft)'}`,
-                    background: on ? `${KIND_COLOR[kind]}22` : 'transparent',
+                    background: on ? `${KIND_COLOR[kind]}18` : 'transparent',
                     color: on ? KIND_COLOR[kind] : 'var(--text-55)',
                     cursor: 'pointer',
+                    transition: 'background 240ms var(--ease-relaxed, ease-out), border-color 240ms var(--ease-relaxed, ease-out)',
                   }}
                 >
                   {label}
@@ -357,11 +359,11 @@ export function GraphClient({ data }: { data: GraphData }) {
                 zIndex: 3,
                 maxWidth: 360,
                 margin: '0 auto',
-                padding: 14,
-                borderRadius: 14,
-                background: 'var(--bg-elev, #111)',
+                padding: 16,
+                borderRadius: 18,
+                background: 'var(--bg-raised)',
                 border: '1px solid var(--border-soft)',
-                boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+                boxShadow: shadows.raised,
               }}
             >
               <button
@@ -420,7 +422,7 @@ export function GraphClient({ data }: { data: GraphData }) {
         className="desktop-pane detail-rail"
         style={{
           padding: 'clamp(14px, 3vw, 20px) clamp(12px, 2vw, 18px)',
-          background: 'rgba(255,255,255,0.01)',
+          background: 'var(--surface-1)',
         }}
         aria-label="selected node"
       >
@@ -443,13 +445,13 @@ export function GraphClient({ data }: { data: GraphData }) {
                 style={{
                   width: 56,
                   height: 56,
-                  borderRadius: selected.kind === 'company' ? 12 : '50%',
+                  borderRadius: selected.kind === 'company' ? 16 : '50%',
                   background: KIND_COLOR[selected.kind],
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: '#000',
-                  fontWeight: 800,
+                  fontWeight: 700,
                   fontSize: 20,
                   flexShrink: 0,
                 }}
@@ -457,12 +459,12 @@ export function GraphClient({ data }: { data: GraphData }) {
                 {selected.label.charAt(0).toUpperCase()}
               </span>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em' }}>
+                <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.018em' }}>
                   {selected.label}
                 </div>
                 <div
                   className="mono"
-                  style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 4 }}
+                  style={{ fontSize: 12, color: 'var(--text-55)', marginTop: 4 }}
                 >
                   {selected.kind}
                 </div>
@@ -513,15 +515,14 @@ export function GraphClient({ data }: { data: GraphData }) {
                 }}
                 style={{
                   flex: '1 1 190px',
-                  minHeight: 42,
-                  padding: 10,
-                  borderRadius: 10,
+                  minHeight: 44,
+                  padding: 12,
+                  borderRadius: 999,
                   background: accent,
                   color: '#000',
                   fontSize: 12.5,
                   fontWeight: 700,
-                  border: '1.5px solid #000',
-                  boxShadow: '3px 3px 0 #000',
+                  boxShadow: shadows.button,
                   opacity: selected.kind === 'topic' || createDraft.isPending ? 0.55 : 1,
                   cursor:
                     selected.kind === 'topic' || createDraft.isPending ? 'not-allowed' : 'pointer',
@@ -543,10 +544,10 @@ export function GraphClient({ data }: { data: GraphData }) {
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  minHeight: 42,
-                  padding: '10px 14px',
-                  borderRadius: 10,
-                  color: 'rgba(255,255,255,0.55)',
+                  minHeight: 44,
+                  padding: '10px 16px',
+                  borderRadius: 999,
+                  color: 'var(--text-55)',
                   fontSize: 12,
                   textDecoration: 'none',
                   border: '1px solid var(--border-soft)',
@@ -575,16 +576,16 @@ export function GraphClient({ data }: { data: GraphData }) {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
-                  padding: '8px 0',
-                  borderBottom: '1px solid rgba(255,255,255,0.05)',
+                  padding: '10px 0',
+                  borderBottom: '1px solid var(--border-soft)',
                 }}
               >
                 <span
                   className="mono"
                   style={{
-                    padding: '2px 6px',
-                    borderRadius: 4,
-                    background: `${accent}26`,
+                    padding: '2px 8px',
+                    borderRadius: 6,
+                    background: `${accent}20`,
                     fontSize: 9,
                     color: accent,
                     textTransform: 'uppercase',
@@ -594,7 +595,7 @@ export function GraphClient({ data }: { data: GraphData }) {
                 >
                   {e.rel}
                 </span>
-                <span style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.7)' }}>{e.label}</span>
+                <span style={{ fontSize: 12.5, color: 'var(--text-70)' }}>{e.label}</span>
               </div>
             ))}
           </>

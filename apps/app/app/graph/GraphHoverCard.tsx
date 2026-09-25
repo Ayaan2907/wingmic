@@ -1,5 +1,6 @@
 'use client';
 
+import { shadows } from '@wingmic/design-tokens';
 import { KIND_COLOR } from './graph-style';
 import { GraphNodeAvatar } from './GraphNodeAvatar';
 import type { GraphNode } from './graph-types';
@@ -28,11 +29,11 @@ export function GraphHoverCard({
         display: 'flex',
         alignItems: 'center',
         gap: 10,
-        padding: '8px 12px 8px 8px',
-        borderRadius: 12,
-        background: 'rgba(17,17,17,0.94)',
+        padding: '10px 14px 10px 10px',
+        borderRadius: 14,
+        background: 'rgba(14,14,18,0.94)',
         border: '1px solid var(--border-soft)',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
+        boxShadow: shadows.raised,
         maxWidth: 240,
       }}
     >
@@ -41,8 +42,8 @@ export function GraphHoverCard({
         <div
           style={{
             fontSize: 14,
-            fontWeight: 700,
-            letterSpacing: '-0.02em',
+            fontWeight: 600,
+            letterSpacing: '-0.018em',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
