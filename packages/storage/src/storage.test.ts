@@ -149,6 +149,29 @@ describe('storageConfigFromEnv', () => {
       storageConfigFromEnv({ ...fullEnv, OBJECT_STORAGE_SECRET_ACCESS_KEY: '   ' }).driver,
     ).toBe('local');
   });
+
+  it('fails startup in production when credentials are incomplete', () => {
+    // Silent local-disk storage in prod loses bytes on redeploy and splits
+    // multi-instance state — the misconfig must surface immediately.
+    expect(() => storageConfigFromEnv({ NODE_ENV: 'production' })).toThrow(
+      /incomplete in production/,
+    );
+    const partial = { ...fullEnv, NODE_ENV: 'production' } as Record<string, string | undefined>;
+    delete partial.OBJECT_STORAGE_ACCESS_KEY_ID;
+    expect(() => storageConfigFromEnv(partial)).toThrow(/incomplete in production/);
+  });
+
+  it('keeps the silent local fallback outside production', () => {
+    expect(storageConfigFromEnv({ NODE_ENV: 'test' }).driver).toBe('local');
+    expect(storageConfigFromEnv({ NODE_ENV: 'development' }).driver).toBe('local');
+    expect(storageConfigFromEnv({}).driver).toBe('local');
+  });
+
+  it('still selects s3 in production when fully configured', () => {
+    expect(
+      storageConfigFromEnv({ ...fullEnv, NODE_ENV: 'production' }).driver,
+    ).toBe('s3');
+  });
 });
 
 describe('createObjectStore', () => {

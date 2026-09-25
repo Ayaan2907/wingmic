@@ -30,8 +30,10 @@ export const DEFAULT_LOCAL_ROOT = '.object-storage';
 
 /**
  * Env-gated driver selection. S3/R2 only when all four required credentials
- * are present; otherwise the local filesystem driver takes over silently —
- * local dev and tests without creds never touch the network and never log.
+ * are present. Otherwise: local filesystem driver in non-production — local
+ * dev and tests without creds never touch the network and never log — and a
+ * startup failure in production, where silently writing attachments to
+ * ephemeral disk would lose bytes on redeploy and split multi-instance state.
  */
 export function storageConfigFromEnv(
   env: ObjectStorageEnv,
@@ -51,6 +53,16 @@ export function storageConfigFromEnv(
       accessKeyId,
       secretAccessKey,
     };
+  }
+
+  if (env.NODE_ENV === 'production') {
+    throw new Error(
+      '[object-storage] OBJECT_STORAGE_* credentials are incomplete in production ' +
+        '(need OBJECT_STORAGE_BUCKET, OBJECT_STORAGE_ENDPOINT, ' +
+        'OBJECT_STORAGE_ACCESS_KEY_ID, OBJECT_STORAGE_SECRET_ACCESS_KEY). ' +
+        'The local-disk fallback is disabled in production so a partial config ' +
+        'fails startup instead of silently storing attachments on ephemeral disk.',
+    );
   }
 
   return {

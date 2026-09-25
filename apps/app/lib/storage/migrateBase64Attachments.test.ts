@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import * as schema from '@wingmic/db/schema';
-import { createMemoryObjectStore } from '@wingmic/storage';
+import { attachmentStorageKey, createMemoryObjectStore } from '@wingmic/storage';
 import { migrateBase64Attachments } from './migrateBase64Attachments';
-import { attachmentBytesMatchKey, setAttachmentStoreForTests } from './attachments';
+import { attachmentBytesMatchKey, setAttachmentStoreForTests, sha256Hex } from './attachments';
 
 describe('migrateBase64Attachments — base64 rows move to the object store', () => {
   let client: ReturnType<typeof createClient>;
@@ -143,9 +143,10 @@ describe('migrateBase64Attachments — base64 rows move to the object store', ()
       createdAt: now,
     });
 
+    const store = createMemoryObjectStore();
     const report = await migrateBase64Attachments({
       db: db as Parameters<typeof migrateBase64Attachments>[0]['db'],
-      store: createMemoryObjectStore(),
+      store,
       dryRun: true,
     });
 
@@ -156,6 +157,47 @@ describe('migrateBase64Attachments — base64 rows move to the object store', ()
     const rows = await db.query.interactionAttachments.findMany();
     expect(rows[0]?.jpegBase64).toBe(goodA.toString('base64'));
     expect(rows[0]?.storageKey).toBeNull();
+
+    // The store is untouched — the documented contract is scan-and-report,
+    // so a dry-run against production credentials uploads nothing.
+    const expectedKey = attachmentStorageKey({
+      userId: 'u_mig',
+      sha256Hex: sha256Hex(goodA),
+    });
+    expect(await store.get(expectedKey)).toBeNull();
+  });
+
+  it('paginates by keyset — a limit stops the scan and the rest migrates on the next run', async () => {
+    await db.insert(schema.interactionAttachments).values([
+      { id: 'att_b1', interactionId: 'i1', jpegBase64: goodA.toString('base64'), byteSize: goodA.byteLength, createdAt: now },
+      { id: 'att_b2', interactionId: 'i1', jpegBase64: goodB.toString('base64'), byteSize: goodB.byteLength, createdAt: now },
+      {
+        id: 'att_b3',
+        interactionId: 'i1',
+        jpegBase64: makeJpeg(48, 0x44).toString('base64'),
+        byteSize: 48,
+        createdAt: now,
+      },
+    ]);
+
+    const store = createMemoryObjectStore();
+    const capped = await migrateBase64Attachments({
+      db: db as Parameters<typeof migrateBase64Attachments>[0]['db'],
+      store,
+      limit: 2,
+    });
+    expect(capped.scanned).toBe(2);
+    expect(capped.migrated).toBe(2);
+    expect(capped.remainingBase64Rows).toBe(1);
+
+    // The uncapped continuation picks up exactly the remaining row.
+    const rest = await migrateBase64Attachments({
+      db: db as Parameters<typeof migrateBase64Attachments>[0]['db'],
+      store,
+    });
+    expect(rest.scanned).toBe(1);
+    expect(rest.migrated).toBe(1);
+    expect(rest.failed).toBe(0);
   });
 
   it('is idempotent — a second run finds nothing to do', async () => {

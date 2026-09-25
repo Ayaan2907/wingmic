@@ -7,7 +7,7 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { DB } from '@wingmic/db';
 import * as schema from '@wingmic/db/schema';
 import type { FieldProvenance, GraphResult } from '@/app/chat/_components/types';
-import { hydrateAttachmentBase64 } from '@/lib/storage/attachments';
+import { hydrateAttachmentBase64List } from '@/lib/storage/attachments';
 
 export type HydratedThreadItem = {
   id: string;
@@ -84,12 +84,11 @@ export async function hydrateThreadItems(
 
   // Wire contract: capture surfaces receive base64 JPEGs. Storage-backed rows
   // hydrate from the object store; legacy rows pass inline base64 through.
-  const hydratedAttachmentRows = await Promise.all(
-    attachmentRows.map(async (a) => ({
-      ...a,
-      jpegBase64: await hydrateAttachmentBase64(a),
-    })),
-  );
+  const hydratedBase64 = await hydrateAttachmentBase64List(attachmentRows);
+  const hydratedAttachmentRows = attachmentRows.map((a, i) => ({
+    ...a,
+    jpegBase64: hydratedBase64[i] ?? null,
+  }));
 
   const entityIds = [
     ...new Set([
