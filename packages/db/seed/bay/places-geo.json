@@ -1,0 +1,238 @@
+{
+  "_comment": "The /bay places. GeoJSON points with a first-person note each: what it is, why it matters, what happened there. Never a bare pin. Coordinates are [lng, lat]; categories are the layer enum in assets/bay/map.js. Add places freely, keep the notes honest and yours.",
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.4005, 37.7935] },
+      "properties": {
+        "id": "advanceiq",
+        "name": "advanceiq · the day job",
+        "cat": "startup",
+        "note": "the day job. i'm the sole engineer on ARIA, an llm agent that lets revenue-based-finance clients query analytics in plain english. mastra, next.js, a custom sse layer. this dot is the block i walk to every morning.",
+        "source": "https://advanceiq.ai"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.421, 37.7599] },
+      "properties": {
+        "id": "wingmic",
+        "name": "wingmic · the coffee shop build",
+        "cat": "startup",
+        "note": "my side project. speak for 10 to 30 seconds after meeting someone and an llm turns it into a knowledge graph you can query in plain english, mcp server included. most of it got written at a table around here.",
+        "source": "https://wingmic.xyz"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.3926, 37.7827] },
+      "properties": {
+        "id": "south-park",
+        "name": "south park",
+        "cat": "startup",
+        "note": "a lawn in the middle of soma that has watched two booms. multimedia gulch started in the houses around it, and now it's ai pitch decks at every picnic table. i bring lunch here when i want to overhear the future."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.4033, 37.7846] },
+      "properties": {
+        "id": "moscone-west",
+        "name": "moscone west",
+        "cat": "startup",
+        "note": "the hackathon floor. my first sf weekend was a 36 hour build here on folding tables; i left with a working demo and a cold. the startup scene shows up whenever there's free compute."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.0841, 37.422] },
+      "properties": {
+        "id": "googleplex",
+        "name": "the googleplex",
+        "cat": "office",
+        "note": "the mothership down the peninsula. a friend gave me the tour: the bikes are real, the campus is bigger than some sf neighborhoods, and the cafeterias justify the commute all by themselves."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.009, 37.3349] },
+      "properties": {
+        "id": "apple-park",
+        "name": "apple park",
+        "cat": "office",
+        "note": "the ring, seen from the visitor center. the scale model inside is better than walking the real thing, which is the most apple sentence i've ever written."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.1485, 37.4848] },
+      "properties": {
+        "id": "meta-hq",
+        "name": "1 hacker way",
+        "cat": "office",
+        "note": "the thumbs-up sign over the lawn. i detoured past on a 101 ride to menlo park; the campus is a small city that ships one app."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.3972, 37.7897] },
+      "properties": {
+        "id": "salesforce-tower",
+        "name": "salesforce tower",
+        "cat": "office",
+        "note": "the tallest thing downtown and my compass since i moved here. the crown runs a nightly led piece; on a clear evening you can pick it out from the bay bridge."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.418, 37.761] },
+      "properties": {
+        "id": "the-mission",
+        "name": "the mission",
+        "cat": "housing",
+        "note": "the house hunt ended here, two blocks off valencia. taquerias, fog that rolls in around 7 like a scheduled deploy, and a commute i can do in sneakers."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.478, 37.759] },
+      "properties": {
+        "id": "sunset",
+        "name": "the sunset",
+        "cat": "housing",
+        "note": "runner-up in the house hunt. quiet, flat, parking that actually exists. the fog is honest about staying until noon, and my budget liked it more than my alarm did."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.47, 37.78] },
+      "properties": {
+        "id": "richmond",
+        "name": "the richmond",
+        "cat": "housing",
+        "note": "the in-between neighborhood: golden gate park on one side, the presidio on the other. rent is saner, the fog is not. third place in the hunt, first place for pho."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.3943, 37.7799] },
+      "properties": {
+        "id": "fourth-and-king",
+        "name": "4th & king caltrain",
+        "cat": "housing",
+        "note": "the caltrain decision. live near this platform and every peninsula office becomes a one seat ride. still the tiebreaker for the next apartment."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.389, 37.778] },
+      "properties": {
+        "id": "oracle-park",
+        "name": "oracle park",
+        "cat": "sports",
+        "note": "the giants' ballpark where a home run can land in the bay. bleacher seats are the cheapest the city gets, and the view is part of the ticket."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.3875, 37.768] },
+      "properties": {
+        "id": "chase-center",
+        "name": "chase center",
+        "cat": "sports",
+        "note": "warriors home across the water from the ballpark. the arena reads like a spaceship parked next to the older stadiums; the ferry there is half the fun."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.454, 37.77] },
+      "properties": {
+        "id": "kezar-stadium",
+        "name": "kezar stadium",
+        "cat": "sports",
+        "note": "a public track at the east edge of golden gate park. tuesday intervals here beat any gym membership, and the fog keeps the legs honest."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.475, 37.8075] },
+      "properties": {
+        "id": "golden-gate-bridge",
+        "name": "golden gate bridge",
+        "cat": "tour",
+        "note": "the first real walk i took after the move. the bridge is louder than you think, the wind is a wall, and some mornings the fog eats it whole anyway."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.3937, 37.7955] },
+      "properties": {
+        "id": "ferry-building",
+        "name": "ferry building",
+        "cat": "tour",
+        "note": "the clock tower you set your bearings by. saturday farmers market; the bakery line moves faster than it looks and it's worth it."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.514, 37.78] },
+      "properties": {
+        "id": "sutro-baths",
+        "name": "sutro baths",
+        "cat": "tour",
+        "note": "the ruins of a swimming palace at the edge of the continent. best sunset per dollar in sf, and the dollar is zero."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.4477, 37.7544] },
+      "properties": {
+        "id": "twin-peaks",
+        "name": "twin peaks",
+        "cat": "tour",
+        "note": "the whole street grid at your feet. bring a layer no matter the forecast; the wind up there is a feature, not a bug."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.4156, 37.7434] },
+      "properties": {
+        "id": "bernal-summit",
+        "name": "bernal heights summit",
+        "cat": "tour",
+        "note": "a 360 of the city and dogs everywhere. my default answer to 'where do i go to think', and the walk up counts as the gym."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.4328, 37.7763] },
+      "properties": {
+        "id": "painted-ladies",
+        "name": "alamo square",
+        "cat": "tour",
+        "note": "the postcard houses with downtown behind them. tour groups at 10am, locals at sunset, and the lawn in between earned its reputation."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.4485, 37.8029] },
+      "properties": {
+        "id": "palace-fine-arts",
+        "name": "palace of fine arts",
+        "cat": "tour",
+        "note": "built for the 1915 world's fair and kept alive because people refused to let it go. weeping concrete, swans, the best echo in the city."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [-122.4058, 37.7909] },
+      "properties": {
+        "id": "dragon-gate",
+        "name": "chinatown dragon gate",
+        "cat": "tour",
+        "note": "the gate on grant street. walk uphill, get a pastry, keep going past the souvenir shops until the aunties are selling produce on the sidewalk."
+      }
+    }
+  ]
+}

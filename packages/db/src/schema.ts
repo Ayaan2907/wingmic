@@ -1,4 +1,4 @@
-import { customType, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { customType, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { createId } from '@paralleldrive/cuid2';
 
@@ -579,6 +579,80 @@ export const apiKeyRateWindows = sqliteTable(
   (t) => [primaryKey({ columns: [t.keyId, t.windowStart] })],
 );
 
+// ─── Bay layer (public map data: canonical places + live event inventory) ───
+// The merged /bay surface's shared store. Two event concepts live in this schema
+// and must never mix: `event` above is the graph's MEMORY of events a user
+// actually attended (observedCount/promotedAt semantics); `bay_events` below is
+// LIVE INVENTORY from public sources — rows expire (see expiresAt), are retained
+// as history, and never touch graph semantics.
+// The plural category vocabulary lives in src/bay/categories.ts (one home, next
+// to the CANON fold); category columns stay plain text with validation at the
+// normalize boundary.
+
+/** Provenance of a bay_events row. The merge widened the old store's
+ * seed|luma|eventbrite set to the spec's ingest ladder — luma, partiful, web,
+ * meetup, ics, submitted — and keeps `seed` so seeded rows can state their
+ * origin honestly instead of borrowing a live-source label. */
+export const BAY_EVENT_SOURCES = [
+  'luma',
+  'partiful',
+  'web',
+  'meetup',
+  'ics',
+  'submitted',
+  'seed',
+] as const;
+
+export const places = sqliteTable('places', {
+  // Stable curated id ("seed:golden-gate-bridge" now; curated ids later) —
+  // re-seeding lands on the same id, which is what makes the seed idempotent.
+  id: text('id').primaryKey(),
+  slug: text('slug').notNull().unique(),
+  name: text('name').notNull(),
+  /** First-person note, mandatory — never a bare pin (ported check.mjs rule). */
+  note: text('note').notNull(),
+  category: text('category').notNull(), // singular vocabulary folded to BAY_CATEGORIES
+  lat: real('lat').notNull(),
+  lng: real('lng').notNull(),
+  source: text('source'),
+  embedding: float32Blob(1536)('embedding'),
+  // provenance on every record: the earliest sighting survives merges
+  fetchedAt: integer('fetched_at', { mode: 'timestamp' }).notNull(),
+  firstSeenAt: integer('first_seen_at', { mode: 'timestamp' }).notNull(),
+}, (t) => [index('places_category_idx').on(t.category)]);
+
+export const bayEvents = sqliteTable('bay_events', {
+  // Stable per-source id ("luma:abc123", "seed:slug") — re-ingest lands on the
+  // same id, update in place, never duplicate.
+  id: text('id').primaryKey(),
+  /** Set when this row is promoted into the shared graph `event` layer. */
+  canonicalEventId: text('canonical_event_id'),
+  source: text('source', { enum: BAY_EVENT_SOURCES }).notNull(),
+  externalId: text('external_id').notNull(),
+  title: text('title').notNull(),
+  venue: text('venue'),
+  lat: real('lat'), // kept only when the source shares coordinates
+  lng: real('lng'),
+  price: text('price'), // band or amount, honest about unknowns
+  category: text('category').notNull(),
+  /** https-only — enforced by the ported contract, not by the DB. */
+  url: text('url').notNull(),
+  /** First-person note where one exists (seed/curated rows); live rows omit. */
+  note: text('note'),
+  startsAt: integer('starts_at', { mode: 'timestamp' }),
+  endsAt: integer('ends_at', { mode: 'timestamp' }),
+  /** endsAt ‖ startsAt + 24h grace — events die here, history is retained. */
+  expiresAt: integer('expires_at', { mode: 'timestamp' }),
+  /** Earliest sighting survives merges (idempotent re-ingest). */
+  firstSeenAt: integer('first_seen_at', { mode: 'timestamp' }).notNull(),
+  fetchedAt: integer('fetched_at', { mode: 'timestamp' }).notNull(),
+  embedding: float32Blob(1536)('embedding'),
+}, (t) => [
+  index('bay_events_source_idx').on(t.source),
+  index('bay_events_starts_at_idx').on(t.startsAt),
+  index('bay_events_canonical_event_idx').on(t.canonicalEventId),
+]);
+
 // ─── Index name constants ──────────────────────────────────────────────
 // Keep in sync with drizzle/0002_vector_top_k_entity_embedding.sql. Used by
 // recall router's raw `vector_top_k(...)` call — migration rename without
@@ -606,3 +680,7 @@ export type NewAct = typeof acts.$inferInsert;
 export type IcsSnapshot = typeof icsSnapshots.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type NewApiKey = typeof apiKeys.$inferInsert;
+export type Place = typeof places.$inferSelect;
+export type NewPlace = typeof places.$inferInsert;
+export type BayEvent = typeof bayEvents.$inferSelect;
+export type NewBayEvent = typeof bayEvents.$inferInsert;
