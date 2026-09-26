@@ -21,6 +21,8 @@ import { execSync } from 'node:child_process';
 
 const DEV_LOG = '/tmp/wingmic-e2e-dev.log';
 const EMAIL = 'e2e-bay-claim@wingmic.test';
+const PROFILE_PASTE =
+  'sam rivera — ml engineer at a small robotics lab. into drones, mapping, and evals.';
 
 /** The window.__bay test hook — the ported map's data-level affordances. */
 type BayHook = {
@@ -184,5 +186,79 @@ test.describe('the /bay surface', () => {
     await expect(page.getByTestId('bay-answer')).toBeVisible({ timeout: 30_000 });
     const after = await hook(page);
     expect(after?.emphasis).not.toBeNull();
+  });
+
+  test('switching picks after a score never shows the old event’s verdict', async ({ page }) => {
+    // settled switch path: A scored and settled → pick B directly (no close
+    // in between) → the card re-runs for B. The stale-view bug rendered A's
+    // verdict, reasons, and emphasis under B's name.
+    await page.goto('/bay');
+    await page.getByTestId('bay-intro-dismiss').click();
+    await page.waitForFunction(() => {
+      const w = window as unknown as { __bay?: { eventCount: number } };
+      return Boolean(w.__bay && w.__bay.eventCount > 0);
+    });
+
+    await page.evaluate(() => (window as unknown as { __bay?: BayHook }).__bay?.pick('luma:e2e-builder-night'));
+    await page.getByTestId('bay-profile-input').fill(PROFILE_PASTE);
+    await page.getByTestId('bay-profile-go').click();
+    await expect(page.getByTestId('bay-score-verdict')).toBeVisible({ timeout: 20_000 });
+    // the card states which event the SERVER scored — A's own score
+    await expect(page.getByTestId('bay-score')).toHaveAttribute('data-scored-event', 'luma:e2e-builder-night');
+
+    // pick B straight off A's scored card — no close in between
+    await page.evaluate(() => (window as unknown as { __bay?: BayHook }).__bay?.pick('luma:e2e-agent-hack'));
+    await expect(page.getByTestId('bay-score')).toHaveAttribute(
+      'data-scored-event',
+      'luma:e2e-agent-hack',
+      { timeout: 20_000 },
+    );
+    await expect(page.getByTestId('bay-card')).toHaveAttribute('aria-label', /agent hack weekend/i);
+    // the map emphasis follows the re-run, not A's stale go
+    const emphasis = await hook(page);
+    expect(Object.keys(emphasis?.emphasis ?? {})).toEqual(['luma:e2e-agent-hack']);
+  });
+
+  test('a stale in-flight score completion owns nothing when the pick changes', async ({ page }) => {
+    // in-flight switch path: A's score response is held by route interception;
+    // B is picked and scores while A is still in flight; releasing A must not
+    // repaint the card or the map emphasis with A's verdict.
+    let releaseA: (() => void) | undefined;
+    const aGate = new Promise<void>((resolve) => {
+      releaseA = resolve;
+    });
+    let held = false;
+    await page.route(/bay\.score/, async (route) => {
+      if (!held) {
+        held = true;
+        await aGate;
+      }
+      await route.continue();
+    });
+    await page.goto('/bay');
+    await page.getByTestId('bay-intro-dismiss').click();
+    await page.waitForFunction(() => {
+      const w = window as unknown as { __bay?: { eventCount: number } };
+      return Boolean(w.__bay && w.__bay.eventCount > 0);
+    });
+
+    // pick A and submit its paste — the response stays in flight
+    await page.evaluate(() => (window as unknown as { __bay?: BayHook }).__bay?.pick('luma:e2e-builder-night'));
+    await page.getByTestId('bay-profile-input').fill(PROFILE_PASTE);
+    await page.getByTestId('bay-profile-go').click();
+
+    // pick B while A is in flight: the profile was saved optimistically at
+    // A's paste-submit (ported rule — a parsed paste is a real profile), so
+    // the reset effect auto-runs B and B's own score resolves fast
+    await page.evaluate(() => (window as unknown as { __bay?: BayHook }).__bay?.pick('luma:e2e-agent-hack'));
+    await expect(page.getByTestId('bay-score-verdict')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('bay-score')).toHaveAttribute('data-scored-event', 'luma:e2e-agent-hack');
+
+    // A's response finally lands — the completion guard must discard it
+    releaseA?.();
+    await expect(page.getByTestId('bay-score')).toHaveAttribute('data-scored-event', 'luma:e2e-agent-hack');
+    await expect(page.getByTestId('bay-card')).toHaveAttribute('aria-label', /agent hack weekend/i);
+    const emphasis = await hook(page);
+    expect(Object.keys(emphasis?.emphasis ?? {})).toEqual(['luma:e2e-agent-hack']);
   });
 });

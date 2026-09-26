@@ -98,11 +98,17 @@ export function ScorePanel({
         personaId: personaId ?? undefined,
         clientProfile: profileInput,
       })) as ScoreOk;
+      // a stale completion — the visitor picked another event (or closed the
+      // card) while this request was in flight — owns nothing: no verdict,
+      // no reasons, no emphasis repaint for a pick that is no longer shown
+      if (lastScoredRef.current !== id) return;
       setView({ state: 'done', data });
       onEmphasis(new Map([[id, data.score.go]]));
       // a parsed paste is a real profile — keep it (ported auto-score rule)
       if (fromPaste) onProfileSaved?.(fromPaste);
     } catch (err) {
+      // same staleness rule: the newer run owns the view, including its errors
+      if (lastScoredRef.current !== id) return;
       setView({ state: 'error', message: scoreErrorMessage(err) });
     }
   };
@@ -234,7 +240,7 @@ export function scoreErrorMessage(err: unknown): string {
 function ScoreCard({ ok }: { ok: ScoreOk }) {
   const { score, fit } = ok;
   return (
-    <div className="bay-score" data-testid="bay-score">
+    <div className="bay-score" data-testid="bay-score" data-scored-event={ok.event.id}>
       <div className="bay-score-verdict" data-testid="bay-score-verdict">
         <span className={`bay-score-verdict-tag bay-score-verdict--${score.verdict}`}>
           {score.verdict}
