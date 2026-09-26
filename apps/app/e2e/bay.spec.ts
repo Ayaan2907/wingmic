@@ -7,9 +7,14 @@
  * zero-secret local.db, seeded by helpers/seed-bay.ts: three places, two live
  * events, one expired event that must never reach the map. Sign-in rides the
  * magic-link log seam (RESEND_API_KEY unset locally — same seam as the
- * event-session spec). The sandbox has no extraction LLM key, so the signed-in
- * claim's capture pipeline answers the honest "nothing was written" note —
- * that degradation is deterministic here and is itself the pinned behavior.
+ * event-session spec). The conversion path is the real one: claim → magic
+ * link → the requireOnboarded gate redirects the fresh account into the real
+ * onboarding flow → completion lands on /chat (which only loads once privacy
+ * is acknowledged) → the signed-in claim retries on its stable captureId.
+ * The sandbox has no extraction LLM key, so that capture answers the honest
+ * "nothing was written" note — the degradation is deterministic here; the
+ * captured-success leg (identity_claims row, next: '/onboarding') is
+ * unit-pinned in the router tests against a mock boundary.
  *
  * chromium-only: MapLibre's webgl handling and the sign-in seam timing are
  * tuned on the chromium-desktop project (same precedent as event-session).
@@ -130,6 +135,9 @@ test.describe('the /bay surface', () => {
   });
 
   test('the funnel: paste → score → claim → ask with map emphasis', async ({ page }) => {
+    // the conversion path walks the real onboarding flow and lands on /chat,
+    // which the dev server compiles on demand — 30s default cannot hold it
+    test.setTimeout(180_000);
     await page.goto('/bay');
     await page.getByTestId('bay-intro-dismiss').click();
     await page.waitForFunction(() => {
@@ -161,11 +169,37 @@ test.describe('the /bay surface', () => {
     const link = await pollMagicLink(EMAIL);
     await page.goto(link);
     // /bay is public and chromeless — the verified link returns straight there
-    // (onboarding still gates only the protected surfaces, so a stranger
-    // finishes the funnel before any account-admin)
+    // (onboarding gates the authed surfaces, so a stranger finishes the funnel
+    // before any account-admin)
     await page.waitForURL(/\/bay/);
 
-    // ── claim, signed-in: the browser-held profile becomes the claim ────
+    // ── onboarding: the real conversion path's gate ─────────────────────
+    // the fresh claimer has not acknowledged privacy yet: requireOnboarded on
+    // an authed surface redirects into the real onboarding flow — the same
+    // decision the claim router encodes as `next: '/onboarding'` after a
+    // successful capture (unit-pinned; unreachable here without a key)
+    await page.goto('/');
+    await page.waitForURL(/\/onboarding/);
+    // walk the real steps 1 → 4. The mic step runs without granted
+    // permissions and surfaces its blocked outcome honestly (same seam as
+    // onboarding-mic.spec), and denial is not a trap.
+    await expect(page.getByText(/step 1 of 4/i)).toBeVisible();
+    // /^next/ — not /next/i: the Next.js dev-tools overlay button also matches /next/i
+    await page.getByRole('button', { name: /^next/i }).click();
+    await page.getByPlaceholder('Ada').fill('Sam');
+    await page.getByPlaceholder('Lovelace').fill('Rivera');
+    await page.getByRole('button', { name: /^next/i }).click();
+    await expect(page.getByText(/step 3 of 4/i)).toBeVisible();
+    await page.getByRole('button', { name: /enable the mic/i }).click();
+    await expect(page.getByText(/mic blocked/i)).toBeVisible({ timeout: 10_000 });
+    await page.getByRole('button', { name: /^next/i }).click();
+    await expect(page.getByText(/step 4 of 4/i)).toBeVisible();
+    await page.getByRole('button', { name: /get started/i }).click();
+    // /chat sits behind requireOnboarded — loading it proves the
+    // acknowledgment was written and the account is a real one
+    await page.waitForURL(/\/chat/, { timeout: 60_000 });
+
+    // ── graph entry, signed-in: the claim retries on its stable captureId ──
     await page.goto('/bay');
     await page.waitForFunction(() => {
       const w = window as unknown as { __bay?: { profileSaved: boolean; eventCount: number } };
@@ -175,7 +209,9 @@ test.describe('the /bay surface', () => {
     await expect(page.getByTestId('bay-score-verdict')).toBeVisible({ timeout: 20_000 });
     await page.getByTestId('bay-claim-cta').click();
     // zero-secret sandbox: no extraction key, so the capture pipeline cannot
-    // store the profile — the honest note is the correct outcome here
+    // store the profile — the honest note is the correct outcome here. The
+    // captureId is the sha256 of the same profile text, so a retry stays
+    // idempotent: exactly one capture can ever exist for this claim.
     await expect(page.getByTestId('bay-claim-error')).toContainText(/nothing was written|try again/i, {
       timeout: 20_000,
     });
