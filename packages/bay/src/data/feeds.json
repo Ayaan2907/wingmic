@@ -1,0 +1,16 @@
+{
+  "_comment": [
+    "Curated organizer ICS/RSS feeds for the bay ingest job. Deliberately empty:",
+    "every candidate checked this session (Stanford events calendar, Berkeley,",
+    "SF Station, SFPL) was either rate-limited, 404, or served HTML instead of a",
+    "feed. A checked-in feed is a promise the product makes to readers - that the",
+    "url is real, stable, and event-bearing - so entries are added only when a",
+    "feed has been verified by hand.",
+    "",
+    "Entry shape (validated by parseFeedConfig in src/feeds.ts):",
+    "  { \"id\": \"short-slug\", \"name\": \"Human name\", \"kind\": \"ics\" | \"rss\",",
+    "    \"url\": \"https://...\", \"category\": \"<canonical category>\",",
+    "    \"tz\": \"America/Los_Angeles\" (optional, for floating ICS times) }"
+  ],
+  "feeds": []
+}

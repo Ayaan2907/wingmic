@@ -8,6 +8,9 @@ export * from "./personas.js";
 export * from "./contract.js";
 export * from "./ingest.js";
 export * from "./ratelimit.js";
+export * from "./feeds.js";
+export * from "./meetup.js";
+export * from "./sources.js";
 export {
   WingmicAuthError,
   MockWingmicClient,
