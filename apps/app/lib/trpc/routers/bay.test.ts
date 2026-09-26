@@ -105,7 +105,8 @@ async function seedDb(): Promise<{
     CREATE TABLE identity_claim (
       id TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, value TEXT NOT NULL,
       verified INTEGER DEFAULT false NOT NULL, public INTEGER DEFAULT false NOT NULL,
-      created_at INTEGER
+      created_at INTEGER,
+      UNIQUE (user_id, kind, value)
     );
     CREATE TABLE usage_daily (
       user_id TEXT NOT NULL, day TEXT NOT NULL, kind TEXT NOT NULL,

@@ -114,13 +114,19 @@ export const onboardingRouter = router({
           })
           .where(eq(schema.identityClaims.id, existing.id));
       } else {
-        await tx.insert(schema.identityClaims).values({
-          userId: ctx.user.id,
-          kind: 'linkedin',
-          value: linkedin,
-          verified: false,
-          public: false,
-        });
+        // the (user_id, kind, value) unique index is the race-proof backstop —
+        // the find-first above is only the fast path; a raced duplicate no-ops
+        // instead of failing onboarding
+        await tx
+          .insert(schema.identityClaims)
+          .values({
+            userId: ctx.user.id,
+            kind: 'linkedin',
+            value: linkedin,
+            verified: false,
+            public: false,
+          })
+          .onConflictDoNothing();
       }
     });
 
