@@ -33,8 +33,9 @@ import {
   type EventSessionState,
 } from './eventSession';
 
-/** Routes that own their full viewport — no session resolution there. */
-export const CHROMELESS_ROUTES = ['/signin', '/onboarding'];
+/** Routes that own their full viewport — no session resolution there. /bay is
+ * the public map surface: it works signed-out and owns its viewport. */
+export const CHROMELESS_ROUTES = ['/signin', '/onboarding', '/bay'];
 
 export interface EventSessionContextValue {
   state: EventSessionState;

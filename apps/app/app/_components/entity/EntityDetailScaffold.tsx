@@ -18,7 +18,7 @@ import { PersonAvatar, CompanyTile, EventDiamond } from './EntityAvatar';
 import { accent, third, blue, violet } from '@/app/chat/_components/tokens';
 import { shadows, radii, motion } from '@wingmic/design-tokens';
 
-export type EntityKind = 'person' | 'company' | 'event' | 'topic';
+export type EntityKind = 'person' | 'company' | 'event' | 'topic' | 'place';
 
 export interface EntityCapture {
   interactionId: string;
@@ -104,6 +104,9 @@ export interface EntityDetailScaffoldProps {
   onUndoMerge?: () => void;
   /** Person entity id — used for public profile avatar seed. */
   entityId?: string;
+  /** Places have no interaction history — hide the capture/follow-up sections
+   * instead of showing empty cards that promise captures are coming. */
+  hideActivity?: boolean;
 }
 
 const STAT_COLORS = [accent, '#86efac', third];
@@ -134,6 +137,7 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
     mergeUndo,
     onUndoMerge,
     entityId,
+    hideActivity,
   } = props;
 
   return (
@@ -271,21 +275,25 @@ export function EntityDetailScaffold(props: EntityDetailScaffoldProps) {
           </Section>
         )}
 
-        <Section title="from your captures" testid="entity-captures">
-          {captures.length === 0 ? (
-            <EmptyCard>no captures yet for this one.</EmptyCard>
-          ) : (
-            captures.map((c) => <CaptureCard key={c.interactionId} capture={c} />)
-          )}
-        </Section>
+        {!hideActivity && (
+          <Section title="from your captures" testid="entity-captures">
+            {captures.length === 0 ? (
+              <EmptyCard>no captures yet for this one.</EmptyCard>
+            ) : (
+              captures.map((c) => <CaptureCard key={c.interactionId} capture={c} />)
+            )}
+          </Section>
+        )}
 
-        <Section title="follow-ups" testid="entity-followups">
-          {followups.length === 0 ? (
-            <EmptyCard>no follow-ups yet — draft one from a capture, or tap draft check-in.</EmptyCard>
-          ) : (
-            followups.map((f) => <FollowupCard key={f.id} followup={f} />)
-          )}
-        </Section>
+        {!hideActivity && (
+          <Section title="follow-ups" testid="entity-followups">
+            {followups.length === 0 ? (
+              <EmptyCard>no follow-ups yet — draft one from a capture, or tap draft check-in.</EmptyCard>
+            ) : (
+              followups.map((f) => <FollowupCard key={f.id} followup={f} />)
+            )}
+          </Section>
+        )}
 
         {topics && topics.length > 0 && kind !== 'topic' && (
           <Section title="topics" testid="entity-topics-list">
@@ -426,7 +434,9 @@ function Hero({
         ? blue
         : kind === 'topic'
           ? violet
-          : 'var(--text-55)';
+          : kind === 'place'
+            ? '#86efac' // mint — the bay's place color
+            : 'var(--text-55)';
   return (
     <div
       style={{
