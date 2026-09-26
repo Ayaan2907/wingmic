@@ -1,6 +1,7 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
 import { ZodError } from 'zod';
+import { ExpiredEventError } from '@/lib/bay/errors';
 import type { TRPCContext } from './context';
 
 const t = initTRPC.context<TRPCContext>().create({
@@ -10,6 +11,9 @@ const t = initTRPC.context<TRPCContext>().create({
       ...shape,
       data: {
         ...shape.data,
+        // the bay contract's expired state rides as a real 410 — tRPC's code
+        // table has no GONE, so the transport takes the status from here
+        ...(error instanceof ExpiredEventError ? { httpStatus: error.bayHttpStatus } : {}),
         zodError: error.cause instanceof ZodError ? error.cause.flatten() : null,
       },
     };

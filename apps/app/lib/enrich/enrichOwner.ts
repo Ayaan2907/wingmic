@@ -39,11 +39,16 @@ export async function enrichOwnerAfterLinkedin(opts: {
   });
   if (existing) return;
 
-  await db.insert(schema.identityClaims).values({
-    userId,
-    kind: 'url',
-    value: homepage,
-    verified: false,
-    public: false,
-  });
+  // the (user_id, kind, value) unique index is the race-proof backstop — the
+  // guard above is only the fast path; a raced duplicate no-ops instead of 500ing
+  await db
+    .insert(schema.identityClaims)
+    .values({
+      userId,
+      kind: 'url',
+      value: homepage,
+      verified: false,
+      public: false,
+    })
+    .onConflictDoNothing();
 }

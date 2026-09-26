@@ -24,6 +24,7 @@
         "@trpc/next": "^11.17.0",
         "@trpc/react-query": "^11.17.0",
         "@trpc/server": "^11.17.0",
+        "@wingmic/bay": "workspace:*",
         "@wingmic/brand": "workspace:*",
         "@wingmic/db": "workspace:*",
         "@wingmic/design-tokens": "workspace:*",
