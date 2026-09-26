@@ -113,7 +113,8 @@ import { enrichPersonFacts } from '@/lib/enrich/enrichPersons';
 import { enrichEventsAfterCommit } from '@/lib/enrich/enrichEvents';
 import { auth } from '@/lib/auth';
 import type { WebSearchProvider } from '@/lib/web-search';
-import { ANALYTICS_EVENT_NAMES, PENDING_INSTRUMENTATION } from '../events';
+import { ANALYTICS_EVENT_NAMES, ANALYTICS_EVENTS, BAY_ANONYMOUS_ID, PENDING_INSTRUMENTATION } from '../events';
+import { trackAnalyticsEvent } from '../server';
 import { db as moduleDb } from '@wingmic/db';
 
 type DB = ReturnType<typeof drizzle<typeof schema>>;
@@ -545,14 +546,13 @@ describe('analytics taxonomy (spec art_LkglG0Xb)', () => {
     expect(ph.calls[0]!.properties).toMatchObject({ method: 'magic_link' });
   });
 
-  it('pending instrumentation is pinned — only map_view awaits the /bay surface', () => {
+  it('pending instrumentation is empty — every taxonomy event has a call site', () => {
     for (const name of PENDING_INSTRUMENTATION) {
       expect(ANALYTICS_EVENT_NAMES).toContain(name);
     }
-    // When the surface PR lands the /bay server component, it fires map_view
-    // from the render, empties this list, and drives the event in the
-    // coverage test below like every other taxonomy event.
-    expect(PENDING_INSTRUMENTATION).toEqual(['map_view']);
+    // The /bay surface landed (bay/page.tsx) and fires map_view from its
+    // server render; the list stays as the seam for future staged events.
+    expect(PENDING_INSTRUMENTATION).toEqual([]);
   });
 
   it('bay.ask fires ask_run at the pipeline entry onto the anonymous bucket', async () => {
@@ -719,9 +719,11 @@ describe('analytics taxonomy (spec art_LkglG0Xb)', () => {
       clientProfile: { text: 'sam rivera — engineer moving to sf, into agent infra and evals' },
     });
 
+    // map_view fires from the /bay server render (bay/page.tsx) — simulated
+    // here signed-out, the funnel's entry step. With the pending list empty,
+    // every taxonomy event is now enforced in this coverage check.
+    trackAnalyticsEvent(BAY_ANONYMOUS_ID, ANALYTICS_EVENTS.mapView, { signedIn: false });
     const fired = new Set(events());
-    // map_view's point is the /bay server render — the surface PR owns that
-    // file; until it lands the pending list stays excluded from enforcement.
     const enforced = ANALYTICS_EVENT_NAMES.filter(
       (name) => !PENDING_INSTRUMENTATION.includes(name),
     );

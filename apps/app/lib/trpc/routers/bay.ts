@@ -14,7 +14,7 @@ import {
   sourcesOf,
 } from '@wingmic/bay';
 import * as schema from '@wingmic/db/schema';
-import { ANALYTICS_EVENTS } from '@/lib/analytics/events';
+import { ANALYTICS_EVENTS, BAY_ANONYMOUS_ID } from '@/lib/analytics/events';
 import { trackAnalyticsEvent } from '@/lib/analytics/server';
 import { env } from '@/lib/config/env';
 import { getExplainChat } from '@/lib/bay/chat';
@@ -40,14 +40,6 @@ import { publicProcedure, protectedProcedure, router } from '../trpc';
  * Anonymous funnel events share the fixed 'bay_anonymous' bucket — the bay
  * has no server principal before claim (locked decision 3).
  */
-
-/**
- * Analytics distinctId for signed-out bay traffic. One fixed, PII-free
- * bucket: no per-visitor identity exists server-side, so PostHog funnels
- * chain anonymous steps under it while signed-in events key on the real
- * user id. Dashboards can filter it out of user counts by name.
- */
-const BAY_ANONYMOUS_ID = 'bay_anonymous';
 
 /** Map the browser-held profile onto the score pipeline's input shape: raw
  * text rides as the source (parsePaste lifts fields AND the raw words stay in
