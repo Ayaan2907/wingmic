@@ -10,6 +10,7 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { useCapture } from '@/app/_components/CaptureProvider';
 import { accent } from '@/app/chat/_components/tokens';
+import { shadows } from '@wingmic/design-tokens';
 import type { ThreadMessage } from '@/app/chat/_components/types';
 
 type RailPerson = {
@@ -165,6 +166,7 @@ export function ChatEntityRail() {
                 borderRadius: '50%',
                 background: accent,
                 color: '#000',
+                boxShadow: shadows.contact,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -198,7 +200,7 @@ export function ChatEntityRail() {
                     style={{
                       fontSize: 9,
                       padding: '2px 6px',
-                      borderRadius: 4,
+                      borderRadius: 6,
                       background: 'var(--surface-1)',
                       color: 'var(--text-55)',
                     }}
@@ -212,7 +214,7 @@ export function ChatEntityRail() {
                     style={{
                       fontSize: 9,
                       padding: '2px 6px',
-                      borderRadius: 4,
+                      borderRadius: 6,
                       background: accent,
                       color: '#000',
                       fontWeight: 700,
