@@ -1,18 +1,19 @@
-// Local color tokens for the chat surface (PR β₁-A split).
+// Local color + layout tokens for the chat surface (PR β₁-A split).
 //
-// Lifted from CaptureClient verbatim — same hex values. v2 design-tokens
-// will absorb these in PR γ; for now we keep parity with the capture
-// surface, since chat IS the capture surface.
+// v3 (PR7b): colors now re-export from packages/design-tokens — the styling
+// source of truth — instead of hardcoding hex values. Same export names,
+// so every chat component picks up the relaxed-premium palette.
 
-export const accent = '#FFC452';
-export const second = '#86efac';
-export const third = '#FF8FAB';
-export const violet = '#A78BFA';
-export const blue = '#7DD3FC';
-export const coral = '#FF6B6B';
+import { colors } from '@wingmic/design-tokens';
 
-// Shared layout constants used by header / dock / privacy line.
 import { TAB_BAR_HEIGHT_PX as SHARED_TAB_BAR_HEIGHT_PX } from '@/app/_components/BottomTabBar';
+
+export const accent = colors.accent;
+export const second = colors.second;
+export const third = colors.third;
+export const violet = colors.info.violet;
+export const blue = colors.info.blue;
+export const coral = colors.alarm;
 
 /** Pixel thresholds for the hold-to-talk slide gestures. */
 export const HOLD_THRESHOLDS = {

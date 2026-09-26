@@ -10,6 +10,7 @@
 
 import { useCapture } from '@/app/_components/CaptureProvider';
 import { accent } from './tokens';
+import { shadows, radii } from '@wingmic/design-tokens';
 
 export function ChatHeader({ userName }: { userName: string | null }) {
   const { recorder } = useCapture();
@@ -46,12 +47,12 @@ export function ChatHeader({ userName }: { userName: string | null }) {
               width: 24,
               height: 24,
               background: accent,
-              border: '1.5px solid #000',
-              boxShadow: '2px 2px 0 #000',
+              borderRadius: radii.sm,
+              boxShadow: shadows.contact,
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#fff',
+              color: '#000',
               fontFamily: 'Newsreader, Georgia, serif',
               fontStyle: 'italic',
               fontSize: 12,

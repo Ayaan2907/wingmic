@@ -20,6 +20,7 @@ import { ChatThread, UndoChip } from './_components/ChatThread';
 import { ChatEntityRail } from './_components/ChatEntityRail';
 import { CameraCapture } from './_components/CameraCapture';
 import { accent } from './_components/tokens';
+import { shadows, radii, motion } from '@wingmic/design-tokens';
 import type { ChatInitialItem } from './_components/types';
 
 interface ChatClientProps {
@@ -114,9 +115,10 @@ function ChatComposer() {
           style={{
             marginBottom: 8,
             padding: 10,
-            borderRadius: 12,
+            borderRadius: radii.md,
             border: `1px solid ${accent}66`,
             background: 'var(--bg-card)',
+            boxShadow: shadows.button,
             pointerEvents: 'auto',
           }}
         >
@@ -130,9 +132,10 @@ function ChatComposer() {
                 type="button"
                 onClick={() => choosePhotoBind(choice)}
                 style={{
-                  padding: '4px 10px',
+                  minHeight: 44,
+                  padding: '8px 12px',
                   borderRadius: 999,
-                  border: '1px solid var(--border-mid)',
+                  border: '1px solid var(--border-soft)',
                   background: 'transparent',
                   color: accent,
                   cursor: 'pointer',
@@ -147,9 +150,10 @@ function ChatComposer() {
               aria-label="leave photo unassigned"
               onClick={choosePhotoUnassigned}
               style={{
-                padding: '4px 10px',
+                minHeight: 44,
+                padding: '8px 12px',
                 borderRadius: 999,
-                border: '1px solid var(--border-mid)',
+                border: '1px solid var(--border-soft)',
                 background: 'transparent',
                 color: 'var(--text-70)',
                 cursor: 'pointer',
@@ -185,7 +189,7 @@ function ChatComposer() {
             gap: 8,
             marginBottom: 8,
             padding: '6px 10px',
-            borderRadius: 8,
+            borderRadius: radii.sm,
             border: `1px solid ${accent}66`,
             background: `${accent}14`,
             pointerEvents: 'auto',
@@ -234,8 +238,8 @@ function ChatComposer() {
               width: 44,
               height: 44,
               objectFit: 'cover',
-              borderRadius: 8,
-              border: '1px solid var(--border-mid)',
+              borderRadius: radii.sm,
+              border: '1px solid var(--border-soft)',
             }}
           />
           <span className="mono" style={{ fontSize: 10, color: 'var(--text-55)', flex: 1 }}>
@@ -267,7 +271,9 @@ function ChatComposer() {
           padding: '10px 12px',
           borderRadius: 999,
           background: 'var(--bg-card)',
-          border: dropping ? `1.5px solid ${accent}` : '1px solid var(--border-mid)',
+          border: dropping ? `1px solid ${accent}` : '1px solid var(--border-soft)',
+          boxShadow: shadows.button,
+          transition: `border-color ${motion.duration.fast} ${motion.ease.out}, box-shadow ${motion.duration.fast} ${motion.ease.out}`,
           pointerEvents: 'auto',
         }}
       >
@@ -341,11 +347,12 @@ function ChatComposer() {
           className="mono"
           disabled={Boolean(photoBindChoices) || attachmentBusy}
           style={{
-            padding: '6px 12px',
+            padding: '0 16px',
+            minHeight: 44,
             borderRadius: 999,
             background: accent,
-            border: '1.5px solid #000',
-            boxShadow: '2px 2px 0 #000',
+            border: 'none',
+            boxShadow: shadows.button,
             fontSize: 11,
             fontWeight: 700,
             cursor: photoBindChoices || attachmentBusy ? 'default' : 'pointer',

@@ -16,6 +16,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { PersonAvatar, CompanyTile, EventDiamond } from './EntityAvatar';
 import { accent, third, blue, violet } from '@/app/chat/_components/tokens';
+import { shadows, radii, motion } from '@wingmic/design-tokens';
 
 export type EntityKind = 'person' | 'company' | 'event' | 'topic';
 
@@ -389,7 +390,7 @@ function ChromeBtn({
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 8,
+        borderRadius: radii.sm,
         background: 'var(--surface-1, rgba(255,255,255,0.03))',
         border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
         color: 'var(--text-55)',
@@ -506,12 +507,13 @@ function CtaRow({
           flex: '1 1 220px',
           minHeight: 44,
           padding: 12,
-          borderRadius: 10,
+          borderRadius: radii.md,
           background: accent,
           color: '#000',
           font: '700 13px Inter, system-ui, sans-serif',
-          border: '1.5px solid #000',
-          boxShadow: '4px 4px 0 #000',
+          border: 'none',
+          boxShadow: shadows.button,
+          transition: `box-shadow ${motion.duration.fast} ${motion.ease.out}`,
           cursor: primaryInactive ? 'not-allowed' : 'pointer',
           opacity: primaryInactive ? 0.85 : 1,
         }}
@@ -527,11 +529,11 @@ function CtaRow({
           flex: '1 1 140px',
           minHeight: 44,
           padding: '12px 16px',
-          borderRadius: 10,
+          borderRadius: radii.md,
           background: 'transparent',
           color: 'var(--ink)',
           font: '500 13px Inter, system-ui, sans-serif',
-          border: '1.5px solid var(--border-mid, rgba(255,255,255,0.22))',
+          border: '1px solid var(--border-soft, rgba(255,255,255,0.22))',
           cursor: ghostInactive ? 'not-allowed' : 'pointer',
           opacity: ghostInactive ? 0.7 : 1,
         }}
@@ -615,7 +617,7 @@ function EmptyCard({ children }: { children: React.ReactNode }) {
     <div
       style={{
         padding: 14,
-        borderRadius: 12,
+        borderRadius: radii.md,
         background: 'var(--surface-1, rgba(255,255,255,0.02))',
         border: '1px dashed var(--border-mid, rgba(255,255,255,0.12))',
         color: 'var(--text-55)',
@@ -639,9 +641,10 @@ function CaptureCard({ capture }: { capture: EntityCapture }) {
     <div
       style={{
         padding: 14,
-        borderRadius: 14,
+        borderRadius: radii.md,
         background: 'var(--surface-1, rgba(255,255,255,0.025))',
         border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
+        boxShadow: shadows.card,
         marginBottom: 10,
       }}
       data-testid="entity-capture"
@@ -713,9 +716,10 @@ function FollowupCard({ followup }: { followup: EntityFollowup }) {
     <div
       style={{
         padding: 14,
-        borderRadius: 14,
+        borderRadius: radii.md,
         background: 'var(--surface-1, rgba(255,255,255,0.025))',
         border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
+        boxShadow: shadows.card,
         display: 'flex',
         alignItems: 'flex-start',
         gap: 12,
@@ -727,9 +731,9 @@ function FollowupCard({ followup }: { followup: EntityFollowup }) {
         style={{
           width: 22,
           height: 22,
-          borderRadius: 6,
+          borderRadius: radii.sm,
           background: accent,
-          border: '1.5px solid #000',
+          boxShadow: shadows.contact,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -883,9 +887,10 @@ function PublicProfileCard({
         <div
           style={{
             padding: 14,
-            borderRadius: 14,
+            borderRadius: radii.md,
             background: 'var(--surface-1, rgba(255,255,255,0.025))',
             border: '1px solid var(--border-soft, rgba(255,255,255,0.06))',
+            boxShadow: shadows.card,
             display: 'flex',
             gap: 12,
             alignItems: 'flex-start',
@@ -1014,7 +1019,7 @@ function NotEnrichedCard({
           style={{
             minHeight: 44,
             padding: '10px 14px',
-            borderRadius: 8,
+            borderRadius: radii.sm,
             background: 'transparent',
             border: '1px solid var(--border-mid, rgba(255,255,255,0.22))',
             color: accent,

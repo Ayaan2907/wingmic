@@ -22,9 +22,10 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { useCapture } from './CaptureProvider';
 import { micOrbStateFor, type MicOrbState } from '@/app/capture/micOrbState';
+import { colors, shadows } from '@wingmic/design-tokens';
 
-const accent = '#FFC452';
-const coral = '#FF6B6B';
+const accent = colors.accent;
+const coral = colors.alarm;
 
 /** Bottom-nav height — kept in sync with chat/_components/tokens.ts. */
 export const TAB_BAR_HEIGHT_PX = 56;
@@ -165,24 +166,24 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
           height: 52,
           borderRadius: '50%',
           background: accent,
-          color: isActiveRec ? '#fff' : '#000',
+          color: '#000',
           fontSize: 22,
-          fontWeight: 800,
-          border: '1.5px solid #000',
+          fontWeight: 700,
+          border: 'none',
           boxShadow: isActiveRec
-            ? '0 0 30px rgba(255,69,0,0.5), 3px 3px 0 #000'
+            ? `${shadows.glowAccent}, 0 0 40px ${accent}45`
             : orbState === 'hover'
-              ? '5px 5px 0 #000'
-              : '3px 3px 0 #000',
+              ? shadows.buttonHover
+              : shadows.button,
           cursor: 'pointer',
           touchAction: 'manipulation',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           animation:
-            isActive && !isActiveRec ? 'wm-pulse-s 1.4s ease-in-out infinite' : undefined,
+            isActive && !isActiveRec ? 'wm-pulse-s 1.4s var(--ease-relaxed, ease-out) infinite' : undefined,
           transition:
-            'box-shadow 0.12s ease-out, transform 0.12s ease-out, background 0.18s ease-out',
+            `box-shadow var(--dur-base, 240ms) var(--ease-relaxed, ease-out), transform var(--dur-fast, 150ms) var(--ease-relaxed, ease-out), background var(--dur-base, 240ms) var(--ease-relaxed, ease-out)`,
         }}
       >
         {isActiveRec ? (
@@ -247,10 +248,10 @@ export function LockedBar({ onStop, onDiscard, duration }: LockedBarProps) {
         style={{
           width: 32,
           height: 32,
-          borderRadius: 8,
+          borderRadius: 10,
           background: accent,
-          border: '1.5px solid #000',
-          boxShadow: '2px 2px 0 #000',
+          border: 'none',
+          boxShadow: shadows.contact,
           color: '#000',
           display: 'inline-flex',
           alignItems: 'center',
@@ -285,12 +286,13 @@ export function LockedBar({ onStop, onDiscard, duration }: LockedBarProps) {
         onClick={onDiscard}
         aria-label="discard recording"
         style={{
-          minHeight: 40,
-          padding: '8px 10px',
-          borderRadius: 8,
-          background: 'transparent',
+          minHeight: 44,
+          padding: '8px 12px',
+          borderRadius: 10,
+          background: `${coral}1f`,
           color: coral,
-          border: `1.5px solid ${coral}`,
+          border: `1px solid ${coral}40`,
+          boxShadow: 'none',
           cursor: 'pointer',
           fontFamily: 'JetBrains Mono, monospace',
           fontSize: 10,
@@ -298,6 +300,8 @@ export function LockedBar({ onStop, onDiscard, duration }: LockedBarProps) {
           letterSpacing: 0.5,
           textTransform: 'uppercase',
           flexShrink: 0,
+          transition:
+            `background var(--dur-fast, 150ms) var(--ease-relaxed, ease-out), border-color var(--dur-fast, 150ms) var(--ease-relaxed, ease-out)`,
         }}
       >
         discard
@@ -307,20 +311,22 @@ export function LockedBar({ onStop, onDiscard, duration }: LockedBarProps) {
         onClick={onStop}
         aria-label="send recording"
         style={{
-          minHeight: 40,
-          padding: '8px 12px',
-          borderRadius: 8,
+          minHeight: 44,
+          padding: '8px 14px',
+          borderRadius: 10,
           background: accent,
           color: '#000',
-          border: '1.5px solid #000',
-          boxShadow: '3px 3px 0 #000',
+          border: 'none',
+          boxShadow: shadows.button,
           cursor: 'pointer',
           fontFamily: 'JetBrains Mono, monospace',
           fontSize: 10,
-          fontWeight: 800,
+          fontWeight: 700,
           letterSpacing: 0.5,
           textTransform: 'uppercase',
           flexShrink: 0,
+          transition:
+            `box-shadow var(--dur-base, 240ms) var(--ease-relaxed, ease-out)`,
         }}
       >
         send

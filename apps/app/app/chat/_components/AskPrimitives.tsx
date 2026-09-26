@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import type { AskMatch, ThreadMessage } from './types';
 import { accent } from './tokens';
+import { shadows, radii } from '@wingmic/design-tokens';
 
 export function WingmicAvatar() {
   return (
@@ -15,8 +16,7 @@ export function WingmicAvatar() {
         height: 28,
         borderRadius: 999,
         background: accent,
-        border: '1.5px solid #000',
-        boxShadow: '2px 2px 0 #000',
+        boxShadow: shadows.contact,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -38,10 +38,10 @@ export function AgentBubble({ children }: { children: React.ReactNode }) {
       <WingmicAvatar />
       <div
         style={{
-          padding: '12px 14px',
-          borderRadius: '4px 14px 14px 14px',
+          padding: '13px 16px',
+          borderRadius: '6px 18px 18px 18px',
           background: 'var(--surface-2)',
-          border: '1px solid var(--border-mid)',
+          border: '1px solid var(--border-soft)',
           fontSize: 14.5,
           lineHeight: 1.55,
           color: 'var(--text-85)',
@@ -61,8 +61,8 @@ export function EntityMatchCard({ match }: { match: AskMatch }) {
       href={`/person/${match.id}` as Route}
       style={{
         display: 'block',
-        padding: '12px 14px',
-        borderRadius: 12,
+        padding: '13px 15px',
+        borderRadius: radii.md,
         background: 'var(--surface-1)',
         border: '1px solid var(--border-soft)',
         textDecoration: 'none',
@@ -123,10 +123,10 @@ export function AskExchange({
         </div>
         <div
           style={{
-            padding: '12px 14px',
-            borderRadius: '18px 18px 4px 18px',
+            padding: '13px 15px',
+            borderRadius: '20px 20px 6px 20px',
             background: 'var(--surface-2)',
-            border: '1px solid var(--border-mid)',
+            border: '1px solid var(--border-soft)',
             fontSize: 14.5,
             lineHeight: 1.55,
             color: 'var(--text-85)',

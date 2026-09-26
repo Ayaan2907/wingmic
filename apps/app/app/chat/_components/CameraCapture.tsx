@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { snapshotVideoToJpeg } from '@/lib/chat/captureCamera';
 import { readQrFromVideo } from '@/lib/chat/readQr';
 import { accent } from './tokens';
+import { shadows, radii, motion } from '@wingmic/design-tokens';
 
 type Facing = 'environment' | 'user';
 
@@ -209,10 +210,11 @@ export function CameraCapture({
             left: 16,
             right: 16,
             bottom: 120,
-            padding: '12px 14px',
-            borderRadius: 12,
+            padding: '13px 15px',
+            borderRadius: radii.md,
             background: 'rgba(0,0,0,0.78)',
             border: '1px solid rgba(255,255,255,0.12)',
+            boxShadow: shadows.overlay,
           }}
         >
           <p
@@ -249,7 +251,7 @@ export function CameraCapture({
               padding: '0 12px',
               background: 'transparent',
               border: '1px solid var(--border-mid, rgba(255,255,255,0.16))',
-              borderRadius: 10,
+              borderRadius: radii.sm,
               color: 'var(--text-85, #ddd)',
               fontSize: 12,
               letterSpacing: 1,
@@ -315,9 +317,10 @@ export function CameraCapture({
             width: 64,
             height: 64,
             borderRadius: '50%',
-            border: `3px solid ${accent}`,
+            border: 'none',
             background: accent,
-            boxShadow: '4px 4px 0 #000',
+            boxShadow: shadows.raised,
+            transition: `transform ${motion.duration.fast} ${motion.ease.out}, box-shadow ${motion.duration.fast} ${motion.ease.out}`,
             cursor: snapDisabled ? 'default' : 'pointer',
             opacity: snapDisabled ? 0.4 : 1,
           }}
