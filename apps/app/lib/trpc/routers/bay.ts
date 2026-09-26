@@ -246,22 +246,22 @@ export function createBayRouter(rates: { scorePerHour?: number; askPerHour?: num
         const now = Date.now();
         const raw = await loadBayRecords(ctx.db, { now });
         const { live, expired } = liveOf(raw.events, now);
-        const base = {
+        const personaId = input?.persona;
+        const view = personaId ? personaView(personaId, live) : null;
+        // unknown persona is a 400, never a silent unranked 200 (ported rule)
+        if (personaId && (!view || !view.ok)) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `unknown persona "${personaId}"` });
+        }
+        return {
           records: live,
           total: live.length,
           expired,
           sources: sourcesOf(live),
           readErrors: raw.readErrors,
           asOf: raw.asOf,
+          // one stable output shape — persona is null when no view was asked for
+          persona: view?.ok ? view.persona : null,
         };
-        const personaId = input?.persona;
-        if (!personaId) return base;
-        // unknown persona is a 400, never a silent unranked 200 (ported rule)
-        const view = personaView(personaId, live);
-        if (!view.ok) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: `unknown persona "${personaId}"` });
-        }
-        return { ...base, persona: view.persona };
       }),
 
     ask: publicProcedure

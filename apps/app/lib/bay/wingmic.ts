@@ -3,7 +3,6 @@ import { eq } from 'drizzle-orm';
 import type { BayRecord, Meet, VerifyResult, ViewerProfile, WingmicClient } from '@wingmic/bay';
 import { WingmicAuthError } from '@wingmic/bay';
 import * as schema from '@wingmic/db/schema';
-import { apiCallerContext } from '@/lib/api/server';
 import type { TRPCContext } from '@/lib/trpc/context';
 import { captureRouter } from '@/lib/trpc/routers/capture';
 import { recallRouter } from '@/lib/trpc/routers/recall';
@@ -50,6 +49,19 @@ export class WingmicUserService implements WingmicClient {
     private readonly headers: Headers = new Headers(),
   ) {}
 
+  /** Caller context for internal procedure calls — apiCallerContext's shape
+   * built on the injected db handle, not the module singleton, so the
+   * boundary's reads and captures land in the same database the request
+   * came in with (and tests stay hermetic). */
+  private callerContext(): TRPCContext {
+    return {
+      db: this.db,
+      session: { user: { id: this.userId } },
+      user: { id: this.userId },
+      headers: this.headers,
+    } as unknown as TRPCContext;
+  }
+
   /** The signed-in viewer's profile (scope intent: BAY_SCOPES.read). The graph
    * does not model the user's own roles/topics yet — enrichment owns that —
    * so today this is the user row only, honestly thin: qualityOf reports
@@ -82,7 +94,7 @@ export class WingmicUserService implements WingmicClient {
       .join(' ')
       .slice(0, 500);
     try {
-      const caller = recallRouter.createCaller(apiCallerContext(this.userId, this.headers));
+      const caller = recallRouter.createCaller(this.callerContext());
       const res = await caller.query({ q, limit: k });
       return res.entities.slice(0, k).map((e) => {
         const bits = [...e.companies.map((c) => c.name), ...e.topics.map((t) => t.name)]
@@ -123,7 +135,7 @@ export class WingmicUserService implements WingmicClient {
     if (token !== this.userId) throw new WingmicAuthError();
     if (!payload?.text) return false;
     try {
-      const caller = captureRouter.createCaller(apiCallerContext(this.userId, this.headers));
+      const caller = captureRouter.createCaller(this.callerContext());
       await caller.commit({
         transcript: payload.text.slice(0, 10000),
         clientCaptureId: payload.id,
