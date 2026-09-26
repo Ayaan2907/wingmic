@@ -94,6 +94,11 @@ export function ScorePanel({
   // (browser profile vs graph), so the auto-run must re-run, not stay done
   const lastSignedInRef = useRef(false);
   const lastScoredRef = useRef<string | null>(null);
+  // monotonic token: the newest run owns the view. The pick-change reset
+  // guards by event id; this closes the same-id concurrency case (the
+  // session flip re-runs while the anonymous request is still in flight —
+  // a late anonymous response must not overwrite the graph verdict).
+  const runSeqRef = useRef(0);
 
   const eventId = pick?.kind === 'event' ? pick.props.id : null;
 
@@ -101,6 +106,7 @@ export function ScorePanel({
     // the id this card is now scoring for — the auto-run effect compares it
     // so picking a different event resets instead of reusing the old verdict
     lastScoredRef.current = id;
+    const seq = ++runSeqRef.current;
     setView({ state: 'running' });
     // paste → validate locally (bad pastes are bad_source, the ported taxonomy);
     // no paste → the browser-held profile, if the visitor has one
@@ -116,17 +122,18 @@ export function ScorePanel({
         personaId: personaId ?? undefined,
         clientProfile: profileInput,
       })) as ScoreOk;
-      // a stale completion — the visitor picked another event (or closed the
-      // card) while this request was in flight — owns nothing: no verdict,
-      // no reasons, no emphasis repaint for a pick that is no longer shown
-      if (lastScoredRef.current !== id) return;
+      // a stale completion — the visitor picked another event (or closed
+      // the card) while this request was in flight, or a newer run started
+      // for the same id — owns nothing: no verdict, no reasons, no
+      // emphasis repaint for a run that is no longer the newest
+      if (runSeqRef.current !== seq || lastScoredRef.current !== id) return;
       setView({ state: 'done', data });
       onEmphasis(new Map([[id, data.score.go]]));
       // a parsed paste is a real profile — keep it (ported auto-score rule)
       if (fromPaste) onProfileSaved?.(fromPaste);
     } catch (err) {
       // same staleness rule: the newer run owns the view, including its errors
-      if (lastScoredRef.current !== id) return;
+      if (runSeqRef.current !== seq || lastScoredRef.current !== id) return;
       setView({ state: 'error', message: scoreErrorMessage(err) });
     }
   };

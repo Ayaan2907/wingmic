@@ -138,6 +138,26 @@ describe('ClaimPane', () => {
     expect(mockMutate.mock.calls[0][0]).toEqual({ clientProfile: { text: PASTE } });
   });
 
+  it('a rejected hash degrades to the router-derived id and never strands the CTA', async () => {
+    // subtle.digest exists here but rejects (secure-context edge cases): the
+    // submit must still fire — idempotency falls back to server-side
+    // derivation — and the submitting ref must clear on settle
+    vi.stubGlobal('crypto', {
+      subtle: { digest: () => Promise.reject(new Error('digest unavailable')) },
+    } as unknown as typeof crypto);
+    mockMutate.mockImplementation((_input, cbs) => {
+      cbs?.onSettled?.();
+      return undefined;
+    });
+    renderPane();
+    fireEvent.click(screen.getByTestId('bay-claim-cta'));
+    await waitFor(() => expect(mockMutate).toHaveBeenCalledTimes(1));
+    expect(mockMutate.mock.calls[0][0]).toEqual({ clientProfile: { text: PASTE } });
+    // the guard cleared: a second click re-fires rather than inert-returning
+    fireEvent.click(screen.getByTestId('bay-claim-cta'));
+    await waitFor(() => expect(mockMutate).toHaveBeenCalledTimes(2));
+  });
+
   it('an expired session renders the re-auth prompt with the prefilled bay link — never a raw error', () => {
     mockClaimState.isError = true;
     mockClaimState.error = Object.assign(new Error('sign in required'), {
