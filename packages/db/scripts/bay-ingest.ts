@@ -30,6 +30,13 @@ import * as schema from '../src/schema';
 
 const FETCH_TIMEOUT_MS = 15_000;
 
+const redactDbUrl = (url: string): string => {
+  // libsql urls may carry ?authToken=… — the summary line goes to cron logs,
+  // so credentials in the query string must not survive it
+  const q = url.indexOf('?');
+  return q === -1 ? url : `${url.slice(0, q)}?<redacted>`;
+};
+
 function summaryLine(
   event: 'ingest.run' | 'ingest.dry-run',
   ranAt: string,
@@ -44,7 +51,7 @@ function summaryLine(
   return JSON.stringify({
     event,
     ranAt,
-    db,
+    db: redactDbUrl(db),
     sources: sources.map((r) => ({
       name: r.name,
       ok: r.records.length,
@@ -111,7 +118,9 @@ async function main() {
   // never got the web service's TURSO_DB_URL would nightly "succeed" into an
   // ephemeral ./local.db — the bay never updates and no alert fires. Fail fast.
   const dbUrl = env.TURSO_DB_URL;
-  if (!dbUrl || dbUrl.startsWith('file:./')) {
+  // any file: url that is not absolute (file:/…) resolves against the process
+  // cwd — file:./x, file:x and file:../x are all the same trap
+  if (!dbUrl || (dbUrl.startsWith('file:') && !dbUrl.startsWith('file:/'))) {
     console.error(
       `ingest.refused: TURSO_DB_URL must be a remote libsql/turso url or an absolute file: url — got ${dbUrl ? JSON.stringify(dbUrl) : '(unset)'}. The default file:./local.db resolves against the process cwd, so a cron service without the web service's env would silently write an ephemeral local file. Set TURSO_DB_URL on the cron service (docs/deploy.md § bay event ingestion).`,
     );
