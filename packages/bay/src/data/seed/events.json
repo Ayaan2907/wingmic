@@ -1,0 +1,49 @@
+[
+  {
+    "id": "seed:exploratorium-after-dark",
+    "type": "event",
+    "title": "After Dark at the Exploratorium",
+    "category": "tours",
+    "venue": "Exploratorium, Pier 15",
+    "address": "Pier 15, Embarcadero, San Francisco, CA",
+    "lat": 37.8017,
+    "lng": -122.3973,
+    "startsAt": "2026-10-02T01:00:00.000Z",
+    "endsAt": "2026-10-02T05:00:00.000Z",
+    "source": "seed",
+    "sourceUrl": "https://www.exploratorium.edu",
+    "fetchedAt": "2026-09-24T12:00:00.000Z",
+    "note": "weekly adults-only night at the exploratorium, thursdays 6-10pm. this date is the next one at launch; the calendar on their site is the truth."
+  },
+  {
+    "id": "seed:sunday-streets",
+    "type": "event",
+    "title": "Sunday Streets open streets day",
+    "category": "tours",
+    "venue": "rotating neighborhood, see schedule",
+    "lat": 37.7621,
+    "lng": -122.4348,
+    "startsAt": "2026-10-11T17:00:00.000Z",
+    "endsAt": "2026-10-11T21:00:00.000Z",
+    "source": "seed",
+    "sourceUrl": "https://sundaystreetsf.com",
+    "fetchedAt": "2026-09-24T12:00:00.000Z",
+    "note": "miles of car-free streets, one neighborhood at a time. dates move around; check the schedule before you plan a day on it."
+  },
+  {
+    "id": "seed:giants-home-game",
+    "type": "event",
+    "title": "Giants home game at Oracle Park",
+    "category": "sports",
+    "venue": "Oracle Park, 24 Willie Mays Plaza",
+    "address": "24 Willie Mays Plaza, San Francisco, CA 94107",
+    "lat": 37.7786,
+    "lng": -122.3893,
+    "startsAt": "2026-10-03T18:00:00.000Z",
+    "endsAt": "2026-10-03T21:30:00.000Z",
+    "source": "seed",
+    "sourceUrl": "https://www.mlb.com/giants/ballpark",
+    "fetchedAt": "2026-09-24T12:00:00.000Z",
+    "note": "placeholder for the next home stand. the real schedule lives at mlb.com/giants; this record expires on schedule either way."
+  }
+]

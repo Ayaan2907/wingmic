@@ -88,6 +88,17 @@
         "typescript": "^5.6.3",
       },
     },
+    "packages/bay": {
+      "name": "@wingmic/bay",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@types/node": "^22.9.0",
+        "@wingmic/config-tsconfig": "workspace:*",
+        "tsup": "^8.0.0",
+        "typescript": "^5.6.3",
+        "vitest": "^4.1.5",
+      },
+    },
     "packages/brand": {
       "name": "@wingmic/brand",
       "version": "0.0.0",
@@ -121,9 +132,11 @@
       "devDependencies": {
         "@types/node": "^22.9.0",
         "@wingmic/config-tsconfig": "workspace:*",
+        "@wingmic/config-vitest": "workspace:*",
         "drizzle-kit": "^0.31.10",
         "tsup": "^8.0.0",
         "typescript": "^5.6.3",
+        "vitest": "^4.1.5",
       },
     },
     "packages/design-tokens": {
@@ -824,6 +837,8 @@
     "@vitest/utils": ["@vitest/utils@4.1.5", "", { "dependencies": { "@vitest/pretty-format": "4.1.5", "convert-source-map": "^2.0.0", "tinyrainbow": "^3.1.0" } }, "sha512-76wdkrmfXfqGjueGgnb45ITPyUi1ycZ4IHgC2bhPDUfWHklY/q3MdLOAB+TF1e6xfl8NxNY0ZYaPCFNWSsw3Ug=="],
 
     "@wingmic/app": ["@wingmic/app@workspace:apps/app"],
+
+    "@wingmic/bay": ["@wingmic/bay@workspace:packages/bay"],
 
     "@wingmic/brand": ["@wingmic/brand@workspace:packages/brand"],
 
