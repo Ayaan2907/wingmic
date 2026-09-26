@@ -43,6 +43,11 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/_next/webpack-hmr')) return; // dev HMR (registration is prod-only anyway)
 
   if (request.mode === 'navigate') {
+    // /bay deep links (share links, ?q= opens): never the cached root shell —
+    // a stale home chrome behind a map link is worse than the browser's own
+    // offline page. Leave these navigations to the browser entirely.
+    if (url.pathname.startsWith('/bay')) return;
+
     // network-first: live response wins, cached shell covers offline
     event.respondWith(
       fetch(request).catch(() =>
