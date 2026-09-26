@@ -11,8 +11,8 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
 import { useSession } from '@/lib/auth-client';
-import { PERSONAS, rank, type BayRecord, type Persona } from '@wingmic/bay';
-import { ALL_LAYERS, LAYER_IDS } from './mapStyle';
+import { PERSONAS, rank, type BayRecord, type Persona } from '@wingmic/bay/core';
+import { ALL_LAYERS, LAYER_IDS, eventsToGeoJSON, placesToGeoJSON } from './mapStyle';
 import { Hud, IntroDialog, LayerToggles, ViewsPanel, useFirstRun, useStoredView } from './Panels';
 import { AskBar, useAsk } from './AskBar';
 import { ScorePanel } from './Cards';
@@ -101,9 +101,13 @@ export default function BayClient() {
   const ask = useAsk(clientProfile, view?.id ?? null);
 
   // a fresh ask repaints the map; picking a new view clears the old answer's
-  // emphasis (it ranked for a different question)
+  // emphasis (it ranked for a different question); hiding the answer takes
+  // its emphasis with it
   useEffect(() => {
-    if (!ask.result) return;
+    if (!ask.result) {
+      setAskEmphasis(null);
+      return;
+    }
     setAskEmphasis(new Map(ask.result.emphasis.map((e) => [e.id, e.fit])));
     setScoreEmphasis(null);
   }, [ask.result]);
@@ -178,8 +182,25 @@ export default function BayClient() {
       signedIn,
       profileSaved: clientProfile != null,
       emphasis: fits ? Object.fromEntries(fits) : null,
+      // pick(id) opens the same card a dot click opens — built through the
+      // same geo converters, so the card reads identical properties. an
+      // unknown or expired id does nothing, honestly.
+      pick: (id: string) => {
+        const place = places.find((r) => r.id === id);
+        const record = place ?? events.find((r) => r.id === id);
+        if (!record) return;
+        const feature = place
+          ? placesToGeoJSON([place]).features[0]
+          : eventsToGeoJSON([record]).features[0];
+        setPick({
+          kind: place ? 'place' : 'event',
+          props: feature.properties,
+          lng: feature.geometry.coordinates[0],
+          lat: feature.geometry.coordinates[1],
+        });
+      },
     };
-  }, [places.length, events.length, liveOnMap, view?.id, signedIn, clientProfile, fits]);
+  }, [places, events, liveOnMap, view?.id, signedIn, clientProfile, fits]);
 
   return (
     <main className={`bay-page${night ? ' is-night' : ''}`} data-testid="bay-page">

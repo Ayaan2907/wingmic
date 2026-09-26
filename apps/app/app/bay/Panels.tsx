@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { COPY } from './copy';
 import { ALL_LAYERS } from './mapStyle';
-import type { Persona } from '@wingmic/bay';
+import type { Persona } from '@wingmic/bay/core';
 
 // ---------- HUD ----------
 

@@ -281,6 +281,26 @@
   gap: 8px;
 }
 
+/* the hide control leads the card column; the emphasis it clears belongs to
+   this answer, so hiding takes the map emphasis with it */
+.bay-answer-hide {
+  align-self: flex-end;
+  border: 1px solid var(--bay-border-soft);
+  border-radius: 999px;
+  background: transparent;
+  color: color-mix(in srgb, var(--bay-ink) 65%, transparent);
+  font: 400 11px/1 'Inter', system-ui, sans-serif;
+  padding: 6px 12px;
+  min-height: 44px;
+  min-width: 44px;
+  cursor: pointer;
+}
+
+.bay-answer-hide:hover {
+  color: var(--bay-ink);
+  border-color: var(--bay-border-mid);
+}
+
 .bay-answer-text {
   margin: 0;
   font: 400 13.5px/1.5 'Instrument Serif', Georgia, serif;

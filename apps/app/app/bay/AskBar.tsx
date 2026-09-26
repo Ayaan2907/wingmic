@@ -58,7 +58,7 @@ export function AskBar({
   onAsk,
   signedIn,
 }: {
-  ask: AskState;
+  ask: AskState & { clear: () => void };
   onAsk: (q: string) => void;
   signedIn: boolean;
 }) {
@@ -102,7 +102,12 @@ export function AskBar({
         </p>
       )}
       {ask.result && (
-        <AnswerCard result={ask.result} signedIn={signedIn} onPickNote={undefined} />
+        <AnswerCard
+          result={ask.result}
+          signedIn={signedIn}
+          onPickNote={undefined}
+          onHide={ask.clear}
+        />
       )}
     </div>
   );
@@ -112,13 +117,26 @@ export function AnswerCard({
   result,
   signedIn,
   onPickNote,
+  onHide,
 }: {
   result: AskResult;
   signedIn: boolean;
   onPickNote?: string | undefined;
+  onHide?: (() => void) | undefined;
 }) {
   return (
     <article className="bay-answer" data-testid="bay-answer">
+      {onHide && (
+        <button
+          type="button"
+          className="bay-answer-hide"
+          onClick={onHide}
+          aria-label="hide the answer"
+          data-testid="bay-answer-hide"
+        >
+          {COPY.answerHide}
+        </button>
+      )}
       <p className="bay-answer-text">{result.answer}</p>
       {onPickNote && <p className="bay-answer-note">{onPickNote}</p>}
       {result.picks.length > 0 ? (

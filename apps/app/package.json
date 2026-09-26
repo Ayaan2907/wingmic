@@ -2,15 +2,15 @@
   "name": "@wingmic/app",
   "version": "1.0.0",
   "private": true,
-  "description": "wingmic product app — capture, recall, dashboard",
+  "description": "wingmic product app \u2014 capture, recall, dashboard",
   "scripts": {
     "dev": "next dev --port 3211",
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p ${PORT:-3211}",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "prebuild": "cp ../../packages/brand/src/*.svg ../../packages/brand/src/*.png ../../packages/brand/src/*.webmanifest public/ && sed -e \"s/__BUILD_ID__/$(git rev-parse --short HEAD 2>/dev/null || echo localdev)/\" ../../packages/brand/src/sw.js > public/sw.js",
-    "predev": "cp ../../packages/brand/src/*.svg ../../packages/brand/src/*.png ../../packages/brand/src/*.webmanifest public/ && sed -e \"s/__BUILD_ID__/$(git rev-parse --short HEAD 2>/dev/null || echo localdev)/\" ../../packages/brand/src/sw.js > public/sw.js",
+    "prebuild": "cp ../../packages/brand/src/*.svg ../../packages/brand/src/*.png ../../packages/brand/src/*.webmanifest public/ && cp node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs public/maplibre-gl-worker.mjs && cp node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs public/maplibre-gl-shared.mjs && sed -e \"s/__BUILD_ID__/$(git rev-parse --short HEAD 2>/dev/null || echo localdev)/\" ../../packages/brand/src/sw.js > public/sw.js",
+    "predev": "cp ../../packages/brand/src/*.svg ../../packages/brand/src/*.png ../../packages/brand/src/*.webmanifest public/ && cp node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs public/maplibre-gl-worker.mjs && cp node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs public/maplibre-gl-shared.mjs && sed -e \"s/__BUILD_ID__/$(git rev-parse --short HEAD 2>/dev/null || echo localdev)/\" ../../packages/brand/src/sw.js > public/sw.js",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "test:e2e": "playwright test"

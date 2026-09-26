@@ -5,8 +5,8 @@
 // tests both consume it.
 
 import { colors } from '@wingmic/design-tokens';
-import type { BayRecord, Persona } from '@wingmic/bay';
-import { personaFit } from '@wingmic/bay';
+import type { BayRecord, Persona } from '@wingmic/bay/core';
+import { personaFit } from '@wingmic/bay/core';
 import type { ExpressionSpecification } from 'maplibre-gl';
 
 export interface BayLayer {

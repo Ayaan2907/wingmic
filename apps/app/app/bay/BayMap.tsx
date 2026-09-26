@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { GeoJSONSource, LngLatLike, Map as MLMap, MapMouseEvent } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import type { BayRecord } from '@wingmic/bay';
+import type { BayRecord } from '@wingmic/bay/core';
 import {
   ALL_LAYERS,
   eventsToGeoJSON,
@@ -113,6 +113,11 @@ export default function BayMap({
     (async () => {
       try {
         const maplibregl = await import('maplibre-gl');
+        // v6 spawns its worker from a sibling file of the bundle's own URL —
+        // no bundler serves that (webpack inlines the main bundle), so point
+        // it at the copy in public/ that predev/prebuild vendor from the
+        // installed package
+        maplibregl.setWorkerUrl('/maplibre-gl-worker.mjs');
         if (cancelled || !containerRef.current) return;
         const map = new maplibregl.Map({
           container: containerRef.current,
@@ -384,7 +389,7 @@ function applyFits(
   (map.getSource('events') as GeoJSONSource | undefined)?.setData(eventsGeo as never);
   for (const layer of ALL_LAYERS) {
     if (fitMap) {
-      map.setPaintProperty(`dot-${layer.id}`, 'circle-radius', fitRadius(4, 8, 13));
+      map.setPaintProperty(`dot-${layer.id}`, 'circle-radius', fitRadius(5, 12, 18));
       map.setPaintProperty(`dot-${layer.id}`, 'circle-opacity', fitOpacity());
     } else {
       // back to the launch defaults, byte for byte

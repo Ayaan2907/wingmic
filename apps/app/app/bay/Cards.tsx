@@ -196,8 +196,8 @@ export function ScorePanel({
               {view.message}
             </p>
           )}
-          {!signedIn && view.state === 'done' && (
-            <ClaimPane clientProfile={clientProfile} onCleared={onCleared} />
+          {view.state === 'done' && (
+            <ClaimPane clientProfile={clientProfile} signedIn={signedIn} onCleared={onCleared} />
           )}
         </div>
       )}
@@ -266,19 +266,22 @@ function ScoreCard({ ok }: { ok: ScoreOk }) {
 
 function ClaimPane({
   clientProfile,
+  signedIn,
   onCleared,
 }: {
   clientProfile: ClientProfile | null;
+  signedIn: boolean;
   onCleared: () => void;
 }) {
   const [email, setEmail] = useState('');
-  const [sent, setSent] = useState(false);
+  const [claimed, setClaimed] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   const claim = trpc.bay.claim.useMutation();
 
-  if (sent) {
+  if (claimed) {
     return (
       <p className="bay-claim-sent" data-testid="bay-claim-sent">
-        {COPY.claimSent}
+        {note ?? COPY.claimDone}
       </p>
     );
   }
@@ -287,43 +290,58 @@ function ClaimPane({
       <p className="bay-claim-title">{COPY.claimTitle}</p>
       <p className="bay-claim-body">{COPY.claimBody}</p>
       <div className="bay-claim-row">
-        <input
-          type="email"
-          className="bay-claim-email"
-          aria-label="email"
-          placeholder="you@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          data-testid="bay-claim-email"
-        />
+        {/* signed in, the claim binds to the session user — no email to ask for */}
+        {!signedIn && (
+          <input
+            type="email"
+            className="bay-claim-email"
+            aria-label="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            data-testid="bay-claim-email"
+          />
+        )}
         <button
           type="button"
           className="bay-claim-cta"
-          disabled={!email.includes('@') || claim.isPending}
+          disabled={(!signedIn && !email.includes('@')) || claim.isPending}
           onClick={() => {
             if (!clientProfile) return;
+            if (!signedIn) {
+              // locked decision 3: claim is a magic link — the sign-in page
+              // prefills this email and `next` returns to /bay, where the
+              // stored profile is still in the browser and claim completes
+              window.location.assign(
+                `/signin?next=${encodeURIComponent('/bay')}&email=${encodeURIComponent(email)}`,
+              );
+              return;
+            }
             // captureId omitted — the router derives the stable sha256 key from
             // the profile text, so a double-click cannot capture twice
             claim.mutate(
               { clientProfile },
               {
-                onSuccess: () => {
-                  setSent(true);
-                  window.location.assign(
-                    `/signin?next=${encodeURIComponent('/bay')}&email=${encodeURIComponent(email)}`,
-                  );
+                onSuccess: (res) => {
+                  if (res.captured) {
+                    setClaimed(true);
+                    if (res.next !== '/bay') window.location.assign(res.next);
+                    return;
+                  }
+                  // honest failure: nothing was written — say so, invite a retry
+                  setNote(res.note ?? COPY.claimRetry);
                 },
               },
             );
           }}
           data-testid="bay-claim-cta"
         >
-          {COPY.claimCta}
+          {claim.isPending ? COPY.claimSaving : COPY.claimCta}
         </button>
       </div>
-      {claim.isError && (
-        <p className="bay-claim-error" role="alert">
-          {claim.error.message}
+      {(claim.isError || note) && (
+        <p className="bay-claim-error" role="alert" data-testid="bay-claim-error">
+          {claim.isError ? claim.error.message : note}
         </p>
       )}
       {clientProfile != null && (
