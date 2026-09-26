@@ -39,6 +39,7 @@ function activeFor(pathname: string): BottomTabKey | null {
     return 'graph';
   }
   if (pathname.startsWith('/acts')) return 'acts';
+  if (pathname.startsWith('/bay')) return 'bay';
   if (pathname.startsWith('/imports') || pathname.startsWith('/settings')) return 'home';
   return null;
 }
@@ -84,6 +85,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <CaptureOrb isActive={active === 'capture'} label="capture" recorder={recorder} beginCapture={beginCapture} />
           <NavLink tab={NAV_TABS[3]} active={active === 'graph'} />
           <NavLink tab={NAV_TABS[4]} active={active === 'acts'} />
+          <NavLink tab={NAV_TABS[5]} active={active === 'bay'} />
         </nav>
       )}
       <CommandPalette />

@@ -14,7 +14,7 @@ import {
   sourcesOf,
 } from '@wingmic/bay';
 import * as schema from '@wingmic/db/schema';
-import { ANALYTICS_EVENTS } from '@/lib/analytics/events';
+import { ANALYTICS_EVENTS, BAY_ANONYMOUS_ID } from '@/lib/analytics/events';
 import { trackAnalyticsEvent } from '@/lib/analytics/server';
 import { env } from '@/lib/config/env';
 import { getExplainChat } from '@/lib/bay/chat';
@@ -23,6 +23,10 @@ import { runAsk } from '@/lib/bay/ask';
 import { ExpiredEventError } from '@/lib/bay/errors';
 import { loadBayEvent, loadBayRecords, liveOf } from '@/lib/bay/store';
 import { bayClaimCaptureId, makeWingmicClient } from '@/lib/bay/wingmic';
+// the browser-held profile's shape lives in one client-safe module so the /bay
+// surface validates the same object the router receives (locked decision 3)
+import { clientProfileSchema } from '@/lib/bay/clientProfile';
+import type { ClientProfile } from '@/lib/bay/clientProfile';
 import type { TRPCContext } from '@/lib/trpc/context';
 import { publicProcedure, protectedProcedure, router } from '../trpc';
 
@@ -36,54 +40,6 @@ import { publicProcedure, protectedProcedure, router } from '../trpc';
  * Anonymous funnel events share the fixed 'bay_anonymous' bucket — the bay
  * has no server principal before claim (locked decision 3).
  */
-
-/**
- * Analytics distinctId for signed-out bay traffic. One fixed, PII-free
- * bucket: no per-visitor identity exists server-side, so PostHog funnels
- * chain anonymous steps under it while signed-in events key on the real
- * user id. Dashboards can filter it out of user counts by name.
- */
-const BAY_ANONYMOUS_ID = 'bay_anonymous';
-
-const httpsLink = z
-  .string()
-  .max(300)
-  .refine((v) => /^https:\/\//.test(v), 'links must be https');
-
-export const clientProfileSchema = z
-  .object({
-    /** raw pasted text — rides into retrieval as-is and parses for fields */
-    text: z.string().max(4000).optional(),
-    name: z.string().max(120).optional(),
-    headline: z.string().max(200).optional(),
-    roles: z.array(z.string().max(80)).max(12).optional(),
-    topics: z.array(z.string().max(80)).max(24).optional(),
-    goals: z.array(z.string().max(120)).max(12).optional(),
-    links: z
-      .object({
-        linkedin: httpsLink,
-        github: httpsLink,
-        x: httpsLink,
-        site: httpsLink,
-      })
-      .partial()
-      .optional(),
-  })
-  .refine(
-    (v) =>
-      Boolean(
-        (v.text && v.text.trim()) ||
-          v.name ||
-          v.headline ||
-          v.roles?.length ||
-          v.topics?.length ||
-          v.goals?.length ||
-          (v.links && Object.keys(v.links).length),
-      ),
-    { message: 'a client profile needs something to read — paste a few lines or fill a field' },
-  );
-
-type ClientProfile = z.infer<typeof clientProfileSchema>;
 
 /** Map the browser-held profile onto the score pipeline's input shape: raw
  * text rides as the source (parsePaste lifts fields AND the raw words stay in

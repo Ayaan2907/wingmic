@@ -1,0 +1,787 @@
+/* apps/app/app/bay/bay.css — the /bay surface stylesheet. Ported from
+   ayaan-site assets/bay/bay.css, re-expressed on design-tokens v3: dark warm
+   canvas, amber accent, soft borders, 44px hit targets, reduced-motion safe.
+   Scoped by .bay-page so nothing leaks into the app shell. */
+
+.bay-page {
+  /* map onto packages/design-tokens v3 (colors.ts) */
+  --bay-page: #0a0a0a;
+  --bay-card: #08080d;
+  --bay-ink: #f4f1ea;
+  --bay-accent: #ffc452;
+  --bay-mint: #86efac;
+  --bay-coral: #ff8fab;
+  --bay-alarm: #ff6b6b;
+  --bay-border-soft: rgba(244, 241, 234, 0.08);
+  --bay-border-mid: rgba(244, 241, 234, 0.16);
+  --bay-surface-1: rgba(244, 241, 234, 0.04);
+  --bay-surface-2: rgba(244, 241, 234, 0.08);
+
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bay-page);
+  color: var(--bay-ink);
+  font-family: Inter, system-ui, sans-serif;
+  z-index: 0;
+}
+
+.bay-page .bay-map,
+.bay-page .bay-map--collapsed {
+  position: absolute;
+  inset: 0;
+}
+
+.bay-map-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bay-ink);
+  opacity: 0.7;
+  font-size: 14px;
+}
+
+/* ---------- top bar ---------- */
+
+.bay-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  pointer-events: none;
+  z-index: 30;
+}
+
+.bay-top > * {
+  pointer-events: auto;
+}
+
+.bay-home,
+.bay-night-toggle {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--bay-border-soft);
+  background: color-mix(in srgb, var(--bay-card) 82%, transparent);
+  color: var(--bay-ink);
+  font: 600 12px/1 Inter, system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.bay-home {
+  text-decoration: none;
+}
+
+.bay-home:hover,
+.bay-night-toggle:hover {
+  border-color: var(--bay-border-mid);
+}
+
+.bay-title {
+  margin: 0;
+  font: 700 15px/1 'Instrument Serif', Georgia, serif;
+  letter-spacing: 0.02em;
+  color: var(--bay-ink);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- side panel (layers + views) ---------- */
+
+.bay-side {
+  position: absolute;
+  top: 60px;
+  right: 14px;
+  width: 224px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 25;
+  max-height: calc(100% - 120px);
+  overflow-y: auto;
+}
+
+.bay-layers,
+.bay-views {
+  border: 1px solid var(--bay-border-soft);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bay-card) 88%, transparent);
+  backdrop-filter: blur(8px);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bay-views-title {
+  font: 700 10px/1 'JetBrains Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: rgba(244, 241, 234, 0.55);
+  padding: 2px 4px 6px;
+}
+
+.bay-layer-toggle,
+.bay-view {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--bay-ink);
+  font: 500 13px/1.2 Inter, system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bay-layer-toggle:hover,
+.bay-view:hover {
+  background: var(--bay-surface-1);
+}
+
+.bay-layer-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--bay-layer-color, var(--bay-ink));
+  flex: none;
+}
+
+.bay-layer-count {
+  margin-left: auto;
+  font: 500 11px/1 'JetBrains Mono', ui-monospace, monospace;
+  color: rgba(244, 241, 234, 0.55);
+}
+
+.bay-layer-toggle.is-off .bay-layer-label,
+.bay-layer-toggle.is-off .bay-layer-count {
+  opacity: 0.4;
+}
+
+.bay-layer-toggle.is-off .bay-layer-dot {
+  opacity: 0.35;
+}
+
+.bay-views-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bay-view {
+  min-height: 36px;
+  border: 1px solid var(--bay-border-soft);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: 500 12px/1 Inter, system-ui, sans-serif;
+}
+
+.bay-view.is-active {
+  border-color: var(--bay-accent);
+  color: var(--bay-accent);
+  background: rgba(255, 196, 82, 0.1);
+}
+
+.bay-views-why {
+  margin: 4px 4px 0;
+  font: 400 11px/1.45 Inter, system-ui, sans-serif;
+  color: rgba(244, 241, 234, 0.55);
+}
+
+/* ---------- ask dock ---------- */
+
+.bay-ask-dock {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 24px));
+  z-index: 28;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bay-ask-form {
+  display: flex;
+  gap: 8px;
+}
+
+.bay-ask-input {
+  flex: 1;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--bay-border-mid);
+  background: color-mix(in srgb, var(--bay-card) 90%, transparent);
+  color: var(--bay-ink);
+  font: 400 14px/1.3 Inter, system-ui, sans-serif;
+  backdrop-filter: blur(8px);
+}
+
+.bay-ask-input::placeholder {
+  color: rgba(244, 241, 234, 0.4);
+}
+
+.bay-ask-input:focus-visible,
+.bay-profile-input:focus-visible,
+.bay-claim-email:focus-visible {
+  outline: 2px solid var(--bay-accent);
+  outline-offset: 1px;
+}
+
+.bay-ask-submit {
+  min-height: 44px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 12px;
+  background: var(--bay-accent);
+  color: #0a0a0a;
+  font: 700 13px/1 Inter, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.bay-ask-submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.bay-ask-error,
+.bay-card-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  background: rgba(255, 107, 107, 0.12);
+  color: var(--bay-alarm);
+  font: 400 12px/1.45 Inter, system-ui, sans-serif;
+}
+
+/* ---------- answer card ---------- */
+
+.bay-answer {
+  border: 1px solid var(--bay-border-soft);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bay-card) 92%, transparent);
+  backdrop-filter: blur(8px);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* the hide control leads the card column; the emphasis it clears belongs to
+   this answer, so hiding takes the map emphasis with it */
+.bay-answer-hide {
+  align-self: flex-end;
+  border: 1px solid var(--bay-border-soft);
+  border-radius: 999px;
+  background: transparent;
+  color: color-mix(in srgb, var(--bay-ink) 65%, transparent);
+  font: 400 11px/1 'Inter', system-ui, sans-serif;
+  padding: 6px 12px;
+  min-height: 44px;
+  min-width: 44px;
+  cursor: pointer;
+}
+
+.bay-answer-hide:hover {
+  color: var(--bay-ink);
+  border-color: var(--bay-border-mid);
+}
+
+.bay-answer-text {
+  margin: 0;
+  font: 400 13.5px/1.5 'Instrument Serif', Georgia, serif;
+  color: var(--bay-ink);
+}
+
+.bay-answer-picks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bay-answer-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--bay-surface-1);
+  font: 400 12px/1.45 Inter, system-ui, sans-serif;
+}
+
+.bay-answer-verdict {
+  font: 700 10px/1 'JetBrains Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.bay-answer-verdict--go {
+  color: var(--bay-mint);
+}
+
+.bay-answer-verdict--maybe {
+  color: var(--bay-accent);
+}
+
+.bay-answer-verdict--skip {
+  color: rgba(244, 241, 234, 0.45);
+}
+
+.bay-answer-title {
+  font-weight: 600;
+}
+
+.bay-answer-outcome,
+.bay-answer-reasons,
+.bay-answer-meet {
+  color: rgba(244, 241, 234, 0.7);
+}
+
+.bay-answer-empty {
+  margin: 0;
+  font: italic 400 13px/1.5 'Instrument Serif', Georgia, serif;
+  color: rgba(244, 241, 234, 0.55);
+}
+
+.bay-answer-meta {
+  margin: 0;
+  font: 400 10.5px/1 'JetBrains Mono', ui-monospace, monospace;
+  color: rgba(244, 241, 234, 0.4);
+  letter-spacing: 0.04em;
+}
+
+/* ---------- HUD ---------- */
+
+.bay-hud {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 25;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--bay-border-soft);
+  background: color-mix(in srgb, var(--bay-card) 82%, transparent);
+  backdrop-filter: blur(6px);
+  font: 500 11px/1.4 'JetBrains Mono', ui-monospace, monospace;
+  color: rgba(244, 241, 234, 0.75);
+  max-width: min(70vw, 420px);
+}
+
+/* ---------- score card (bottom sheet) ---------- */
+
+.bay-card {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 14px;
+  width: min(480px, calc(100vw - 24px));
+  z-index: 32;
+  border: 1px solid var(--bay-border-soft);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bay-card) 94%, transparent);
+  backdrop-filter: blur(10px);
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(70vh, 620px);
+  overflow-y: auto;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+
+.bay-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bay-card-kind {
+  font: 700 10px/1 'JetBrains Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--bay-accent);
+}
+
+.bay-card-kind::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  margin-right: 6px;
+  background: var(--bay-coral);
+}
+
+.bay-card--place .bay-card-kind::before {
+  background: var(--bay-mint);
+}
+
+.bay-card-close {
+  min-height: 44px;
+  min-width: 44px;
+  border: none;
+  background: transparent;
+  color: rgba(244, 241, 234, 0.55);
+  font: 500 12px/1 Inter, system-ui, sans-serif;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.bay-card-close:hover {
+  color: var(--bay-ink);
+  background: var(--bay-surface-1);
+}
+
+.bay-card-name {
+  margin: 0;
+  font: 600 18px/1.25 'Instrument Serif', Georgia, serif;
+}
+
+.bay-card-note {
+  margin: 0;
+  font: italic 400 13px/1.5 'Instrument Serif', Georgia, serif;
+  color: rgba(244, 241, 234, 0.75);
+}
+
+.bay-card-loading {
+  margin: 4px 0;
+  font: 400 13px/1.4 Inter, system-ui, sans-serif;
+  color: rgba(244, 241, 234, 0.6);
+}
+
+.bay-card-link,
+.bay-profile-signedin {
+  font: 500 12px/1.4 Inter, system-ui, sans-serif;
+}
+
+.bay-card-link {
+  color: var(--bay-accent);
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.bay-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* profile paste */
+
+.bay-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bay-profile p {
+  margin: 0;
+  font: 400 12.5px/1.5 Inter, system-ui, sans-serif;
+  color: rgba(244, 241, 234, 0.7);
+}
+
+.bay-profile-input {
+  min-height: 88px;
+  resize: vertical;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--bay-border-mid);
+  background: var(--bay-surface-1);
+  color: var(--bay-ink);
+  font: 400 12.5px/1.5 Inter, system-ui, sans-serif;
+}
+
+.bay-profile-go {
+  min-height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: var(--bay-accent);
+  color: #0a0a0a;
+  font: 700 13px/1 Inter, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.bay-profile-go:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.bay-profile-signedin {
+  margin: 0;
+  color: rgba(244, 241, 234, 0.5);
+}
+
+/* score verdict */
+
+.bay-score {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bay-score-verdict {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.bay-score-verdict-tag {
+  font: 700 12px/1 'JetBrains Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.bay-score-verdict--go {
+  color: var(--bay-mint);
+}
+
+.bay-score-verdict--maybe {
+  color: var(--bay-accent);
+}
+
+.bay-score-verdict--skip {
+  color: rgba(244, 241, 234, 0.45);
+}
+
+.bay-score-rank {
+  font: 400 11px/1 'JetBrains Mono', ui-monospace, monospace;
+  color: rgba(244, 241, 234, 0.55);
+}
+
+.bay-score-outcome {
+  margin: 0;
+  font: 400 13.5px/1.5 'Instrument Serif', Georgia, serif;
+}
+
+.bay-score-reasons {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bay-score-reasons li {
+  font: 400 12px/1.5 Inter, system-ui, sans-serif;
+  color: rgba(244, 241, 234, 0.75);
+}
+
+.bay-score-reasons li::before {
+  content: '·';
+  margin-right: 8px;
+  color: var(--bay-accent);
+}
+
+.bay-score-meet-title {
+  margin: 0 0 4px;
+  font: 700 10px/1 'JetBrains Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(244, 241, 234, 0.5);
+}
+
+.bay-score-meet ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bay-score-meet li {
+  font: 400 12px/1.5 Inter, system-ui, sans-serif;
+  color: rgba(244, 241, 234, 0.75);
+}
+
+.bay-score-meta {
+  margin: 0;
+  font: 400 10.5px/1 'JetBrains Mono', ui-monospace, monospace;
+  color: rgba(244, 241, 234, 0.4);
+}
+
+/* claim */
+
+.bay-claim {
+  border-top: 1px solid var(--bay-border-soft);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bay-claim-title {
+  margin: 0;
+  font: 600 13px/1.3 Inter, system-ui, sans-serif;
+}
+
+.bay-claim-body {
+  margin: 0;
+  font: 400 12px/1.5 Inter, system-ui, sans-serif;
+  color: rgba(244, 241, 234, 0.65);
+}
+
+.bay-claim-row {
+  display: flex;
+  gap: 8px;
+}
+
+.bay-claim-email {
+  flex: 1;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--bay-border-mid);
+  background: var(--bay-surface-1);
+  color: var(--bay-ink);
+  font: 400 13px/1 Inter, system-ui, sans-serif;
+}
+
+.bay-claim-cta {
+  min-height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--bay-mint);
+  color: #0a0a0a;
+  font: 700 12.5px/1 Inter, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.bay-claim-cta:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.bay-claim-error {
+  margin: 0;
+  color: var(--bay-alarm);
+  font: 400 12px/1.4 Inter, system-ui, sans-serif;
+}
+
+.bay-claim-clear {
+  align-self: flex-start;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  color: rgba(244, 241, 234, 0.5);
+  font: 400 12px/1 Inter, system-ui, sans-serif;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.bay-claim-sent {
+  margin: 0;
+  font: 400 12.5px/1.5 Inter, system-ui, sans-serif;
+  color: var(--bay-mint);
+}
+
+/* ---------- intro ---------- */
+
+.bay-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(10, 10, 10, 0.55);
+}
+
+.bay-intro-card {
+  width: min(420px, 100%);
+  border: 1px solid var(--bay-border-mid);
+  border-radius: 16px;
+  background: var(--bay-card);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bay-intro-title {
+  margin: 0;
+  font: 700 18px/1.2 'Instrument Serif', Georgia, serif;
+}
+
+.bay-intro-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bay-intro-lines li {
+  font: 400 13px/1.5 Inter, system-ui, sans-serif;
+  color: rgba(244, 241, 234, 0.8);
+}
+
+.bay-intro-lines li::before {
+  content: '·';
+  margin-right: 8px;
+  color: var(--bay-accent);
+}
+
+.bay-intro-dismiss {
+  min-height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: var(--bay-accent);
+  color: #0a0a0a;
+  font: 700 13px/1 Inter, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+/* ---------- reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .bay-page * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ---------- small screens: the side panel tucks under the top bar ---------- */
+
+@media (max-width: 640px) {
+  .bay-side {
+    top: auto;
+    bottom: 76px;
+    right: 10px;
+    width: min(200px, calc(100vw - 20px));
+  }
+
+  .bay-ask-dock {
+    top: 56px;
+  }
+
+  .bay-hud {
+    bottom: auto;
+    top: 106px;
+    max-width: calc(100vw - 20px);
+  }
+}

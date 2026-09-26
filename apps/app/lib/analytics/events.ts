@@ -26,9 +26,9 @@
  *   claim_started     — a signed-in viewer started claiming a throwaway
  *                       profile into the graph
  *
- * `map_view`'s instrumentation point is the /bay server component render —
- * the surface PR owns that file, so until it lands the event is pinned in
- * PENDING_INSTRUMENTATION below and the taxonomy test enforces the rest.
+ * `map_view` fires from the /bay server component render (apps/app/app/bay/
+ * page.tsx) — the only funnel event driven outside a tRPC procedure, because
+ * a render is what it measures.
  *
  * Every event is captured server-side (posthog-node) — no taxonomy event
  * originates in the browser, so no client SDK ships. See docs/analytics.md
@@ -67,14 +67,21 @@ export const ANALYTICS_EVENT_NAMES: readonly AnalyticsEventName[] = Object.value
 );
 
 /**
- * Taxonomy events whose server instrumentation point does not exist yet.
- * `map_view` fires from the /bay server component render — the surface PR
- * owns that file, and this task must not touch surface UI. When the call
- * site lands, the surface PR removes the entry here and the taxonomy test
- * starts enforcing the event like the rest. Typed as AnalyticsEventName so
- * a typo cannot sneak in.
+ * Every taxonomy event has a live server instrumentation point — this list is
+ * empty and kept as the enforcement seam: a new event whose call site lands in
+ * a later PR goes here until that PR ships. Typed as AnalyticsEventName so a
+ * typo cannot sneak in.
  */
-export const PENDING_INSTRUMENTATION: readonly AnalyticsEventName[] = ['map_view'];
+export const PENDING_INSTRUMENTATION: readonly AnalyticsEventName[] = [];
+
+/**
+ * Analytics distinctId for signed-out bay traffic. One fixed, PII-free
+ * bucket: no per-visitor identity exists server-side, so PostHog funnels
+ * chain anonymous steps under it while signed-in events key on the real
+ * user id. Shared by the bay router and the /bay page render (map_view) —
+ * dashboards can filter it out of user counts by name.
+ */
+export const BAY_ANONYMOUS_ID = 'bay_anonymous';
 
 // ── Per-event property shapes (all bounded, all PII-free) ────────────────
 

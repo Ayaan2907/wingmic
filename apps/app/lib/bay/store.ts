@@ -166,3 +166,15 @@ export async function loadBayEvent(
   if (!row) return { record: null, readErrors };
   return { record: eventToRecord(row, readErrors), readErrors };
 }
+
+/** One place row by id — the public place-detail page's read. Places never
+ * expire unless they carry an explicit expiresAt (the contract). */
+export async function loadBayPlace(
+  db: Db,
+  id: string,
+): Promise<{ record: PlaceRecord | null; readErrors: string[] }> {
+  const readErrors: string[] = [];
+  const row = await db.query.places.findFirst({ where: eq(schema.places.id, id) });
+  if (!row) return { record: null, readErrors };
+  return { record: placeToRecord(row, readErrors), readErrors };
+}

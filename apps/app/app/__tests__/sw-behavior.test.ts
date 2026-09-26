@@ -249,4 +249,18 @@ describe('service worker caching contract (AC1)', () => {
 
     expect((await respondedTo(event)).status).toBe(504); // FakeResponse.error()
   });
+
+  it('never serves the cached shell for /bay deep links — even offline', () => {
+    const shell = new FakeResponse('<html>shell</html>');
+    const { listeners } = loadServiceWorker({ cached: { '/': shell } });
+    const event = makeFetchEvent('https://app.wingmic.xyz/bay?q=who+should+i+meet', {
+      mode: 'navigate',
+    });
+
+    (listeners.fetch as WorkerListener)(event);
+
+    // a stale home chrome behind a shared map link is worse than the
+    // browser's own offline page — /bay navigations are never intercepted
+    expect(event.respondWith).not.toHaveBeenCalled();
+  });
 });

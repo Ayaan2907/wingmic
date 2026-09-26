@@ -30,7 +30,7 @@ const coral = colors.alarm;
 /** Bottom-nav height — kept in sync with chat/_components/tokens.ts. */
 export const TAB_BAR_HEIGHT_PX = 56;
 
-export type BottomTabKey = 'home' | 'chat' | 'capture' | 'graph' | 'search' | 'acts';
+export type BottomTabKey = 'home' | 'chat' | 'capture' | 'graph' | 'search' | 'acts' | 'bay';
 
 function vibrate(pattern: number | number[]) {
   if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
@@ -42,14 +42,17 @@ function vibrate(pattern: number | number[]) {
   }
 }
 
-// Tab arrangement (PDF + design/v2): acts on the fifth slot. Search stays
-// reachable via ⌘K / header affordances — not a bottom-nav verb.
+// Tab arrangement (PDF + design/v2): acts on the fifth slot, the bay map on
+// the sixth (locked decision 6 — the map joins the bar rather than absorbing
+// the home feed). Search stays reachable via ⌘K / header affordances — not a
+// bottom-nav verb.
 export const NAV_TABS: Array<{ key: BottomTabKey; glyph: string; label: string; href: string; big?: boolean }> = [
   { key: 'home', glyph: '⌂', label: 'home', href: '/' },
   { key: 'chat', glyph: '≡', label: 'chat', href: '/chat' },
   { key: 'capture', glyph: '◉', label: 'capture', href: '/chat', big: true },
   { key: 'graph', glyph: '◈', label: 'graph', href: '/graph' },
   { key: 'acts', glyph: '☑', label: 'acts', href: '/acts' },
+  { key: 'bay', glyph: '⌖', label: 'bay', href: '/bay' },
 ];
 
 export function NavLink({ tab, active }: { tab: (typeof NAV_TABS)[number]; active: boolean }) {
