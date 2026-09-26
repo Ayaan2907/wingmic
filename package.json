@@ -33,7 +33,7 @@
     "db:generate":        "bun --filter=@wingmic/db generate",
     "db:apply":            "bun --filter=@wingmic/db apply",
     "db:seed:bay":         "bun --filter=@wingmic/db seed:bay",
-    "bay:ingest":          "bun --filter=@wingmic/db bay:ingest",
+    "bay:ingest":          "bun run --filter=@wingmic/bay build && bun run --filter=@wingmic/db bay:ingest",
     "db:migrate:deploy":  "sh scripts/predeploy-migrate.sh",
     "db:studio":          "bun --filter=@wingmic/db studio",
     "db:apply:doppler":   "doppler run -- bun run db:apply",

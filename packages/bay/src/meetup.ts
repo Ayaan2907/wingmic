@@ -72,9 +72,10 @@ export class PointBudget {
 
   private pruneAndSum(now: number): number {
     const windowStart = now - (this.opts.windowMs ?? MEETUP_BUDGET_WINDOW_MS);
-    for (let i = this.spent.length - 1; i >= 0; i--) {
-      if (this.spent[i].at <= windowStart) this.spent.splice(0, i + 1);
-    }
+    // entries are chronological, so the stale ones are a prefix — prune it in
+    // one terminal pass (a reverse loop that splices the whole array empty
+    // mid-iteration crashes the recovery path in spend()).
+    while (this.spent.length > 0 && this.spent[0].at <= windowStart) this.spent.shift();
     return this.spent.reduce((sum, s) => sum + s.points, 0);
   }
 

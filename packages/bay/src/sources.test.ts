@@ -145,6 +145,37 @@ describe("meetup source (recorded fixtures)", () => {
     expect(result.errors[0]).toMatch(/point budget/);
   });
 
+  it("prunes an all-stale window without crashing (the recovery path)", async () => {
+    // every entry stale at prune time was the crash: the reverse loop spliced
+    // the array empty on its first iteration, then indexed the hole
+    let clock = 1_000;
+    const budget = new PointBudget({ limit: 30, windowMs: 60_000, now: () => clock });
+    await budget.spend(10);
+    await budget.spend(10); // two chronological entries
+    clock = 61_000; // jump: every entry now stale when the next spend prunes
+    await expect(budget.spend(1)).resolves.toBeUndefined();
+  });
+
+  it("recovers by waiting when the window rolls", async () => {
+    // the successful-wait path: sleep advances the injected clock past the
+    // window, the prune empties it harmlessly, and the spend lands
+    let clock = 1_000;
+    const budget = new PointBudget({
+      limit: 25,
+      windowMs: 60_000,
+      maxWaitMs: 120_000,
+      now: () => clock,
+      sleep: async (ms) => {
+        clock += ms;
+      },
+    });
+    await budget.spend(25); // full at t=1000
+    await expect(budget.spend(1)).resolves.toBeUndefined(); // wait rolls the window, then succeeds
+    // the wait is exact: it wakes at oldest + windowMs, the first instant the
+    // budget frees — not a tick later
+    expect(clock).toBe(61_000);
+  });
+
   it("surfaces graphql-level errors as error lines", async () => {
     const fetchImpl = (async (url: RequestInfo | URL) => {
       if (String(url).includes("oauth2")) return okJson({ access_token: "t" }, url);
@@ -188,6 +219,11 @@ describe("feeds source (recorded ICS/RSS fixtures)", () => {
     expect(event?.note).toMatch(/folded-line fixture: this sentence continues/);
     // the date-less VEVENT is a per-item rejection, not a failed source
     expect(result.errors.some((e) => e.includes("no parseable DTSTART"))).toBe(true);
+    // a quoted TZID (RFC 5545 allows quoted param-values) resolves identically
+    // to the unquoted one — same wall time, same instant
+    const quoted = result.records.find((r) => r.id === "ics:fixture-cal:evt-003-bay-example");
+    expect(quoted).toBeTruthy();
+    expect(quoted?.startsAt).toBe("2026-02-11T02:00:00.000Z");
   });
 
   it("parses the RSS fixture: event-module dates, announcement items rejected", async () => {

@@ -15,4 +15,10 @@ BEGIN:VEVENT
 UID:evt-002@bay.example
 SUMMARY:no start date here
 END:VEVENT
+BEGIN:VEVENT
+UID:evt-003@bay.example
+SUMMARY:quoted tzid meetup
+DTSTART;TZID="America/Los_Angeles":20260210T180000
+URL:https://cal.example.org/quoted-tzid
+END:VEVENT
 END:VCALENDAR

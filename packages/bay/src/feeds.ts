@@ -50,7 +50,14 @@ export function parseIcsLine(line: string): IcsProperty | null {
   for (const segment of segments.slice(1)) {
     const eq = segment.indexOf("=");
     if (eq === -1) continue;
-    params[segment.slice(0, eq).trim().toUpperCase()] = segment.slice(eq + 1).trim();
+    let value = segment.slice(eq + 1).trim();
+    // RFC 5545 param-values may be quoted, and quoted TZIDs occur in the wild
+    // (DTSTART;TZID="America/Los_Angeles":...). Store the unquoted value — a
+    // quoted zone fails the Intl lookup and silently rejects every VEVENT.
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+      value = value.slice(1, -1);
+    }
+    params[segment.slice(0, eq).trim().toUpperCase()] = value;
   }
   return { name, params, value };
 }

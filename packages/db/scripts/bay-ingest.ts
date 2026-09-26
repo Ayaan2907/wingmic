@@ -10,7 +10,8 @@
 // alert) — partial success and all-skipped exits are 0.
 //
 // Usage:
-//   bun run bay:ingest              # full run against TURSO_DB_URL (defaults to ./local.db)
+//   bun run bay:ingest              # full run against TURSO_DB_URL (remote turso url or an absolute file: url — a
+//                                     relative file:./ url is refused: it would resolve against the process cwd)
 //   bun run bay:ingest --dry-run    # fetch + normalize + report, no db connection at all
 //   bun run bay:ingest --only=seed  # run a single source (also: luma, meetup, feeds, submissions, eventbrite)
 //
@@ -103,6 +104,18 @@ async function main() {
     }
     console.log(summaryLine('ingest.dry-run', now, '(none — dry run)', results, null));
     process.exit(ingestExitCode(results));
+  }
+
+  // A silent wrong-destination write is the one failure this job must never
+  // have: the env default is a cwd-relative local file, so a cron service that
+  // never got the web service's TURSO_DB_URL would nightly "succeed" into an
+  // ephemeral ./local.db — the bay never updates and no alert fires. Fail fast.
+  const dbUrl = env.TURSO_DB_URL;
+  if (!dbUrl || dbUrl.startsWith('file:./')) {
+    console.error(
+      `ingest.refused: TURSO_DB_URL must be a remote libsql/turso url or an absolute file: url — got ${dbUrl ? JSON.stringify(dbUrl) : '(unset)'}. The default file:./local.db resolves against the process cwd, so a cron service without the web service's env would silently write an ephemeral local file. Set TURSO_DB_URL on the cron service (docs/deploy.md § bay event ingestion).`,
+    );
+    process.exit(2);
   }
 
   const client = createClient({ url: env.TURSO_DB_URL, authToken: env.TURSO_AUTH_TOKEN });
