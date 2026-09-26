@@ -249,6 +249,7 @@ export default function BayClient() {
         clientProfile={clientProfile}
         personaId={view?.id ?? null}
         signedIn={signedIn}
+        viewerEmail={sessionData?.user?.email ?? null}
         onEmphasis={setScoreEmphasis}
         onClosed={() => setPick(null)}
         onCleared={clearProfile}
