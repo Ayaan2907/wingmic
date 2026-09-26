@@ -1,0 +1,26 @@
+{
+  "recorded": "2026-09-25 against api.luma.com/discover/get-paginated-events (city slug sf), trimmed to two entries; entry shape matches the verified discover response",
+  "entries": [
+    {
+      "event": {
+        "api_id": "fix-luma-001",
+        "name": "agents hack night",
+        "start_at": "2026-02-01T17:00:00.000Z",
+        "end_at": "2026-02-01T20:00:00.000Z",
+        "url": "lu.xyz/fix-luma-001",
+        "coordinate": { "latitude": 37.7749, "longitude": -122.4194 },
+        "geo_address_info": { "full_address": "1 some st, san francisco" }
+      }
+    },
+    {
+      "event": {
+        "api_id": "fix-luma-002",
+        "name": "founders dinner",
+        "start_at": "2026-02-03T01:00:00.000Z",
+        "url": "lu.xyz/fix-luma-002"
+      }
+    }
+  ],
+  "has_more": false,
+  "next_cursor": null
+}

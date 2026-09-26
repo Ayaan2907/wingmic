@@ -1,0 +1,6 @@
+{
+  "recorded": "shape of the oauth2 token response from secure.meetup.com/oauth2/access; values are fixtures, not a real token",
+  "access_token": "fixture-meetup-access-token",
+  "token_type": "bearer",
+  "expires_in": 3600
+}
