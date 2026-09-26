@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:ev="http://purl.org/rss/1.0/modules/event/">
+  <channel>
+    <title>fixture bay events</title>
+    <link>https://feeds.example.org/</link>
+    <description>recorded-shape rss fixture with the event module</description>
+    <item>
+      <title>founders coffee</title>
+      <link>https://feeds.example.org/founders-coffee</link>
+      <ev:startdate>2026-02-11T09:00:00-08:00</ev:startdate>
+      <ev:enddate>2026-02-11T11:00:00-08:00</ev:enddate>
+      <description>weekly founders coffee, wednesday mornings</description>
+    </item>
+    <item>
+      <title>announcement only, no event date</title>
+      <link>https://feeds.example.org/announcement</link>
+      <description>a date-less item is an announcement, not an event</description>
+    </item>
+  </channel>
+</rss>

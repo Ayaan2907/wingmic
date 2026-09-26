@@ -1,0 +1,24 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//fixture//bay//EN
+BEGIN:VEVENT
+UID:evt-001@bay.example
+SUMMARY:indie hacker demo night
+DTSTART;TZID=America/Los_Angeles:20260210T180000
+DTEND;TZID=America/Los_Angeles:20260210T200000
+LOCATION:650 California St, San Francisco
+DESCRIPTION:bring a demo and show it in five minutes. folded-line fixture:
+  this sentence continues the previous physical line per RFC 5545.
+URL:https://cal.example.org/demo-night
+END:VEVENT
+BEGIN:VEVENT
+UID:evt-002@bay.example
+SUMMARY:no start date here
+END:VEVENT
+BEGIN:VEVENT
+UID:evt-003@bay.example
+SUMMARY:quoted tzid meetup
+DTSTART;TZID="America/Los_Angeles":20260210T180000
+URL:https://cal.example.org/quoted-tzid
+END:VEVENT
+END:VCALENDAR
