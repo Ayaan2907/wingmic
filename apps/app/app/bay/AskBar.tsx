@@ -9,6 +9,7 @@ import { useRef, useState } from 'react';
 import { trpc } from '@/lib/trpc/client';
 import type { AskResult } from '@/lib/bay/ask';
 import { COPY } from './copy';
+import { noteAskRun } from './clientProfile';
 import type { ClientProfile } from '@/lib/bay/clientProfile';
 
 export interface AskState {
@@ -37,6 +38,9 @@ export function useAsk(clientProfile: ClientProfile | null, personaId: string | 
         personaId: personaRef.current ?? undefined,
         clientProfile: profileRef.current ?? undefined,
       });
+      // the ask happened — record it for the ask bar's hints (session-scoped,
+      // browser-held; never leaves the device)
+      noteAskRun(q);
       setState({ running: false, result, error: null });
     } catch (err) {
       // the ask degrades server-side; a failure here is transport-level —
@@ -101,14 +105,7 @@ export function AskBar({
           {ask.error}
         </p>
       )}
-      {ask.result && (
-        <AnswerCard
-          result={ask.result}
-          signedIn={signedIn}
-          onPickNote={undefined}
-          onHide={ask.clear}
-        />
-      )}
+      {ask.result && <AnswerCard result={ask.result} signedIn={signedIn} onHide={ask.clear} />}
     </div>
   );
 }
@@ -116,12 +113,10 @@ export function AskBar({
 export function AnswerCard({
   result,
   signedIn,
-  onPickNote,
   onHide,
 }: {
   result: AskResult;
   signedIn: boolean;
-  onPickNote?: string | undefined;
   onHide?: (() => void) | undefined;
 }) {
   return (
@@ -138,7 +133,6 @@ export function AnswerCard({
         </button>
       )}
       <p className="bay-answer-text">{result.answer}</p>
-      {onPickNote && <p className="bay-answer-note">{onPickNote}</p>}
       {result.picks.length > 0 ? (
         <ul className="bay-answer-picks">
           {result.picks.map((p) => (

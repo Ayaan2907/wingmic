@@ -314,7 +314,12 @@ export default function BayMap({
   }
 
   function wireTestHook(map: MLMap): void {
+    // spread-preserve: BayClient's effect already wrote the data-level keys
+    // (placeCount, eventCount, signedIn, profileSaved, emphasis, …) — replacing
+    // the object wholesale discards them and leaves the e2e hook half-empty
+    // when nothing re-renders after the dynamic import resolves
     window.__bay = {
+      ...window.__bay,
       map,
       addEvents: (records) => {
         geoRef.current = { ...geoRef.current, eventsGeo: eventsToGeoJSON(records) };

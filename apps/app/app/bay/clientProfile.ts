@@ -25,7 +25,12 @@ export function loadClientProfile(): ClientProfile | null {
 }
 
 export function saveClientProfile(profile: ClientProfile): void {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+  } catch {
+    // storage blocked (private mode, quota) is never a failure — the
+    // in-memory profile still drives this session's scoring and claim
+  }
 }
 
 export function clearClientProfile(): void {

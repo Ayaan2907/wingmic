@@ -75,10 +75,14 @@ export function ScorePanel({
   const [view, setView] = useState<ScoreView>({ state: 'idle' });
   const scoreMut = trpc.bay.score.useMutation();
   const autoRanRef = useRef(false);
+  const lastScoredRef = useRef<string | null>(null);
 
   const eventId = pick?.kind === 'event' ? pick.props.id : null;
 
   const run = async (id: string, paste?: string) => {
+    // the id this card is now scoring for — the auto-run effect compares it
+    // so picking a different event resets instead of reusing the old verdict
+    lastScoredRef.current = id;
     setView({ state: 'running' });
     // paste → validate locally (bad pastes are bad_source, the ported taxonomy);
     // no paste → the browser-held profile, if the visitor has one
@@ -107,9 +111,18 @@ export function ScorePanel({
   // a saved profile auto-scores on card open); without one, the paste asks.
   useEffect(() => {
     if (!eventId) {
+      lastScoredRef.current = null;
       autoRanRef.current = false;
       if (view.state !== 'idle') setView({ state: 'idle' });
       return;
+    }
+    // picking event B directly after scoring event A (no close in between)
+    // must not render A's verdict, reasons, and emphasis under B's name —
+    // reset and re-run for the new id
+    if (lastScoredRef.current !== eventId) {
+      autoRanRef.current = false;
+      lastScoredRef.current = eventId;
+      if (view.state !== 'idle') setView({ state: 'idle' });
     }
     if (clientProfile && !autoRanRef.current) {
       autoRanRef.current = true;

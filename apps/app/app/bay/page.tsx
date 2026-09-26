@@ -26,8 +26,16 @@ export const metadata: Metadata = {
 export default async function BayPage() {
   const reqHeaders = await headers();
   const session = await auth.api.getSession({ headers: reqHeaders });
-  trackAnalyticsEvent(session?.user.id ?? BAY_ANONYMOUS_ID, ANALYTICS_EVENTS.mapView, {
-    signedIn: Boolean(session),
-  });
+  // the route is now indexable: every crawler crawl would write a map_view
+  // into the shared bay_anonymous bucket (one outbound request each at
+  // flushAt: 1) and inflate the funnel's entry step with non-human traffic
+  // no dashboard filter can separate — skip known bots before tracking
+  const userAgent = reqHeaders.get('user-agent') ?? '';
+  const isBot = /bot|crawl|spider|slurp/i.test(userAgent);
+  if (!isBot) {
+    trackAnalyticsEvent(session?.user.id ?? BAY_ANONYMOUS_ID, ANALYTICS_EVENTS.mapView, {
+      signedIn: Boolean(session),
+    });
+  }
   return <BayClient />;
 }

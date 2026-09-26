@@ -5,8 +5,7 @@
 // tests both consume it.
 
 import { colors } from '@wingmic/design-tokens';
-import type { BayRecord, Persona } from '@wingmic/bay/core';
-import { personaFit } from '@wingmic/bay/core';
+import type { BayRecord } from '@wingmic/bay/core';
 import type { ExpressionSpecification } from 'maplibre-gl';
 
 export interface BayLayer {
@@ -191,15 +190,4 @@ export function stampFits(
     if (fit != null) f.properties.pf = fit;
     else delete f.properties.pf;
   }
-}
-
-/** Client-side persona fits for places (events carry ranked fits from the
- * server view). personaFit reads category-or-cat plus the record's own words. */
-export function personaFitsFor(records: BayRecord[], persona: Persona | null): Map<string, number> | null {
-  if (!persona) return null;
-  const fits = new Map<string, number>();
-  for (const r of records) {
-    fits.set(r.id, personaFit(persona, r));
-  }
-  return fits;
 }
