@@ -90,6 +90,9 @@ export function ScorePanel({
   const [view, setView] = useState<ScoreView>({ state: 'idle' });
   const scoreMut = trpc.bay.score.useMutation();
   const autoRanRef = useRef(false);
+  // the session resolves async — the signedIn flip changes the score's basis
+  // (browser profile vs graph), so the auto-run must re-run, not stay done
+  const lastSignedInRef = useRef(false);
   const lastScoredRef = useRef<string | null>(null);
 
   const eventId = pick?.kind === 'event' ? pick.props.id : null;
@@ -131,6 +134,10 @@ export function ScorePanel({
   // an event pick with a stored profile scores immediately (ported behavior:
   // a saved profile auto-scores on card open); without one, the paste asks.
   useEffect(() => {
+    if (signedIn !== lastSignedInRef.current) {
+      lastSignedInRef.current = signedIn;
+      autoRanRef.current = false;
+    }
     if (!eventId) {
       lastScoredRef.current = null;
       autoRanRef.current = false;
@@ -240,15 +247,14 @@ export function ScorePanel({
           )}
           {view.state === 'running' && <p className="bay-card-loading">scoring…</p>}
           {view.state === 'done' && <ScoreCard ok={view.data} />}
-          {view.state === 'error' && (
-            view.code === 'UNAUTHORIZED' ? (
+          {view.state === 'error' &&
+            (view.code === 'UNAUTHORIZED' ? (
               <ReAuth email={viewerEmail ?? null} />
             ) : (
               <p className="bay-card-error" role="alert" data-testid="bay-score-error">
                 {view.message}
               </p>
-            )
-          )}
+            ))}
           {view.state === 'done' && (
             <ClaimPane
               clientProfile={clientProfile}
@@ -362,27 +368,31 @@ export function ClaimPane({
   const submit = () => {
     if (!clientProfile || submittingRef.current || claim.isPending) return;
     submittingRef.current = true;
-    void profileCaptureId(clientProfile).then((captureId) => {
-      claim.mutate(
-        { clientProfile, ...(captureId ? { captureId } : {}) },
-        {
-          onSuccess: (res) => {
-            if (res.captured) {
-              setClaimed(true);
-              // a first claim still owes onboarding — the router's `next`
-              // carries the requireOnboarded decision
-              if (res.next !== '/bay') window.location.assign(res.next);
-              return;
-            }
-            // honest failure: nothing was written — say so, invite a retry
-            setNote(res.note ?? COPY.claimRetry);
+    profileCaptureId(clientProfile)
+      // a failed hash degrades to a router-derived id (same idempotency,
+      // server-side) — it must never strand the submittingRef below
+      .catch(() => null)
+      .then((captureId) => {
+        claim.mutate(
+          { clientProfile, ...(captureId ? { captureId } : {}) },
+          {
+            onSuccess: (res) => {
+              if (res.captured) {
+                setClaimed(true);
+                // a first claim still owes onboarding — the router's `next`
+                // carries the requireOnboarded decision
+                if (res.next !== '/bay') window.location.assign(res.next);
+                return;
+              }
+              // honest failure: nothing was written — say so, invite a retry
+              setNote(res.note ?? COPY.claimRetry);
+            },
+            onSettled: () => {
+              submittingRef.current = false;
+            },
           },
-          onSettled: () => {
-            submittingRef.current = false;
-          },
-        },
-      );
-    });
+        );
+      });
   };
 
   if (claimed) {
@@ -395,46 +405,53 @@ export function ClaimPane({
   const unauthorized = claim.isError && errorCodeOf(claim.error) === 'UNAUTHORIZED';
   return (
     <div className="bay-claim" data-testid="bay-claim">
-      <p className="bay-claim-title">{COPY.claimTitle}</p>
-      <p className="bay-claim-body">{COPY.claimBody}</p>
-      <div className="bay-claim-row">
-        {/* signed in, the claim binds to the session user — no email to ask for */}
-        {!signedIn && (
-          <input
-            type="email"
-            className="bay-claim-email"
-            aria-label="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            data-testid="bay-claim-email"
-          />
-        )}
-        <button
-          type="button"
-          className="bay-claim-cta"
-          disabled={(!signedIn && !email.includes('@')) || claim.isPending}
-          onClick={() => {
-            if (!clientProfile) return;
-            if (!signedIn) {
-              // locked decision 3: claim is a magic link — the sign-in page
-              // prefills this email and `next` returns to /bay, where the
-              // stored profile is still in the browser and claim completes
-              window.location.assign(
-                `/signin?next=${encodeURIComponent('/bay')}&email=${encodeURIComponent(email)}`,
-              );
-              return;
-            }
-            // the browser passes the sha256 captureId derived from the profile
-            // text — the same key the router derives server-side, so a
-            // double-click or a retry after a network error captures once
-            submit();
-          }}
-          data-testid="bay-claim-cta"
-        >
-          {claim.isPending ? COPY.claimSaving : COPY.claimCta}
-        </button>
-      </div>
+      {/* a signed-in viewer with no browser-held profile has nothing to
+          claim — the graph-aware score never produced one — so the
+          conversion block stays hidden instead of showing a dead CTA */}
+      {(!signedIn || clientProfile != null) && (
+        <>
+          <p className="bay-claim-title">{COPY.claimTitle}</p>
+          <p className="bay-claim-body">{COPY.claimBody}</p>
+          <div className="bay-claim-row">
+            {/* signed in, the claim binds to the session user — no email to ask for */}
+            {!signedIn && (
+              <input
+                type="email"
+                className="bay-claim-email"
+                aria-label="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                data-testid="bay-claim-email"
+              />
+            )}
+            <button
+              type="button"
+              className="bay-claim-cta"
+              disabled={(!signedIn && !email.includes('@')) || claim.isPending}
+              onClick={() => {
+                if (!clientProfile) return;
+                if (!signedIn) {
+                  // locked decision 3: claim is a magic link — the sign-in page
+                  // prefills this email and `next` returns to /bay, where the
+                  // stored profile is still in the browser and claim completes
+                  window.location.assign(
+                    `/signin?next=${encodeURIComponent('/bay')}&email=${encodeURIComponent(email)}`,
+                  );
+                  return;
+                }
+                // the browser passes the sha256 captureId derived from the profile
+                // text — the same key the router derives server-side, so a
+                // double-click or a retry after a network error captures once
+                submit();
+              }}
+              data-testid="bay-claim-cta"
+            >
+              {claim.isPending ? COPY.claimSaving : COPY.claimCta}
+            </button>
+          </div>
+        </>
+      )}
       {unauthorized ? (
         <ReAuth email={viewerEmail ?? null} />
       ) : (

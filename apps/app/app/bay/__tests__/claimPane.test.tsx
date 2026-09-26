@@ -58,11 +58,13 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-function renderPane(overrides: {
-  clientProfile?: { text: string } | null;
-  signedIn?: boolean;
-  viewerEmail?: string | null;
-} = {}) {
+function renderPane(
+  overrides: {
+    clientProfile?: { text: string } | null;
+    signedIn?: boolean;
+    viewerEmail?: string | null;
+  } = {},
+) {
   const props = {
     clientProfile: { text: PASTE },
     signedIn: true,
@@ -175,6 +177,16 @@ describe('ClaimPane', () => {
     expect(screen.getByTestId('bay-claim-email')).toBeDefined();
     expect((screen.getByTestId('bay-claim-cta') as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByTestId('bay-signout')).toBeNull();
+  });
+
+  it('signed-in with no browser-held profile hides the claim block — nothing to claim', () => {
+    // fresh browser / new device: the graph-aware score never produced a
+    // profile, so a claim CTA here would click into nothing
+    renderPane({ clientProfile: null });
+    expect(screen.queryByTestId('bay-claim-cta')).toBeNull();
+    expect(screen.queryByTestId('bay-claim-email')).toBeNull();
+    // the session control survives — sign-out is not claim-scoped
+    expect(screen.getByTestId('bay-signout')).toBeDefined();
   });
 });
 
