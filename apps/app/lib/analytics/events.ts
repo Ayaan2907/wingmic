@@ -2,7 +2,7 @@
  * Locked analytics event taxonomy — spec art_LkglG0Xb, "Analytics".
  *
  * Single source of truth for every PostHog event Wingmic emits. The locked
- * taxonomy is exactly these seven events:
+ * taxonomy is exactly these twelve events:
  *
  *   capture_started   — a capture turn entered the commit pipeline
  *   capture_completed — the capture committed to the graph (or resolved as an
@@ -14,6 +14,22 @@
  *   api_call          — one authenticated /api/v1 request completed
  *   signup            — a BetterAuth user row was created
  *
+ * The bay funnel (merged-product spec, locked decision 7) measures the
+ * anonymous stranger → claimed account path over the /bay map:
+ *
+ *   map_view          — the /bay map rendered for a visitor
+ *   ask_run           — an accepted ask entered the bay pipeline (after the
+ *                       rate/persona guards — 429 noise is not product signal)
+ *   event_opened      — a bay event detail fetch resolved (a card read; live
+ *                       or expired history)
+ *   score_shown       — a bay score returned ok (a score was actually shown)
+ *   claim_started     — a signed-in viewer started claiming a throwaway
+ *                       profile into the graph
+ *
+ * `map_view`'s instrumentation point is the /bay server component render —
+ * the surface PR owns that file, so until it lands the event is pinned in
+ * PENDING_INSTRUMENTATION below and the taxonomy test enforces the rest.
+ *
  * Every event is captured server-side (posthog-node) — no taxonomy event
  * originates in the browser, so no client SDK ships. See docs/analytics.md
  * for the reasoning and the dashboard setup.
@@ -24,6 +40,8 @@
  * as a backstop, but the guarantee starts here at the call sites.
  */
 
+import type { ProfileKind } from '@wingmic/bay';
+
 export const ANALYTICS_EVENTS = {
   captureStarted: 'capture_started',
   captureCompleted: 'capture_completed',
@@ -32,6 +50,12 @@ export const ANALYTICS_EVENTS = {
   searchRun: 'search_run',
   apiCall: 'api_call',
   signup: 'signup',
+  // bay funnel
+  mapView: 'map_view',
+  askRun: 'ask_run',
+  eventOpened: 'event_opened',
+  scoreShown: 'score_shown',
+  claimStarted: 'claim_started',
 } as const;
 
 export type AnalyticsEventName = (typeof ANALYTICS_EVENTS)[keyof typeof ANALYTICS_EVENTS];
@@ -41,6 +65,16 @@ export type AnalyticsEventName = (typeof ANALYTICS_EVENTS)[keyof typeof ANALYTIC
 export const ANALYTICS_EVENT_NAMES: readonly AnalyticsEventName[] = Object.values(
   ANALYTICS_EVENTS,
 );
+
+/**
+ * Taxonomy events whose server instrumentation point does not exist yet.
+ * `map_view` fires from the /bay server component render — the surface PR
+ * owns that file, and this task must not touch surface UI. When the call
+ * site lands, the surface PR removes the entry here and the taxonomy test
+ * starts enforcing the event like the rest. Typed as AnalyticsEventName so
+ * a typo cannot sneak in.
+ */
+export const PENDING_INSTRUMENTATION: readonly AnalyticsEventName[] = ['map_view'];
 
 // ── Per-event property shapes (all bounded, all PII-free) ────────────────
 
@@ -93,4 +127,53 @@ export type ApiCallProperties = {
 
 export type SignupProperties = {
   method: 'magic_link';
+};
+
+// ── Bay funnel property shapes ───────────────────────────────────────────
+//
+// The bay is anonymous-first (locked decision 3): signed-out funnel events
+// aggregate under one fixed, PII-free distinctId bucket ('bay_anonymous',
+// see the bay router) because no server principal exists before claim.
+
+export type MapViewProperties = {
+  signedIn: boolean;
+  /** Validated persona view id, when the visitor arrived with one. */
+  persona?: string;
+};
+
+export type AskRunProperties = {
+  signedIn: boolean;
+  /** The viewer handed the ask a browser-held profile (paste or fields). */
+  hasClientProfile: boolean;
+  persona?: string;
+};
+
+export type EventOpenedProperties = {
+  /** Record provenance — the BAY_SOURCES enum from @wingmic/bay. */
+  source: 'luma' | 'partiful' | 'web' | 'meetup' | 'ics' | 'submitted' | 'seed';
+  /** false = the card read resolved to retained (expired) history. */
+  live: boolean;
+};
+
+export type ScoreShownProperties = {
+  signedIn: boolean;
+  verdict: 'go' | 'maybe' | 'skip';
+  /** typed = the deterministic anchor, llm = the clamped explainer. */
+  scorer: 'typed' | 'llm';
+  /** The score pipeline's resolved profile kind — the core's own taxonomy. */
+  profileKind: ProfileKind;
+  /** ok | thin | none — how much of a viewer the score had to work with. */
+  profileQuality: 'ok' | 'thin' | 'none';
+  /** The clamped LLM explainer produced the wording. */
+  ai: boolean;
+  persona?: string;
+};
+
+export type ClaimStartedProperties = {
+  /** The submission shape — raw paste vs structured fields. The resolved
+   * core kind lands on score_shown.profileKind (a claim fires before any
+   * profile parses, so its shape is all a start attempt can honestly say). */
+  submittedKind: 'text' | 'structured';
+  /** The profile asserts an external identity (drives identity_claim rows). */
+  hasLinks: boolean;
 };

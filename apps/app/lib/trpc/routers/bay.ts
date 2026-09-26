@@ -14,6 +14,8 @@ import {
   sourcesOf,
 } from '@wingmic/bay';
 import * as schema from '@wingmic/db/schema';
+import { ANALYTICS_EVENTS } from '@/lib/analytics/events';
+import { trackAnalyticsEvent } from '@/lib/analytics/server';
 import { env } from '@/lib/config/env';
 import { getExplainChat } from '@/lib/bay/chat';
 import { embeddingScores } from '@/lib/bay/retrieval';
@@ -28,9 +30,20 @@ import { publicProcedure, protectedProcedure, router } from '../trpc';
  * The bay router: the map's reads, the ask, the scorer, and the claim — one
  * router serving the merged /bay surface. Reads, ask, and score are public
  * (the map is indexable and shareable; deep links work signed out); claim is
- * the only write and requires a session. No PostHog here — the analytics PR
- * owns instrumentation to avoid merge conflicts.
+ * the only write and requires a session. The bay funnel instruments this
+ * router server-side (ask_run, event_opened, score_shown, claim_started);
+ * map_view fires from the /bay server component render (the surface PR).
+ * Anonymous funnel events share the fixed 'bay_anonymous' bucket — the bay
+ * has no server principal before claim (locked decision 3).
  */
+
+/**
+ * Analytics distinctId for signed-out bay traffic. One fixed, PII-free
+ * bucket: no per-visitor identity exists server-side, so PostHog funnels
+ * chain anonymous steps under it while signed-in events key on the real
+ * user id. Dashboards can filter it out of user counts by name.
+ */
+const BAY_ANONYMOUS_ID = 'bay_anonymous';
 
 const httpsLink = z
   .string()
@@ -331,6 +344,13 @@ export function createBayRouter(
         takeDaily(askDailyCap, 'the ask');
         takeRate(askLimiter, clientKey(ctx.headers, ctx.user?.id), 'the ask');
         requireKnownPersona(input.personaId);
+        // ask_run at the pipeline entry: guards passed, so this is an
+        // accepted ask — 429 noise and unknown personas are not product signal
+        trackAnalyticsEvent(ctx.user?.id ?? BAY_ANONYMOUS_ID, ANALYTICS_EVENTS.askRun, {
+          signedIn: Boolean(ctx.user),
+          hasClientProfile: Boolean(input.clientProfile),
+          ...(input.personaId ? { persona: input.personaId } : {}),
+        });
         const now = Date.now();
         const raw = await loadBayRecords(ctx.db, { now });
         const { live: places } = liveOf(raw.places, now);
@@ -386,6 +406,7 @@ export function createBayRouter(
         takeDaily(scoreDailyCap, 'scoring');
         takeRate(scoreLimiter, clientKey(ctx.headers, ctx.user?.id), 'scoring');
         requireKnownPersona(input.personaId);
+        const now = Date.now();
         const boundary = makeWingmicClient(ctx.session, ctx.db, ctx.headers);
         // one targeted read for the scored event (404/410 semantics on any
         // retained history row, however old) + the bounded live board for the
@@ -395,6 +416,14 @@ export function createBayRouter(
           loadBayEvent(ctx.db, input.eventId),
           loadBayRecords(ctx.db, {}),
         ]);
+        // the detail fetch resolved to a real record — a card read happened,
+        // live or expired history; unknown events 404 below and never count
+        if (single) {
+          trackAnalyticsEvent(ctx.user?.id ?? BAY_ANONYMOUS_ID, ANALYTICS_EVENTS.eventOpened, {
+            source: single.source,
+            live: liveOf([single], now).live.length > 0,
+          });
+        }
         const events =
           single && !board.events.some((e) => e.id === single.id)
             ? [single, ...board.events]
@@ -416,6 +445,17 @@ export function createBayRouter(
           },
         );
         if (!outcome.ok) throw outcomeToTRPCError(outcome);
+        // a score was actually shown — the stage the funnel can lose viewers
+        // on profile friction (score_shown minus event_opened)
+        trackAnalyticsEvent(ctx.user?.id ?? BAY_ANONYMOUS_ID, ANALYTICS_EVENTS.scoreShown, {
+          signedIn: Boolean(ctx.user),
+          verdict: outcome.score.verdict,
+          scorer: outcome.score.scorer,
+          profileKind: outcome.profile.kind,
+          profileQuality: outcome.profile.quality,
+          ai: outcome.ai,
+          ...(input.personaId ? { persona: input.personaId } : {}),
+        });
         return outcome;
       }),
 
@@ -432,6 +472,14 @@ export function createBayRouter(
         }),
       )
       .mutation(async ({ input, ctx }) => {
+        // claim_started at the very top: even a claim that fails profile
+        // parsing is a real funnel attempt worth seeing
+        trackAnalyticsEvent(ctx.user?.id ?? BAY_ANONYMOUS_ID, ANALYTICS_EVENTS.claimStarted, {
+          submittedKind: input.clientProfile.text?.trim() ? 'text' : 'structured',
+          hasLinks: Boolean(
+            input.clientProfile.links && Object.keys(input.clientProfile.links).length > 0,
+          ),
+        });
         const boundary = makeWingmicClient(ctx.session, ctx.db, ctx.headers);
         // protectedProcedure guarantees the session; the guard keeps types honest
         if (!boundary || !ctx.user) {

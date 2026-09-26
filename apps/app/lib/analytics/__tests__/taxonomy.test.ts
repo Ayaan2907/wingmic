@@ -104,6 +104,7 @@ vi.mock('@wingmic/extractor/embeddings', async (importOriginal) => {
 
 // ── Imports under test (after mocks) ─────────────────────────────────────
 
+import { createBayRouter } from '@/lib/trpc/routers/bay';
 import { captureRouter } from '@/lib/trpc/routers/capture';
 import { recallRouter } from '@/lib/trpc/routers/recall';
 import { withApiKey } from '@/lib/api/server';
@@ -112,7 +113,7 @@ import { enrichPersonFacts } from '@/lib/enrich/enrichPersons';
 import { enrichEventsAfterCommit } from '@/lib/enrich/enrichEvents';
 import { auth } from '@/lib/auth';
 import type { WebSearchProvider } from '@/lib/web-search';
-import { ANALYTICS_EVENT_NAMES } from '../events';
+import { ANALYTICS_EVENT_NAMES, PENDING_INSTRUMENTATION } from '../events';
 import { db as moduleDb } from '@wingmic/db';
 
 type DB = ReturnType<typeof drizzle<typeof schema>>;
@@ -132,6 +133,22 @@ function callerCtx(db: DB) {
   } as unknown as Parameters<typeof captureRouter.createCaller>[0];
 }
 
+/** Bay caller — mirrors bay.test.ts's callerFor: headers for the limiter's
+ * client key, session shape for the signed-in drives. One router instance per
+ * drive → fresh rate-limit windows. */
+function bayCaller(
+  db: DB,
+  opts: { signedIn?: boolean } = {},
+): ReturnType<ReturnType<typeof createBayRouter>['createCaller']> {
+  const ctx = {
+    db,
+    headers: new Headers({ 'x-forwarded-for': '10.9.9.9' }),
+    user: opts.signedIn ? { id: USER_ID } : undefined,
+    session: opts.signedIn ? { user: { id: USER_ID } } : undefined,
+  } as unknown as Parameters<ReturnType<typeof createBayRouter>['createCaller']>[0];
+  return createBayRouter().createCaller(ctx);
+}
+
 describe('analytics taxonomy (spec art_LkglG0Xb)', () => {
   let client: ReturnType<typeof createClient>;
   let db: DB;
@@ -144,6 +161,7 @@ describe('analytics taxonomy (spec art_LkglG0Xb)', () => {
       CREATE TABLE user (
         id TEXT PRIMARY KEY, email TEXT NOT NULL, email_verified INTEGER DEFAULT 0,
         name TEXT, image TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+        acknowledged_privacy INTEGER DEFAULT false NOT NULL,
         calendar_ics_url TEXT
       );
       CREATE TABLE usage_daily (
@@ -184,6 +202,39 @@ describe('analytics taxonomy (spec art_LkglG0Xb)', () => {
         key_id TEXT NOT NULL, window_start INTEGER NOT NULL,
         count INTEGER DEFAULT 0 NOT NULL, PRIMARY KEY (key_id, window_start)
       );
+      CREATE TABLE bay_events (
+        id TEXT PRIMARY KEY, canonical_event_id TEXT, source TEXT NOT NULL, external_id TEXT NOT NULL,
+        title TEXT NOT NULL, venue TEXT, lat REAL, lng REAL, price TEXT, category TEXT NOT NULL,
+        url TEXT NOT NULL, note TEXT, starts_at INTEGER, ends_at INTEGER, expires_at INTEGER,
+        first_seen_at INTEGER NOT NULL, fetched_at INTEGER NOT NULL, embedding F32_BLOB(1536)
+      );
+      CREATE TABLE places (
+        id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL, note TEXT NOT NULL,
+        category TEXT NOT NULL, lat REAL NOT NULL, lng REAL NOT NULL, source TEXT,
+        embedding F32_BLOB(1536), fetched_at INTEGER NOT NULL, first_seen_at INTEGER NOT NULL
+      );
+    `);
+
+    // Bay board seed: one live event, one past the 24h grace (retained
+    // history the 410 path reads), one place. drizzle timestamp mode stores
+    // seconds — the fixtures seed seconds like bay.test.ts.
+    const sec = Math.floor(Date.now() / 1000);
+    await client.executeMultiple(`
+      INSERT INTO bay_events (
+        id, source, external_id, title, venue, lat, lng, price, category, url, note,
+        starts_at, ends_at, expires_at, first_seen_at, fetched_at
+      ) VALUES
+        ('luma:tax-demo-night', 'luma', 'tax-demo-night', 'demo night at the foundry',
+         'the foundry', 37.7749, -122.4194, 'free', 'events', 'https://lu.ma/tax-demo-night',
+         'builders show what they shipped', ${sec - 3600}, ${sec + 7200}, NULL,
+         ${sec - 86400}, ${sec - 3600}),
+        ('luma:tax-old-hackathon', 'luma', 'tax-old-hackathon', 'old hackathon',
+         'the foundry', 37.7749, -122.4194, 'free', 'hackathons', 'https://lu.ma/tax-old',
+         'a past hackathon', ${sec - 96 * 3600}, ${sec - 72 * 3600}, NULL,
+         ${sec - 120 * 3600}, ${sec - 96 * 3600});
+      INSERT INTO places (id, slug, name, note, category, lat, lng, source, fetched_at, first_seen_at)
+        VALUES ('seed:tax-foundry', 'foundry', 'the foundry', 'where the builders actually are',
+                'startups', 37.7749, -122.4194, NULL, ${sec}, ${sec});
     `);
 
     // withApiKey reads the module-level '@wingmic/db' singleton (mocked to a
@@ -494,6 +545,87 @@ describe('analytics taxonomy (spec art_LkglG0Xb)', () => {
     expect(ph.calls[0]!.properties).toMatchObject({ method: 'magic_link' });
   });
 
+  it('pending instrumentation is pinned — only map_view awaits the /bay surface', () => {
+    for (const name of PENDING_INSTRUMENTATION) {
+      expect(ANALYTICS_EVENT_NAMES).toContain(name);
+    }
+    // When the surface PR lands the /bay server component, it fires map_view
+    // from the render, empties this list, and drives the event in the
+    // coverage test below like every other taxonomy event.
+    expect(PENDING_INSTRUMENTATION).toEqual(['map_view']);
+  });
+
+  it('bay.ask fires ask_run at the pipeline entry onto the anonymous bucket', async () => {
+    const caller = bayCaller(db); // signed out — anonymous-first funnel
+    await caller.ask({
+      q: 'where should a builder go tonight?',
+      clientProfile: { text: 'engineer moving to sf, into agent infra and evals' },
+    });
+
+    expect(events()).toEqual(['ask_run']);
+    expect(ph.calls[0]!.distinctId).toBe('bay_anonymous');
+    expect(ph.calls[0]!.properties).toMatchObject({
+      signedIn: false,
+      hasClientProfile: true,
+    });
+  });
+
+  it('bay.score fires event_opened when the detail resolves and score_shown when a score lands', async () => {
+    const caller = bayCaller(db);
+    const res = await caller.score({
+      eventId: 'luma:tax-demo-night',
+      clientProfile: { text: 'engineer moving to sf, into agent infra and evals' },
+    });
+
+    expect(res.ok).toBe(true);
+    expect(events()).toEqual(['event_opened', 'score_shown']);
+    expect(ph.calls[0]!.distinctId).toBe('bay_anonymous');
+    expect(ph.calls[0]!.properties).toMatchObject({ source: 'luma', live: true });
+    expect(ph.calls[1]!.properties).toMatchObject({
+      signedIn: false,
+      scorer: 'typed',
+      profileKind: 'throwaway',
+      ai: false,
+    });
+    expect(['go', 'maybe', 'skip']).toContain(ph.calls[1]!.properties!.verdict);
+
+    // Expired history still opens honestly (live: false) — and never shows a
+    // score: the 410 rides out exactly as the ported contract dictates.
+    ph.calls.length = 0;
+    await expect(
+      caller.score({
+        eventId: 'luma:tax-old-hackathon',
+        clientProfile: { text: 'engineer moving to sf, into agent infra and evals' },
+      }),
+    ).rejects.toThrow();
+    expect(events()).toEqual(['event_opened']);
+    expect(ph.calls[0]!.properties).toMatchObject({ source: 'luma', live: false });
+  });
+
+  it('bay.claim fires claim_started at the top, and its internal capture rides the capture funnel', async () => {
+    const caller = bayCaller(db, { signedIn: true });
+    const res = await caller.claim({
+      clientProfile: { text: 'sam rivera — engineer moving to sf, into agent infra and evals' },
+    });
+
+    expect(res.captured).toBe(true);
+    expect(res.next).toBe('/onboarding'); // the seeded user has not acknowledged privacy
+    // claim_started, then the boundary's capture.commit events — a claim IS a
+    // capture, the capture funnel sees it as one, and extraction grows the
+    // graph from the claimed profile (entity_created rides along).
+    expect(events()).toEqual([
+      'claim_started',
+      'capture_started',
+      'capture_completed',
+      'entity_created',
+    ]);
+    expect(ph.calls[0]!.distinctId).toBe(USER_ID);
+    expect(ph.calls[0]!.properties).toMatchObject({
+      submittedKind: 'text',
+      hasLinks: false,
+    });
+  });
+
   it('every locked taxonomy event fires from its instrumentation point, and no payload carries PII', async () => {
     // Drive all seven surfaces in one pass, then assert full coverage.
     const now = Date.now();
@@ -570,14 +702,45 @@ describe('analytics taxonomy (spec art_LkglG0Xb)', () => {
       provider: adaProvider,
       sourceInteractionId: null,
     });
+    // Bay funnel drives: ask_run (anonymous bucket), event_opened +
+    // score_shown (signed-out score), claim_started (signed-in claim — its
+    // internal capture rides the capture funnel above).
+    const bay = bayCaller(db); // signed out
+    await bay.ask({
+      q: 'where should a builder go tonight?',
+      clientProfile: { text: 'engineer moving to sf, into agent infra and evals' },
+    });
+    await bay.score({
+      eventId: 'luma:tax-demo-night',
+      clientProfile: { text: 'engineer moving to sf, into agent infra and evals' },
+    });
+    const bayIn = bayCaller(db, { signedIn: true });
+    await bayIn.claim({
+      clientProfile: { text: 'sam rivera — engineer moving to sf, into agent infra and evals' },
+    });
 
     const fired = new Set(events());
-    const missing = ANALYTICS_EVENT_NAMES.filter((name) => !fired.has(name));
+    // map_view's point is the /bay server render — the surface PR owns that
+    // file; until it lands the pending list stays excluded from enforcement.
+    const enforced = ANALYTICS_EVENT_NAMES.filter(
+      (name) => !PENDING_INSTRUMENTATION.includes(name),
+    );
+    const missing = enforced.filter((name) => !fired.has(name));
     expect(missing).toEqual([]);
 
     // PII scan: no transcript text, no names, no emails anywhere in the
-    // property bags (spec capture invariant + orchestrator contract).
-    const forbidden = ['Sarah Chen', 'Ada Lovelace', 'sarah@', 'photo memo', 'grabbed coffee'];
+    // property bags (spec capture invariant + orchestrator contract). The bay
+    // needles pin the same rule for the funnel: no question text, no profile
+    // text — the ask's words and the claimed paste never ride analytics.
+    const forbidden = [
+      'Sarah Chen',
+      'Ada Lovelace',
+      'sarah@',
+      'photo memo',
+      'grabbed coffee',
+      'go tonight',
+      'moving to sf',
+    ];
     for (const call of ph.calls) {
       const flat = JSON.stringify(call.properties ?? {});
       for (const needle of forbidden) {
