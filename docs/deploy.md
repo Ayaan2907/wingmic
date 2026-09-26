@@ -21,6 +21,7 @@ This guide covers both. If you're just running locally for dev, jump to [§ Loca
   - [Railway dashboard checklist (evidence-based)](#railway-dashboard-checklist-evidence-based)
 - [§ Custom domains](#-custom-domains)
 - [§ Local development](#-local-development)
+- [§ Bay event ingestion (nightly cron)](#-bay-event-ingestion-nightly-cron)
 - [§ Troubleshooting](#-troubleshooting)
 - [§ Known issues](#-known-issues)
 
@@ -412,6 +413,28 @@ See [railway-deploy-runbook.md §7](./railway-deploy-runbook.md#7-failure-modes-
 - `workspace:*` / `npm install` → Root Directory still `apps/app`
 - `install inputs must be an image or step input` → invalid `railpack.json` install block (fixed on `staging`)
 - `No package manager inferred` → partial repo in build context; clear Root Directory
+
+---
+
+## § Bay event ingestion (nightly cron)
+
+The bay live-inventory tables (`places`, `bay_events`) fill from a nightly ingest job: `bun run bay:ingest` (runs `packages/db/scripts/bay-ingest.ts`). One source interface, six rungs, each isolated — a down source contributes nothing, never a failed run:
+
+| Source | Needs | Notes |
+| --- | --- | --- |
+| seed | nothing | curated rows in `packages/db/seed/bay/` — the floor, always runs |
+| luma | nothing (keyless) | discover endpoint, city slugs via `LUMA_CITIES` (default `sf`) |
+| meetup | `MEETUP_CLIENT_ID` + `MEETUP_CLIENT_SECRET` (or a pre-minted `MEETUP_ACCESS_TOKEN`) | skipped with a summary line when absent — never an error |
+| feeds | nothing | curated ICS/RSS list in `packages/bay/src/data/feeds.json` (empty until a feed verifies) |
+| submissions | nothing | operator-curated rows in `packages/bay/src/data/submissions.json` |
+| eventbrite | — | documented stub; no keyless path since 2019 |
+
+**Operator checklist — wire the cron (one-time):**
+
+1. In the Railway project, add a **Cron** service (or a scheduled job) that runs at `0 3 * * *` (nightly, UTC) with start command `bun run bay:ingest` from the repo root. The job opens the same `TURSO_DB_URL` as the web service — no extra secrets.
+2. Set the optional vars on that service if used: `LUMA_CITIES` (comma-separated city slugs), `MEETUP_CLIENT_ID` / `MEETUP_CLIENT_SECRET` (register an OAuth client at meetup.com/api-access; the client-credentials grant is not clearly documented by Meetup — if refused, mint a token manually and set `MEETUP_ACCESS_TOKEN`).
+3. Alerting: the job logs one JSON line, `"event":"ingest.run"`, with per-source ok/error counts. Exit code is **non-zero only when every attempted source failed** — that's the cron-alert signal. A skipped Meetup (no credentials) is not a failure.
+4. The job is idempotent: re-runs update content in place, keep the earliest `firstSeenAt`, and never delete expired rows (history is retained; serve-time filtering hides them).
 
 ---
 
