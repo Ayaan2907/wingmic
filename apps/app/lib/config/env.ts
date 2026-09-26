@@ -31,6 +31,19 @@ const serverSchema = z.object({
   TURSO_DB_URL: z.string().default('file:./local.db'),
   TURSO_AUTH_TOKEN: z.string().optional(),
 
+  // ── Bay ingest (nightly cron job, packages/db/scripts/bay-ingest.ts) ──
+  // MEETUP_* gate the meetup source. Absent → the source is skipped with a
+  // summary line and the run continues on luma + feeds — the source lands
+  // behind the key. Meetup's oauth docs clearly cover the authorization-code
+  // grant; the client-credentials grant is expected to work for registered
+  // clients but is not verified against a live account — MEETUP_ACCESS_TOKEN
+  // is the escape hatch (an operator-minted token skips the exchange).
+  MEETUP_CLIENT_ID: z.string().min(1).optional(),
+  MEETUP_CLIENT_SECRET: z.string().min(1).optional(),
+  MEETUP_ACCESS_TOKEN: z.string().min(1).optional(),
+  // Comma-separated luma city slugs for the discover endpoint (default "sf").
+  LUMA_CITIES: z.string().optional(),
+
   // ── Auth (BetterAuth) ─────────────────────────────────────────────────
   BETTER_AUTH_SECRET: z.string().min(32).optional(),
   // Must match apps/app dev port (next dev --port 3211) or BetterAuth rejects Origin.

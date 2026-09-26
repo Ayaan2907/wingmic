@@ -127,6 +127,7 @@
       "dependencies": {
         "@libsql/client": "^0.17.3",
         "@paralleldrive/cuid2": "^3.3.0",
+        "@wingmic/bay": "workspace:*",
         "drizzle-orm": "^0.45.2",
       },
       "devDependencies": {

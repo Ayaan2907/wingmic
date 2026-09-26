@@ -1,0 +1,32 @@
+{
+  "recorded": "shape of the eventsSearch response from api.meetup.com/gql2; node fields follow the tolerant mapper contract",
+  "data": {
+    "eventsSearch": {
+      "totalCount": 2,
+      "pageInfo": { "hasNextPage": false, "endCursor": null },
+      "edges": [
+        {
+          "node": {
+            "id": "fix-meetup-001",
+            "title": "sf agents meetup",
+            "eventUrl": "https://www.meetup.com/ai-builders/events/fix-meetup-001/",
+            "dateTime": "2026-02-02T18:00:00-08:00",
+            "endTime": "2026-02-02T20:00:00-08:00",
+            "venue": { "name": "The Foundry", "lat": 37.7749, "lon": -122.4194 },
+            "group": { "name": "AI Builders", "urlname": "ai-builders" }
+          }
+        },
+        {
+          "node": {
+            "id": "fix-meetup-002",
+            "title": "founders coffee",
+            "eventUrl": "https://www.meetup.com/founders/events/fix-meetup-002/",
+            "dateTime": "2026-02-04T16:00:00-08:00",
+            "venue": { "name": "Dolores Park Cafe" },
+            "group": { "name": "Founders", "urlname": "founders" }
+          }
+        }
+      ]
+    }
+  }
+}

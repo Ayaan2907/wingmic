@@ -19,8 +19,13 @@ export type BayCategory = (typeof BAY_CATEGORIES)[number];
 export const BAY_TYPES = ["event", "place"] as const;
 export type BayRecordType = (typeof BAY_TYPES)[number];
 
-/** Per-source stable ids: "luma:<api_id>", "seed:<slug>". */
-export const BAY_SOURCES = ["seed", "luma", "eventbrite"] as const;
+/** Per-source stable ids: "luma:<api_id>", "seed:<slug>", "meetup:<id>",
+ * "ics:<feedId>:<uid>". Mirrors the db layer's BAY_EVENT_SOURCES (migration
+ * 0015) — one vocabulary on both sides of the store boundary, so a record the
+ * contract accepts is always a row the db accepts. eventbrite is a stub, not a
+ * record source (the db enum excludes it on purpose): a tokened path labels
+ * its rows "web" rather than borrowing a live-source label. */
+export const BAY_SOURCES = ["luma", "partiful", "web", "meetup", "ics", "submitted", "seed"] as const;
 export type BaySource = (typeof BAY_SOURCES)[number];
 
 /** The normalized store record: allow-listed fields only. Dates are UTC ISO strings. */
