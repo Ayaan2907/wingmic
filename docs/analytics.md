@@ -120,23 +120,45 @@ metric (drops here = pipeline/extraction failures); `capture_completed` →
 - **Trend:** `search_run` with breakdown `mode` — a rising `text` share means
   embeddings are degrading to the keyword fallback.
 
-### 4. Bay map funnel (Funnel insight)
+### 4. Bay map funnel (two recipes — the id spaces do not chain)
+
+The bay is anonymous-first, and its funnel does **not** live in one PostHog
+Funnel: signed-out events all share one aggregate person (`bay_anonymous`)
+while `claim_started` fires on the claimer's real user id, and no
+identify/alias call stitches the two — deliberately (see Privacy). A funnel
+step chains per-person by `distinctId`, so the claim step cannot chain from
+the anonymous person: a single funnel ending at `claim_started` would read
+~0% on its final transition for exactly the population it exists to measure.
+Two recipes instead:
+
+**Anonymous shape funnel (Funnel insight):**
 
 1. New insight → **Funnel**.
 2. Step 1: event `map_view` — until the bay surface PR lands, build this from
    `ask_run` onward (`map_view` does not fire yet; see `PENDING_INSTRUMENTATION`).
 3. Step 2: `ask_run` — the visitor asked the map a question.
-4. Step 3: `event_opened` — a card was read. Conversion window: **1 day**
-   (a map visit is a short session, not a 7-day arc).
-5. Step 4: `score_shown` — a score was actually shown (drops here = profile
-   friction: scoring needs a viewer profile, and this is where it leaks).
-6. Step 5: `claim_started` — value → account conversion, broken down by
-   `score_shown.profileQuality` (thin profiles should claim less; if they
-   claim the same, friction is in the claim flow, not the profile).
+4. Step 3: `event_opened` — a card was read.
+5. Step 4: `score_shown` — a score was actually shown.
 
-Expected reading: `ask_run` → `event_opened` is the answer-relevance metric;
-`event_opened` → `score_shown` is the profile-friction metric; `score_shown`
-→ `claim_started` is the product's whole anonymous-first thesis.
+Read this as the **shape of a visit**, not per-person conversion: with one
+aggregate person the step totals measure event volume, the conversion
+percentages carry no unique-visitor meaning, and no conversion window is
+per-person either. The honest signals are the volume ratios between steps —
+a rising `ask_run` → `event_opened` drop is an answer-relevance smell; a
+rising `event_opened` → `score_shown` drop is profile friction (scoring
+needs a viewer profile, and this is where it leaks).
+
+**Claim ratio (Trend insight) — the thesis metric:**
+
+- Trend of `claim_started` count divided by `score_shown` count — the
+  aggregate stand-in for anonymous → claim conversion, since the transition
+  itself cannot chain inside a funnel. If a stitched per-person view ever
+  becomes necessary, that is an aliasing design decision (spec change), not
+  a dashboard tweak.
+- Break down `claim_started` by its own `submittedKind` (paste vs structured
+  claim shapes). Put the score-side breakdowns (`profileQuality`,
+  `profileKind`) on separate trends — a `claim_started` step cannot break
+  down by properties its payloads do not carry.
 
 ### 5. Event score quality (Trend insights)
 
