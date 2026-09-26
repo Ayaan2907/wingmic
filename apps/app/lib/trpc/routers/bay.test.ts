@@ -3,6 +3,7 @@
 // env module needs the node environment (jsdom makes loadEnv take the client
 // branch, where TURSO_DB_URL is undefined by design).
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
@@ -405,6 +406,28 @@ describe('bay.claim (protected)', () => {
     expect(Number(ints.rows[0]?.n)).toBe(1);
     const claims = await client.execute({ sql: `SELECT COUNT(*) AS n FROM identity_claim`, args: [] });
     expect(Number(claims.rows[0]?.n)).toBe(1);
+  });
+
+  it('derives the stable sha256 captureId when the UI omits it — the browser hash must agree', async () => {
+    // locked decision 3: the id is sha256(profile text)[:16] with the
+    // bay-claim- prefix. The UI derives it with WebCrypto; a context without
+    // WebCrypto omits it and the router derives the same key here — so the
+    // dedupe still collapses a double-submit into one capture.
+    const text = 'no id provided — engineer moving to sf, into agent infra and evals';
+    const derived = `bay-claim-${createHash('sha256').update(text).digest('hex').slice(0, 16)}`;
+    await client.execute({
+      sql: `INSERT INTO interaction (id, user_id, transcript, captured_at, created_at, client_capture_id)
+            VALUES ('int_claim_derived', '${userId}', '${text}', 1, 1, '${derived}')`,
+    });
+    const caller = callerFor(db, { signedIn: true });
+    const first = await caller.claim({ clientProfile: { text } });
+    const second = await caller.claim({ clientProfile: { text } });
+    expect(first.captureId).toBe(derived);
+    expect(first.captured).toBe(true);
+    expect(second.captureId).toBe(derived);
+    expect(second.captured).toBe(true);
+    const ints = await client.execute({ sql: `SELECT COUNT(*) AS n FROM interaction`, args: [] });
+    expect(Number(ints.rows[0]?.n)).toBe(1);
   });
 
   it('reports an honest captured:false when the capture pipeline fails — nothing pretends', async () => {
