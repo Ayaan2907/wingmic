@@ -18,6 +18,11 @@ export function getExplainChat(): ChatFn | null {
     const { text } = await generateText({
       model: openrouter(opts?.model || env.EXTRACTION_MODEL),
       messages,
+      // a hung call must not stall the public ask for undici's ~5-minute
+      // headers timeout (repo convention: the extractor aborts at 20s). the
+      // abort throws — the caller's catch falls back to the deterministic
+      // template, so a timeout degrades honestly.
+      abortSignal: AbortSignal.timeout(15000),
     });
     return text;
   };

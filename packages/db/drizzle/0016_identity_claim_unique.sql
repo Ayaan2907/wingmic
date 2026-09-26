@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `identity_claim_user_kind_value_uq` ON `identity_claim` (`user_id`,`kind`,`value`);

@@ -134,6 +134,10 @@ export const identityClaims = sqliteTable(
   (t) => [
     index('identity_claim_kind_value_idx').on(t.kind, t.value),
     index('identity_claim_user_idx').on(t.userId),
+    // one claim per (user, kind, value): claim re-submits — including two
+    // concurrent ones — must land on a single row (onConflictDoNothing reads
+    // the winner back; without the constraint the race duplicates rows)
+    uniqueIndex('identity_claim_user_kind_value_uq').on(t.userId, t.kind, t.value),
   ],
 );
 

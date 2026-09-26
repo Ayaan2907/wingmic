@@ -3,9 +3,11 @@
 // env module needs the node environment (jsdom makes loadEnv take the client
 // branch, where TURSO_DB_URL is undefined by design).
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import * as schema from '@wingmic/db/schema';
+import { embedText } from '@wingmic/extractor/embeddings';
 
 // The explain stage is mocked so tests never touch OpenRouter: default null →
 // the deterministic template answers. One test swaps in a throwing chat to pin
@@ -263,6 +265,22 @@ describe('bay.ask (public)', () => {
     const res = await caller.ask({ q: 'what events are on this week?', clientProfile: pasteProfile });
     expect(res.answer.length).toBeGreaterThan(0);
     expect(res.explain).toBe('template');
+  });
+
+  it('ranks through the real F32 vector path when embeddings resolve — retrieval: embeddings', async () => {
+    // the one novel SQL in this diff — vector_distance_cos over F32_BLOB(1536)
+    // — must actually execute in the suite: a malformed vector query would
+    // otherwise invisibly degrade every ask in production (caught → text rank,
+    // the only signal being retrieval: 'text')
+    vi.mocked(embedText).mockResolvedValueOnce(new Array<number>(1536).fill(0.1));
+    await db
+      .update(schema.bayEvents)
+      .set({ embedding: new Array<number>(1536).fill(0.5) })
+      .where(eq(schema.bayEvents.id, 'luma:live-demo-night'));
+    const caller = callerFor(db);
+    const res = await caller.ask({ q: 'what events are on this week?', clientProfile: pasteProfile });
+    expect(res.retrieval).toBe('embeddings');
+    expect(res.answer.length).toBeGreaterThan(0);
   });
 
   it('rate limits per ip', async () => {

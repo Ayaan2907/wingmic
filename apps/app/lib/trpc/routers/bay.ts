@@ -5,7 +5,7 @@ import type { BayRecord, Meet, ScoreOutcome } from '@wingmic/bay';
 import {
   BAY_CATEGORIES,
   buildProfile,
-  clientIp,
+  dailyCap,
   limiter,
   personaView,
   profileText,
@@ -19,7 +19,7 @@ import { getExplainChat } from '@/lib/bay/chat';
 import { embeddingScores } from '@/lib/bay/retrieval';
 import { runAsk } from '@/lib/bay/ask';
 import { ExpiredEventError } from '@/lib/bay/errors';
-import { loadBayRecords, liveOf } from '@/lib/bay/store';
+import { loadBayEvent, loadBayRecords, liveOf } from '@/lib/bay/store';
 import { bayClaimCaptureId, makeWingmicClient } from '@/lib/bay/wingmic';
 import type { TRPCContext } from '@/lib/trpc/context';
 import { publicProcedure, protectedProcedure, router } from '../trpc';
@@ -100,8 +100,9 @@ const LINK_KINDS = [
  * Provenance for a claimed profile. The identity_claim schema's kind enum has
  * no 'bay_claim', so the row derives from the profile's own asserted links
  * (linkedin / github / twitter / url) — the same identity-assertion semantics
- * the old /api/link capture implied. One row per (userId, kind, value);
- * re-claims resolve to the existing row instead of duplicating it.
+ * the old /api/link capture implied. One row per (userId, kind, value); that
+ * triple carries a unique index, so re-claims — including two concurrent
+ * submits — land on one row instead of duplicating it.
  */
 async function claimIdentityFromLinks(
   db: TRPCContext['db'],
@@ -120,8 +121,22 @@ async function claimIdentityFromLinks(
       columns: { kind: true, value: true },
     });
     if (existing) return { kind: existing.kind, value: existing.value };
-    await db.insert(schema.identityClaims).values({ userId, kind, value });
-    return { kind, value };
+    // unique (user_id, kind, value): a concurrent double-claim loses the race
+    // here instead of duplicating the row; the winner's row is read back
+    await db
+      .insert(schema.identityClaims)
+      .values({ userId, kind, value })
+      .onConflictDoNothing();
+    const row = await db.query.identityClaims.findFirst({
+      where: and(
+        eq(schema.identityClaims.userId, userId),
+        eq(schema.identityClaims.kind, kind),
+        eq(schema.identityClaims.value, value),
+      ),
+      columns: { kind: true, value: true },
+    });
+    if (row) return { kind: row.kind, value: row.value };
+    return null;
   }
   return null; // no external identity asserted — the idempotent capture carries provenance
 }
@@ -171,23 +186,54 @@ export function outcomeToTRPCError(outcome: Extract<ScoreOutcome, { ok: false }>
   }
 }
 
-// the old route's per-ip limiter, wired through the ported module (same
+// the old route's per-visitor limiter, wired through the ported module (same
 // interface; in-memory is right for the single Railway instance — the module's
 // own note). the ask is a query but it does llm + embedding work, so it carries
-// its own looser window.
+// its own looser window. signed-in traffic keys on the session user (an
+// attacker cannot mint new identities by rotating a header); anonymous traffic
+// keys on the proxy-appended address. the daily caps are the global backstop
+// the ported module ships: the paid ask/score work cannot run away across
+// many rotated buckets.
 const DEFAULT_SCORE_PER_HOUR = 30;
-const DEFAULT_ASK_PER_HOUR = 60;
+const DEFAULT_ASK_PER_HOUR = 30;
+const DEFAULT_SCORE_DAILY = 500;
+const DEFAULT_ASK_DAILY = 1000;
+
+/** The limiter bucket for a request. Signed-in first — a header can be
+ * rotated per request, a session cannot. Anonymous falls to the RIGHTMOST
+ * x-forwarded-for entry (a trusted proxy appends the real address on the
+ * right; the leftmost is fully client-controlled) or x-real-ip. */
+function clientKey(headers: Headers, userId: string | undefined): string {
+  if (userId) return `user:${userId}`;
+  const realIp = headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp;
+  const xff = headers.get('x-forwarded-for');
+  if (xff) {
+    const entries = xff.split(',').map((s) => s.trim()).filter(Boolean);
+    if (entries.length > 0) return entries[entries.length - 1];
+  }
+  return 'anonymous';
+}
 
 function takeRate(
   l: { take: (ip: string) => boolean },
-  headers: Headers,
+  key: string,
   what: string,
 ): void {
-  // clientIp reads a plain header record; a Headers instance needs the entries
-  if (!l.take(clientIp({ headers: Object.fromEntries(headers.entries()) }))) {
+  if (!l.take(key)) {
     throw new TRPCError({
       code: 'TOO_MANY_REQUESTS',
       message: `${what} is rate limited — try again in a bit`,
+    });
+  }
+}
+
+/** The global daily backstop — one counter per day, all visitors combined. */
+function takeDaily(cap: { take: () => boolean }, what: string): void {
+  if (!cap.take()) {
+    throw new TRPCError({
+      code: 'TOO_MANY_REQUESTS',
+      message: `${what} is rate limited for today — try again tomorrow`,
     });
   }
 }
@@ -201,9 +247,18 @@ function requireKnownPersona(personaId: string | undefined): void {
 
 /** Test seam: fresh rate-limit windows per instance; the exported singleton
  * uses the production defaults. */
-export function createBayRouter(rates: { scorePerHour?: number; askPerHour?: number } = {}) {
+export function createBayRouter(
+  rates: {
+    scorePerHour?: number;
+    askPerHour?: number;
+    scoreDaily?: number;
+    askDaily?: number;
+  } = {},
+) {
   const scoreLimiter = limiter({ perHour: rates.scorePerHour ?? DEFAULT_SCORE_PER_HOUR });
   const askLimiter = limiter({ perHour: rates.askPerHour ?? DEFAULT_ASK_PER_HOUR });
+  const scoreDailyCap = dailyCap(rates.scoreDaily ?? DEFAULT_SCORE_DAILY);
+  const askDailyCap = dailyCap(rates.askDaily ?? DEFAULT_ASK_DAILY);
 
   return router({
     places: publicProcedure
@@ -273,7 +328,8 @@ export function createBayRouter(rates: { scorePerHour?: number; askPerHour?: num
         }),
       )
       .query(async ({ input, ctx }) => {
-        takeRate(askLimiter, ctx.headers, 'the ask');
+        takeDaily(askDailyCap, 'the ask');
+        takeRate(askLimiter, clientKey(ctx.headers, ctx.user?.id), 'the ask');
         requireKnownPersona(input.personaId);
         const now = Date.now();
         const raw = await loadBayRecords(ctx.db, { now });
@@ -327,12 +383,22 @@ export function createBayRouter(rates: { scorePerHour?: number; askPerHour?: num
         }),
       )
       .mutation(async ({ input, ctx }) => {
-        takeRate(scoreLimiter, ctx.headers, 'scoring');
+        takeDaily(scoreDailyCap, 'scoring');
+        takeRate(scoreLimiter, clientKey(ctx.headers, ctx.user?.id), 'scoring');
         requireKnownPersona(input.personaId);
         const boundary = makeWingmicClient(ctx.session, ctx.db, ctx.headers);
-        const raw = await loadBayRecords(ctx.db, {});
-        // unfiltered set: scoreEvent live-filters itself, so a known-but-over
-        // event answers 410 instead of melting into 404
+        // one targeted read for the scored event (404/410 semantics on any
+        // retained history row, however old) + the bounded live board for the
+        // fit-rank context — "#N of M" only means something when M is the
+        // board, not a single row
+        const [{ record: single }, board] = await Promise.all([
+          loadBayEvent(ctx.db, input.eventId),
+          loadBayRecords(ctx.db, {}),
+        ]);
+        const events =
+          single && !board.events.some((e) => e.id === single.id)
+            ? [single, ...board.events]
+            : board.events;
         const outcome = await scoreEvent(
           {
             eventId: input.eventId,
@@ -343,7 +409,7 @@ export function createBayRouter(rates: { scorePerHour?: number; askPerHour?: num
             personaId: input.personaId,
           },
           {
-            events: raw.events,
+            events,
             client: boundary,
             chat: getExplainChat(),
             model: env.EXTRACTION_MODEL,

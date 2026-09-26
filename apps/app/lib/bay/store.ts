@@ -1,4 +1,4 @@
-import { inArray } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, or } from 'drizzle-orm';
 import type { BayCategory, BayRecord, BaySource } from '@wingmic/bay';
 import { BAY_CATEGORIES, liveFilter } from '@wingmic/bay';
 import * as schema from '@wingmic/db/schema';
@@ -120,19 +120,29 @@ function eventToRecord(
   };
 }
 
-/** One load, both tables; place categories pre-filtered for the places read. */
+/** One load, both tables; place categories pre-filtered for the places read.
+ * The events read is bounded to rows that could still be live or expired
+ * within the last 7 days — expired history beyond that window never loads for
+ * boards (nightly ingest accumulates history forever; score reads one row by
+ * id through loadBayEvent). */
 export async function loadBayRecords(
   db: Db,
   opts: { placeCategories?: string[]; now?: number } = {},
 ): Promise<BayRawLoad> {
   const readErrors: string[] = [];
+  const since = new Date((opts.now ?? Date.now()) - 7 * 24 * 3_600_000);
   const [placeRows, eventRows] = await Promise.all([
     db.query.places.findMany({
       where: opts.placeCategories?.length
         ? inArray(schema.places.category, opts.placeCategories)
         : undefined,
     }),
-    db.query.bayEvents.findMany(),
+    db.query.bayEvents.findMany({
+      where: or(
+        gte(schema.bayEvents.endsAt, since),
+        and(isNull(schema.bayEvents.endsAt), gte(schema.bayEvents.startsAt, since)),
+      ),
+    }),
   ]);
   const places = placeRows
     .map((row) => placeToRecord(row, readErrors))
@@ -141,4 +151,18 @@ export async function loadBayRecords(
     .map((row) => eventToRecord(row, readErrors))
     .filter((r): r is EventRecord => r !== null);
   return { places, events, readErrors, asOf: new Date(opts.now ?? Date.now()).toISOString() };
+}
+
+/** One event row by id — the score path's targeted read, so a single score
+ * never loads the board (including ever-growing expired history). Expiry
+ * stays with the contract: unknown (null record) vs known-but-over (410) is
+ * decided by scoreEvent on the returned record, not by a db-level filter. */
+export async function loadBayEvent(
+  db: Db,
+  id: string,
+): Promise<{ record: EventRecord | null; readErrors: string[] }> {
+  const readErrors: string[] = [];
+  const row = await db.query.bayEvents.findFirst({ where: eq(schema.bayEvents.id, id) });
+  if (!row) return { record: null, readErrors };
+  return { record: eventToRecord(row, readErrors), readErrors };
 }
