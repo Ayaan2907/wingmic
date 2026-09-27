@@ -180,7 +180,6 @@
 }
 
 .bay-view {
-  min-height: 36px;
   border: 1px solid var(--bay-border-soft);
   border-radius: 999px;
   padding: 6px 12px;
