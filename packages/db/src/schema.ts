@@ -178,6 +178,7 @@ export const events = sqliteTable(
     externalId: text('external_id'),
     observedCount: integer('observed_count').notNull().default(1),
     promotedAt: integer('promoted_at', { mode: 'timestamp' }),
+    embedding: float32Blob(1536)('embedding'),
     createdAt: ts('created_at'),
   },
   (t) => [
@@ -662,6 +663,8 @@ export const bayEvents = sqliteTable('bay_events', {
 // recall router's raw `vector_top_k(...)` call — migration rename without
 // updating this constant breaks recall at runtime.
 export const ENTITY_EMBEDDING_INDEX = 'entity_embedding_vector_idx';
+/** Keep in sync with drizzle/0018_event_embedding_vector_idx.sql */
+export const EVENT_EMBEDDING_INDEX = 'event_embedding_vector_idx';
 
 // ─── Type exports ──────────────────────────────────────────────────────
 
