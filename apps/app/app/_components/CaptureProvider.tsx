@@ -455,15 +455,31 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     async (id: string, q: string) => {
       try {
         const res = await utils.recall.query.fetch({ q, limit: 5 });
+        const rows = res.results?.length ? res.results : res.entities.map((e) => ({ kind: 'person' as const, ...e }));
         const ask: AskResult = {
-          matches: res.entities.map((e) => ({
-            id: e.id,
-            name: e.name,
-            role: e.companies[0]?.role ?? '',
-            company: e.companies[0]?.name ?? '',
-            topics: e.topics.map((t) => t.name),
-            score: e.score,
-          })),
+          matches: rows.map((row) => {
+            if (row.kind === 'event') {
+              return {
+                id: row.id,
+                name: row.name,
+                kind: 'event' as const,
+                role: row.location ?? '',
+                company: '',
+                topics: [],
+                score: row.score,
+                people: row.people.map((p) => ({ id: p.id, name: p.name })),
+              };
+            }
+            return {
+              id: row.id,
+              name: row.name,
+              kind: 'person' as const,
+              role: row.companies[0]?.role ?? '',
+              company: row.companies[0]?.name ?? '',
+              topics: row.topics.map((t) => t.name),
+              score: row.score,
+            };
+          }),
           durationMs: res.durationMs,
           mode: res.mode,
         };

@@ -8,6 +8,7 @@ import {
   type PersonCandidate,
 } from './schema';
 import { embedText, embedTexts, cosine } from './embeddings';
+import { eventEmbedText } from './eventEmbed';
 import { canonicalizeLinkedin, harvestLinkedinFromTranscript, isLinkedinUrlDebrisTopic } from './linkedin';
 import { applyHarvestedEvent, parseEventExternal } from './eventUrl';
 import { entityMatchesPersonName, nameSimilarity, slugify } from './slug';
@@ -145,6 +146,9 @@ export async function commit(
     ? await embedTexts(personEmbedTexts)
     : [];
 
+  const eventEmbedTexts = extracted.events.map((e) => eventEmbedText(e));
+  const eventEmbeddings = eventEmbedTexts.length ? await embedTexts(eventEmbedTexts) : [];
+
   return db.transaction(async (tx) => {
     const writeDb = tx as unknown as DB;
 
@@ -158,8 +162,9 @@ export async function commit(
 
   // ── Canonical: Events ────────────────────────────────────────────────
   const eventIds: Map<string, string> = new Map();
-  for (const e of extracted.events) {
-    const id = await upsertEvent(writeDb, e, capturedAt);
+  for (let i = 0; i < extracted.events.length; i++) {
+    const e = extracted.events[i];
+    const id = await upsertEvent(writeDb, e, capturedAt, eventEmbeddings[i]);
     eventIds.set(e.name, id);
   }
 
@@ -471,7 +476,18 @@ async function upsertEvent(
   db: DB,
   e: EventCandidate,
   _capturedAt: Date,
+  embedding: number[] | undefined,
 ): Promise<string> {
+  const shouldWriteEmbedding = (row: { embedding: number[] | null | undefined; observedCount: number; promotedAt: Date | null }, creating: boolean): boolean => {
+    if (creating) return Boolean(embedding?.length);
+    const promoting =
+      row.observedCount + 1 >= 2 && !row.promotedAt;
+    const missing = !row.embedding || row.embedding.length === 0;
+    return Boolean(embedding?.length && (promoting || missing));
+  };
+
+  const embeddingPatch = (row: { embedding: number[] | null | undefined; observedCount: number; promotedAt: Date | null }, creating: boolean): Partial<typeof schema.events.$inferInsert> =>
+    shouldWriteEmbedding(row, creating) ? { embedding } : {};
   let slug = slugify(e.name);
   const dateGuess =
     e.dateHint && /^\d{4}-\d{2}-\d{2}/.test(e.dateHint) ? new Date(e.dateHint) : null;
@@ -494,6 +510,7 @@ async function upsertEvent(
       };
       if (!byExternal.url && e.url) patch.url = e.url;
       if (!byExternal.location && e.location) patch.location = e.location;
+      Object.assign(patch, embeddingPatch(byExternal, false));
       await db.update(schema.events).set(patch).where(eq(schema.events.id, byExternal.id));
       return byExternal.id;
     }
@@ -522,6 +539,7 @@ async function upsertEvent(
       patch.externalSource = harvested.source;
       patch.externalId = harvested.id;
     }
+    Object.assign(patch, embeddingPatch(existing, false));
     await db.update(schema.events).set(patch).where(eq(schema.events.id, existing.id));
     return existing.id;
   }
@@ -543,6 +561,7 @@ async function upsertEvent(
       externalSource: harvested?.source ?? null,
       externalId: harvested?.id ?? null,
       observedCount: 1,
+      ...(embedding?.length ? { embedding } : {}),
     })
     .returning({ id: schema.events.id });
   return inserted[0].id;

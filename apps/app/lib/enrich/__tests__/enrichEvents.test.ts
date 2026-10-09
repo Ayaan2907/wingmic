@@ -27,11 +27,11 @@ async function seedEvent(extra: { url?: string | null; dates?: boolean }) {
       id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL,
       date_range_start INTEGER, date_range_end INTEGER, location TEXT, url TEXT,
       external_source TEXT, external_id TEXT,
-      observed_count INTEGER DEFAULT 1, promoted_at INTEGER, created_at INTEGER NOT NULL
+      observed_count INTEGER DEFAULT 1, promoted_at INTEGER, embedding F32_BLOB(1536), created_at INTEGER NOT NULL
     );
   `);
   await client.execute({
-    sql: `INSERT INTO event VALUES ('ev_eth', 'eth-denver', 'ETH Denver', ?, ?, null, ?, null, null, 1, null, ?)`,
+    sql: `INSERT INTO event VALUES ('ev_eth', 'eth-denver', 'ETH Denver', ?, ?, null, ?, null, null, 1, null, null, ?)`,
     args: [extra.dates ? now : null, extra.dates ? now : null, extra.url ?? null, now],
   });
   return db;

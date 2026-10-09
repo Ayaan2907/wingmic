@@ -56,9 +56,11 @@ export function AgentBubble({ children }: { children: React.ReactNode }) {
 
 export function EntityMatchCard({ match }: { match: AskMatch }) {
   const topic = match.topics[0];
+  const href =
+    match.kind === 'event' ? (`/event/${match.id}` as Route) : (`/person/${match.id}` as Route);
   return (
     <Link
-      href={`/person/${match.id}` as Route}
+      href={href}
       style={{
         display: 'block',
         padding: '13px 15px',
@@ -72,7 +74,9 @@ export function EntityMatchCard({ match }: { match: AskMatch }) {
       <div style={{ fontWeight: 600, fontSize: 14 }}>{match.name}</div>
       {(match.role || match.company) && (
         <div className="mono" style={{ fontSize: 11, color: 'var(--text-55)', marginTop: 4 }}>
-          {[match.role, match.company].filter(Boolean).join(' · ')}
+          {match.kind === 'event' && match.people?.length
+            ? `met ${match.people.map((p) => p.name).join(', ')}`
+            : [match.role, match.company].filter(Boolean).join(' · ')}
         </div>
       )}
       {topic && (

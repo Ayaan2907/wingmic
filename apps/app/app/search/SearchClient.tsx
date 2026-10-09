@@ -27,6 +27,19 @@ type Entity = {
   facts: Array<{ key: string; value: string; confidence: number }>;
 };
 
+type EventResult = {
+  kind: 'event';
+  id: string;
+  name: string;
+  location: string | null;
+  score: number;
+  people: Array<{ id: string; name: string; aliases: string[] }>;
+};
+
+type RecallRow =
+  | ({ kind: 'person' } & Entity)
+  | EventResult;
+
 type Grouping = 'recent' | 'by-company' | 'by-event' | 'by-topic';
 
 const GROUPINGS: Array<{ key: Grouping; label: string }> = [
@@ -70,10 +83,15 @@ export default function SearchClient() {
   }
 
   const entities = (search.data?.entities ?? []) as Entity[];
+  const results = (search.data?.results ?? entities.map((e) => ({ kind: 'person' as const, ...e }))) as RecallRow[];
   const hasQuery = normalizedQuery.length > 0;
+  const personResults = useMemo(
+    () => results.filter((r): r is { kind: 'person' } & Entity => r.kind === 'person'),
+    [results],
+  );
   const groupedEntities = useMemo(
-    () => (grouping === 'recent' ? [] : groupEntities(entities, grouping)),
-    [entities, grouping],
+    () => (grouping === 'recent' ? [] : groupEntities(personResults, grouping)),
+    [personResults, grouping],
   );
 
   return (
@@ -244,14 +262,14 @@ export default function SearchClient() {
                 textTransform: 'uppercase',
               }}
             >
-              ↪ {entities.length} match
-              {entities.length === 1 ? '' : 'es'} in {search.data.durationMs}ms
+              ↪ {results.length} match
+              {results.length === 1 ? '' : 'es'} in {search.data.durationMs}ms
               {search.data.mode === 'text' ? (
                 <span style={{ color: accent }}> · text match — semantic search offline</span>
               ) : null}
             </div>
 
-            {entities.length === 0 ? (
+            {results.length === 0 ? (
               <div
                 style={{
                   padding: 24,
@@ -266,7 +284,13 @@ export default function SearchClient() {
                 no matches yet. capture a few people first, then try again.
               </div>
             ) : grouping === 'recent' ? (
-              entities.map((e) => <ResultCard key={e.id} entity={e} />)
+              results.map((row) =>
+                row.kind === 'event' ? (
+                  <EventResultCard key={row.id} event={row} />
+                ) : (
+                  <ResultCard key={row.id} entity={row} />
+                ),
+              )
             ) : (
               groupedEntities.map((group) => (
                 <ClusterGroup key={group.key} label={group.label} entities={group.entities} />
@@ -334,6 +358,88 @@ function ClusterGroup({ label, entities }: { label: string; entities: Entity[] }
         <ResultCard key={`${label}-${e.id}`} entity={e} />
       ))}
     </section>
+  );
+}
+
+function EventResultCard({ event }: { event: EventResult }) {
+  const eventHref = `/event/${event.id}` as Route;
+  return (
+    <article
+      style={{
+        padding: 20,
+        borderRadius: 18,
+        background: 'var(--surface-1)',
+        border: '1px solid var(--border-soft)',
+        boxShadow: shadows.card,
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
+        <div>
+          <Link
+            href={eventHref}
+            style={{
+              fontSize: 19,
+              fontWeight: 700,
+              color: 'inherit',
+              textDecoration: 'none',
+            }}
+          >
+            {event.name}
+          </Link>
+          {event.location && (
+            <div style={{ fontSize: 14, color: 'var(--text-55)', marginTop: 4 }}>{event.location}</div>
+          )}
+        </div>
+        <span
+          className="mono"
+          style={{
+            fontSize: 10,
+            color: event.score > 0.7 ? second : event.score > 0.5 ? accent : 'var(--text-40)',
+            letterSpacing: 1,
+          }}
+        >
+          {(event.score * 100).toFixed(0)}%
+        </span>
+      </div>
+      {event.people.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+          {event.people.map((p) => (
+            <Link
+              key={p.id}
+              href={`/person/${p.id}` as Route}
+              className="mono"
+              style={{
+                padding: '3px 9px',
+                borderRadius: 999,
+                background: `${accent}20`,
+                color: accent,
+                fontSize: 10.5,
+                fontWeight: 600,
+                textDecoration: 'none',
+              }}
+            >
+              {p.name}
+            </Link>
+          ))}
+        </div>
+      )}
+      <div style={{ marginTop: 14 }}>
+        <Link
+          href={eventHref}
+          className="mono"
+          style={{
+            fontSize: 11,
+            letterSpacing: 1,
+            textTransform: 'uppercase',
+            color: accent,
+            textDecoration: 'none',
+            fontWeight: 600,
+          }}
+        >
+          open event →
+        </Link>
+      </div>
+    </article>
   );
 }
 

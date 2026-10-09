@@ -9,12 +9,15 @@ vi.mock('@wingmic/extractor/embeddings', async (orig) => {
   return {
     ...real,
     embedText: vi.fn(async (q: string) => {
-      // Deterministic 1536-dim vector: lean toward 1.0 if query mentions "rust", else 0.
       const v = new Array(1536).fill(0);
-      const seed = q.toLowerCase().includes('rust') ? 1 : 0;
-      v[0] = seed;
-      v[1] = 1 - seed;
-      // normalize
+      const lower = q.toLowerCase();
+      if (lower.includes('rust')) {
+        v[0] = 1;
+      } else if (lower.includes('ethdenver') || lower.includes('denver')) {
+        v[2] = 1;
+      } else {
+        v[1] = 1;
+      }
       const norm = Math.sqrt(v.reduce((a, b) => a + b * b, 0)) || 1;
       return v.map((x) => x / norm);
     }),
@@ -59,9 +62,10 @@ describe('recall.query (libSQL vector_top_k)', () => {
       CREATE TABLE entity_topic (id TEXT PRIMARY KEY, entity_id TEXT NOT NULL, topic_id TEXT NOT NULL, weight INTEGER DEFAULT 50, source_interaction_id TEXT, created_at INTEGER NOT NULL, source_deleted INTEGER DEFAULT false NOT NULL);
       CREATE TABLE entity_fact (id TEXT PRIMARY KEY, entity_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL, source_interaction_id TEXT, confidence INTEGER DEFAULT 85, embedding F32_BLOB(1536), created_at INTEGER NOT NULL);
       CREATE TABLE company (id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL, domain TEXT, industry TEXT, observed_count INTEGER DEFAULT 1, promoted_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
-      CREATE TABLE event (id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL, date_range_start INTEGER, date_range_end INTEGER, location TEXT, url TEXT, external_source TEXT, external_id TEXT, observed_count INTEGER DEFAULT 1, promoted_at INTEGER, created_at INTEGER NOT NULL);
+      CREATE TABLE event (id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL, date_range_start INTEGER, date_range_end INTEGER, location TEXT, url TEXT, external_source TEXT, external_id TEXT, observed_count INTEGER DEFAULT 1, promoted_at INTEGER, embedding F32_BLOB(1536), created_at INTEGER NOT NULL);
       CREATE TABLE topic (id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL, aliases TEXT DEFAULT '[]', parent_id TEXT, created_at INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS entity_embedding_vector_idx ON entity (libsql_vector_idx(embedding));
+      CREATE INDEX IF NOT EXISTS event_embedding_vector_idx ON event (libsql_vector_idx(embedding));
     `);
 
     // 3 entities. e1's embedding leans rust-axis (v[0]=1), e2/e3 lean other axis.
@@ -147,6 +151,98 @@ describe('recall.query (libSQL vector_top_k)', () => {
     const res = await caller.query({ q: 'anything', limit: 50 });
     expect(res.entities.length).toBeLessThanOrEqual(3);
     expect(res.mode).toBe('semantic');
+  });
+
+  it('returns an attended event with people scoped to the caller (#103)', async () => {
+    const now = Date.now();
+    const eventVec = new Array(1536).fill(0);
+    eventVec[2] = 1;
+    await client.execute({
+      sql: `INSERT INTO event (id, slug, name, location, embedding, observed_count, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)`,
+      args: ['ev1', 'ethdenver', 'ETHDenver 2026', 'Denver, CO', f32(eventVec), now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity_event (id, entity_id, event_id, created_at, source_deleted) VALUES (?, ?, ?, ?, 0)`,
+      args: ['ee1', 'e1', 'ev1', now],
+    });
+
+    const ctx = {
+      db,
+      user: { id: userId },
+      session: { user: { id: userId } },
+    } as unknown as Parameters<typeof recallRouter.createCaller>[0];
+    const caller = recallRouter.createCaller(ctx);
+    const res = await caller.query({ q: 'who did i meet at ethdenver', limit: 5 });
+
+    const eventHit = res.results.find((r) => r.kind === 'event');
+    expect(eventHit).toBeDefined();
+    expect(eventHit?.kind).toBe('event');
+    if (eventHit?.kind === 'event') {
+      expect(eventHit.id).toBe('ev1');
+      expect(eventHit.people.map((p) => p.id)).toContain('e1');
+      expect(eventHit.people.every((p) => p.id !== 'x1')).toBe(true);
+    }
+    expect(res.mode).toBe('semantic');
+  });
+
+  it('never attaches another user\'s people to an event result', async () => {
+    const otherUserId = 'user_test_3';
+    const now = Date.now();
+    const eventVec = new Array(1536).fill(0);
+    eventVec[2] = 1;
+    await client.execute({
+      sql: `INSERT INTO event (id, slug, name, embedding, observed_count, created_at) VALUES (?, ?, ?, ?, 1, ?)`,
+      args: ['ev2', 'ethdenver-2', 'ETHDenver', f32(eventVec), now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity (id, owner_user_id, kind, name, aliases, embedding, created_at, updated_at) VALUES (?, ?, 'person', ?, '[]', ?, ?, ?)`,
+      args: ['other_person', otherUserId, 'Stranger', f32(eventVec), now, now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity_event (id, entity_id, event_id, created_at, source_deleted) VALUES (?, ?, ?, ?, 0)`,
+      args: ['ee_other', 'other_person', 'ev2', now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity_event (id, entity_id, event_id, created_at, source_deleted) VALUES (?, ?, ?, ?, 0)`,
+      args: ['ee_me', 'e1', 'ev2', now],
+    });
+
+    const ctx = {
+      db,
+      user: { id: userId },
+      session: { user: { id: userId } },
+    } as unknown as Parameters<typeof recallRouter.createCaller>[0];
+    const res = await recallRouter.createCaller(ctx).query({ q: 'ethdenver', limit: 5 });
+    const eventHit = res.results.find((r) => r.kind === 'event' && r.id === 'ev2');
+    expect(eventHit?.kind).toBe('event');
+    if (eventHit?.kind === 'event') {
+      expect(eventHit.people.map((p) => p.id)).toEqual(['e1']);
+    }
+  });
+
+  it('text fallback returns attended events when embeddings are unavailable', async () => {
+    const now = Date.now();
+    await client.execute({
+      sql: `INSERT INTO event (id, slug, name, location, observed_count, created_at) VALUES (?, ?, ?, ?, 1, ?)`,
+      args: ['ev3', 'local-meetup', 'Denver Rust Meetup', 'Denver', now],
+    });
+    await client.execute({
+      sql: `INSERT INTO entity_event (id, entity_id, event_id, created_at, source_deleted) VALUES (?, ?, ?, ?, 0)`,
+      args: ['ee3', 'e2', 'ev3', now],
+    });
+
+    vi.mocked(embedText).mockImplementationOnce(async () => {
+      throw new Error('no key');
+    });
+
+    const ctx = {
+      db,
+      user: { id: userId },
+      session: { user: { id: userId } },
+    } as unknown as Parameters<typeof recallRouter.createCaller>[0];
+    const res = await recallRouter.createCaller(ctx).query({ q: 'denver rust', limit: 5 });
+    expect(res.mode).toBe('text');
+    expect(res.results.some((r) => r.kind === 'event' && r.id === 'ev3')).toBe(true);
   });
 
   it('falls back to text match when embed fails, then recovers to semantic', async () => {
