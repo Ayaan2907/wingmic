@@ -26,15 +26,20 @@
     "./linkedin": {
       "types": "./dist/linkedin.d.ts",
       "import": "./dist/linkedin.js"
+    },
+    "./eventEmbed": {
+      "types": "./dist/eventEmbed.d.ts",
+      "import": "./dist/eventEmbed.js"
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts src/schema.ts src/embeddings.ts src/slug.ts src/linkedin.ts --format esm --dts --clean --sourcemap",
-    "dev": "tsup src/index.ts src/schema.ts src/embeddings.ts src/slug.ts src/linkedin.ts --format esm --dts --watch",
+    "build": "tsup src/index.ts src/schema.ts src/embeddings.ts src/slug.ts src/linkedin.ts src/eventEmbed.ts --format esm --dts --clean --sourcemap",
+    "dev": "tsup src/index.ts src/schema.ts src/embeddings.ts src/slug.ts src/linkedin.ts src/eventEmbed.ts --format esm --dts --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "eval": "bun run src/eval/runner.ts"
+    "eval": "bun run src/eval/runner.ts",
+    "backfill:event-embeddings": "bun run scripts/backfill-event-embeddings.ts"
   },
   "dependencies": {
     "@openrouter/ai-sdk-provider": "^2.9.0",

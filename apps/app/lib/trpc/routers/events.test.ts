@@ -84,6 +84,7 @@ describe('events router', () => {
         external_id TEXT,
         observed_count INTEGER NOT NULL DEFAULT 1,
         promoted_at INTEGER,
+        embedding F32_BLOB(1536),
         created_at INTEGER NOT NULL
       );
       CREATE UNIQUE INDEX event_external_idx ON event (external_source, external_id);

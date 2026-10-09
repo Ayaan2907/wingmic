@@ -34,6 +34,8 @@ export interface AskMatch {
   company: string;
   topics: string[];
   score: number;
+  kind?: 'person' | 'event';
+  people?: Array<{ id: string; name: string }>;
 }
 
 /**

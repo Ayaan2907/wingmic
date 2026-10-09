@@ -1,0 +1,1 @@
+ALTER TABLE `event` ADD `embedding` F32_BLOB(1536);

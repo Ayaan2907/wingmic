@@ -32,6 +32,7 @@
     "format:check":       "prettier --check \"**/*.{ts,tsx,md,json}\"",
     "db:generate":        "bun --filter=@wingmic/db generate",
     "db:apply":            "bun --filter=@wingmic/db apply",
+    "db:backfill:event-embeddings": "bun --filter=@wingmic/extractor backfill:event-embeddings",
     "db:seed:bay":         "bun --filter=@wingmic/db seed:bay",
     "bay:ingest":          "bun run --filter=@wingmic/bay build && bun run --filter=@wingmic/db bay:ingest",
     "db:migrate:deploy":  "sh scripts/predeploy-migrate.sh",
