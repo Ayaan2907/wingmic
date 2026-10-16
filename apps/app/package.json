@@ -2,7 +2,7 @@
   "name": "@wingmic/app",
   "version": "1.0.0",
   "private": true,
-  "description": "wingmic product app \u2014 capture, recall, dashboard",
+  "description": "wingmic product app — capture, recall, dashboard",
   "scripts": {
     "dev": "next dev --port 3211",
     "build": "next build",
@@ -34,6 +34,7 @@
     "assemblyai": "^4.33.3",
     "better-auth": "^1.6.9",
     "drizzle-orm": "^0.45.2",
+    "fflate": "0.8.2",
     "maplibre-gl": "^6.11.2",
     "next": "^15.0.3",
     "posthog-node": "^5.53.0",

@@ -3,7 +3,7 @@ import { z } from 'zod';
 /** Shared client + server batch ceiling — do not duplicate elsewhere. */
 export const IMPORT_MAX_BATCH = 1000;
 
-/** Soft byte ceiling for uploaded CSV/vCard text (checked before `file.text()`). */
+/** Soft byte ceiling for uploads (checked before reading csv/vcard/zip bytes). */
 export const IMPORT_MAX_BYTES = 5 * 1024 * 1024;
 
 /** True for `linkedin.com` and any subdomain (e.g. `www.linkedin.com`). */

@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react';
 import { IMPORT_MAX_BYTES } from '@/lib/imports';
+import * as importsLib from '@/lib/imports';
+import { LINKEDIN_DATA_EXPORT_URL } from '../ImportsClient';
 
 const upsertMutate = vi.fn();
+const undoMutate = vi.fn();
+const resolveMutate = vi.fn();
 const previewRefetch = vi.fn();
 
 const previewState = vi.hoisted(() => ({
@@ -63,8 +67,17 @@ vi.mock('@/lib/trpc/client', () => ({
         }),
       },
       undoBatch: {
+        useMutation: (opts?: { onSuccess?: (r: unknown) => void }) => ({
+          mutate: (input: unknown) => {
+            undoMutate(input);
+            opts?.onSuccess?.({ removed: 1, importSource: 'linkedin:batch' });
+          },
+          isPending: false,
+        }),
+      },
+      resolveAmbiguousImport: {
         useMutation: () => ({
-          mutate: vi.fn(),
+          mutate: resolveMutate,
           isPending: false,
         }),
       },
@@ -88,6 +101,8 @@ function csvFor(names: string[]): string {
 afterEach(() => {
   cleanup();
   upsertMutate.mockClear();
+  undoMutate.mockClear();
+  resolveMutate.mockClear();
   previewRefetch.mockClear();
   previewState.data = {
     rows: [],
@@ -106,36 +121,67 @@ describe('ImportsClient', () => {
     previewRefetch.mockClear();
   });
 
-  it('shows empty tip before a file is chosen', () => {
+  it('shows empty tip and LinkedIn export deep link', () => {
     render(<ImportsClient />);
     expect(screen.getByTestId('imports-empty').textContent).toMatch(/linkedin/i);
+    const link = screen.getByTestId('imports-linkedin-export') as HTMLAnchorElement;
+    expect(link.href).toBe(LINKEDIN_DATA_EXPORT_URL);
+    expect(link.textContent).toMatch(/email/i);
   });
 
-  it('parses a csv file and commits via upsertBatch', async () => {
+  it('auto-imports a csv without a confirm step', async () => {
     render(<ImportsClient />);
     const input = screen.getByTestId('imports-file-input') as HTMLInputElement;
     const csv = csvFor(['Ada Lovelace']);
     const file = new File([csv], 'Connections.csv', { type: 'text/csv' });
+    fireEvent.change(input, { target: { files: [file] } });
+
     await waitFor(() => {
-      fireEvent.change(input, { target: { files: [file] } });
+      expect(upsertMutate).toHaveBeenCalled();
     });
-    await waitFor(() => {
-      expect(screen.getByTestId('imports-preview').textContent).toContain('Ada Lovelace');
-    });
-    fireEvent.click(screen.getByTestId('imports-commit'));
-    expect(upsertMutate).toHaveBeenCalled();
     const arg = upsertMutate.mock.calls[0]![0] as {
       kind: string;
       contacts: Array<{ name: string }>;
     };
     expect(arg.kind).toBe('linkedin');
     expect(arg.contacts[0]!.name).toBe('Ada Lovelace');
+    expect(screen.queryByTestId('imports-commit')).toBeNull();
+
     await waitFor(() => {
-      expect(screen.getByTestId('imports-result').textContent).toMatch(/import complete/i);
+      expect(screen.getByTestId('imports-result').textContent).toMatch(/added 1/i);
+      expect(screen.getByTestId('imports-toast').textContent).toMatch(/added 1, merged 0/i);
     });
   });
 
-  it('rejects files with more than 1000 contacts before commit', async () => {
+  it('reads zip bytes and auto-imports parsed contacts', async () => {
+    const normalizeSpy = vi.spyOn(importsLib, 'normalizeContactsFromFile');
+    normalizeSpy.mockReturnValue({
+      kind: 'linkedin',
+      contacts: [{ name: 'Grace Hopper', email: null, linkedinUrl: null, company: null, role: null }],
+    });
+    const arrayBuffer = vi
+      .spyOn(File.prototype, 'arrayBuffer')
+      .mockResolvedValue(new Uint8Array([1, 2, 3]).buffer);
+
+    render(<ImportsClient />);
+    const file = new File([new Uint8Array([1, 2, 3])], 'export.zip', {
+      type: 'application/zip',
+    });
+    const input = screen.getByTestId('imports-file-input') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(normalizeSpy).toHaveBeenCalledWith({
+        filename: 'export.zip',
+        bytes: expect.any(Uint8Array),
+      });
+      expect(upsertMutate).toHaveBeenCalled();
+    });
+    normalizeSpy.mockRestore();
+    arrayBuffer.mockRestore();
+  });
+
+  it('rejects files with more than 1000 contacts before import', async () => {
     render(<ImportsClient />);
     const input = screen.getByTestId('imports-file-input') as HTMLInputElement;
     const names = Array.from({ length: 1001 }, (_, i) => `Person ${i}`);
@@ -144,12 +190,12 @@ describe('ImportsClient', () => {
     await waitFor(() => {
       expect(screen.getByTestId('imports-error').textContent).toMatch(/too many contacts/i);
     });
-    expect(screen.queryByTestId('imports-commit')).toBeNull();
     expect(upsertMutate).not.toHaveBeenCalled();
   });
 
-  it('rejects oversized files by byte size before reading text', async () => {
+  it('rejects oversized files by byte size before reading', async () => {
     const textSpy = vi.spyOn(File.prototype, 'text');
+    const arrayBufferSpy = vi.spyOn(File.prototype, 'arrayBuffer');
     render(<ImportsClient />);
     const input = screen.getByTestId('imports-file-input') as HTMLInputElement;
     const big = new File([new Uint8Array(IMPORT_MAX_BYTES + 1)], 'huge.csv', {
@@ -160,6 +206,7 @@ describe('ImportsClient', () => {
       expect(screen.getByTestId('imports-error').textContent).toMatch(/file too large/i);
     });
     expect(textSpy).not.toHaveBeenCalled();
+    expect(arrayBufferSpy).not.toHaveBeenCalled();
   });
 
   it('ignores a stale parse when a newer file is selected', async () => {
@@ -183,21 +230,27 @@ describe('ImportsClient', () => {
     const fastCsv = csvFor(['Grace Hopper']);
     const fastFile = new File([fastCsv], 'Connections.csv', { type: 'text/csv' });
 
-    fireEvent.change(input, { target: { files: [slowFile] } });
-    fireEvent.change(input, { target: { files: [fastFile] } });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('imports-preview').textContent).toContain('Grace Hopper');
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [slowFile] } });
+    });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [fastFile] } });
     });
 
+    await waitFor(() => {
+      expect(upsertMutate).toHaveBeenCalled();
+    });
+    const arg = upsertMutate.mock.calls.at(-1)![0] as {
+      contacts: Array<{ name: string }>;
+    };
+    expect(arg.contacts[0]!.name).toBe('Grace Hopper');
+
     resolveSlow!(csvFor(['Ada Lovelace']));
-    // Stale slow parse must not replace the newer preview.
-    await new Promise((r) => setTimeout(r, 30));
-    expect(screen.getByTestId('imports-preview').textContent).toContain('Grace Hopper');
-    expect(screen.getByTestId('imports-preview').textContent).not.toContain('Ada Lovelace');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(upsertMutate).toHaveBeenCalledTimes(1);
   });
 
-  it('shows preview error with retry and blocks commit', async () => {
+  it('shows preview error with retry and does not auto-import', async () => {
     previewState.isError = true;
     render(<ImportsClient />);
     const input = screen.getByTestId('imports-file-input') as HTMLInputElement;
@@ -209,14 +262,12 @@ describe('ImportsClient', () => {
     await waitFor(() => {
       expect(screen.getByTestId('imports-preview-error')).toBeTruthy();
     });
-    const commit = screen.getByTestId('imports-commit') as HTMLButtonElement;
-    expect(commit.disabled).toBe(true);
-    expect(commit.textContent).toMatch(/matching failed/i);
+    expect(upsertMutate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('imports-preview-retry'));
     expect(previewRefetch).toHaveBeenCalled();
   });
 
-  it('shows a selector for ambiguous matches and passes the chosen entityId', async () => {
+  it('imports ambiguous rows without blocking and shows post-import review', async () => {
     previewState.data = {
       rows: [
         {
@@ -245,16 +296,69 @@ Ada,Byron,https://www.linkedin.com/in/byron,ada@example.com,,,01 Jan 2024
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId('imports-conflicts')).toBeTruthy();
+      expect(upsertMutate).toHaveBeenCalled();
     });
-    const select = screen.getByTestId('imports-conflict-select-0') as HTMLSelectElement;
-    fireEvent.change(select, { target: { value: 'ent-a' } });
-    fireEvent.click(screen.getByTestId('imports-commit'));
+    expect(upsertMutate.mock.calls[0]![0]).not.toHaveProperty('resolutions');
 
-    expect(upsertMutate).toHaveBeenCalled();
-    const arg = upsertMutate.mock.calls[0]![0] as {
-      resolutions: Array<{ index: number; entityId: string | null }>;
+    await waitFor(() => {
+      expect(screen.getByTestId('imports-conflicts').textContent).toMatch(
+        /judgement call/i,
+      );
+    });
+  });
+
+  it('wires undo from the toast', async () => {
+    render(<ImportsClient />);
+    const input = screen.getByTestId('imports-file-input') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [new File([csvFor(['Ada Lovelace'])], 'Connections.csv', { type: 'text/csv' })],
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('imports-undo')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('imports-undo'));
+    expect(undoMutate).toHaveBeenCalledWith({ kind: 'linkedin', batchId: 'batch' });
+    await waitFor(() => {
+      expect(screen.getByTestId('imports-undone')).toBeTruthy();
+    });
+  });
+
+  it('merges a post-import ambiguous pick via resolveAmbiguousImport', async () => {
+    previewState.data = {
+      rows: [
+        {
+          index: 0,
+          status: 'ambiguous',
+          contactName: 'Ada Byron',
+          entityId: null,
+          candidates: [{ entityId: 'ent-a', name: 'Ada Lovelace', reasons: ['email'] }],
+        },
+      ],
+      ambiguousCount: 1,
+      matchCount: 0,
+      newCount: 0,
     };
-    expect(arg.resolutions).toEqual([{ index: 0, entityId: 'ent-a' }]);
+
+    render(<ImportsClient />);
+    const input = screen.getByTestId('imports-file-input') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [new File([csvFor(['Ada Byron'])], 'Connections.csv', { type: 'text/csv' })],
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('imports-conflict-select-0')).toBeTruthy();
+    });
+    fireEvent.change(screen.getByTestId('imports-conflict-select-0'), {
+      target: { value: 'ent-a' },
+    });
+    expect(resolveMutate).toHaveBeenCalledWith({
+      createdEntityId: 'e1',
+      targetEntityId: 'ent-a',
+    });
   });
 });
