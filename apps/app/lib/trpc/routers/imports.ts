@@ -15,6 +15,7 @@ import {
   type ImportContactDraft,
   type MatchIndexes,
 } from '@/lib/imports';
+import { mergeImportedDuplicate } from '@/lib/imports/resolveAmbiguousImport';
 
 const resolutionSchema = z.object({
   /** Index into `contacts`. */
@@ -229,6 +230,21 @@ export const importsRouter = router({
    * Soft-delete every entity created in a batch (`importSource = kind:batchId`).
    * Matched (pre-existing) people are left alone — they never received that stamp.
    */
+  /**
+   * After a one-tap import, merge a duplicate person (created for an ambiguous row)
+   * into the user-chosen existing contact.
+   */
+  resolveAmbiguousImport: protectedProcedure
+    .input(
+      z.object({
+        createdEntityId: z.string().min(1),
+        targetEntityId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return mergeImportedDuplicate(ctx.db, ctx.user.id, input);
+    }),
+
   undoBatch: protectedProcedure
     .input(
       z.object({

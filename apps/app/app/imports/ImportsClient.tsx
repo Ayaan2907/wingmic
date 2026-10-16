@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * ImportsClient — LinkedIn CSV / vCard drop zone (v0.2 I3).
- * Parses client-side, previews matches (with ambiguous pickers), then upserts.
+ * ImportsClient — one-tap LinkedIn CSV / zip / vCard import (v0.2 #102).
+ * Parses client-side, previews matches, upserts without a confirm step.
  */
 
 import * as React from 'react';
@@ -21,9 +21,30 @@ import { colors, shadows } from '@wingmic/design-tokens';
 
 const accent = colors.accent;
 
-type Phase = 'idle' | 'parsing' | 'ready' | 'uploading' | 'done' | 'error' | 'undone';
+/** LinkedIn self-serve data export (Connections arrive by email). */
+export const LINKEDIN_DATA_EXPORT_URL =
+  'https://www.linkedin.com/mypreferences/d/download-my-data';
 
-/** `null` = create new; string = merge into that entity. */
+type Phase = 'idle' | 'parsing' | 'matching' | 'uploading' | 'done' | 'error' | 'undone';
+
+type PreviewRow = {
+  index: number;
+  status: 'new' | 'match' | 'ambiguous';
+  contactName: string;
+  entityId: string | null;
+  candidates: Array<{
+    entityId: string;
+    name: string;
+    reasons: Array<'email' | 'linkedin' | 'name'>;
+  }>;
+};
+
+type PreviewSnapshot = {
+  rows: PreviewRow[];
+  ambiguousCount: number;
+};
+
+/** `null` = keep the auto-created person; string = merge duplicate into that entity. */
 type ResolutionChoice = string | null;
 
 export function ImportsClient() {
@@ -32,7 +53,11 @@ export function ImportsClient() {
   const [filename, setFilename] = React.useState<string | null>(null);
   const [kind, setKind] = React.useState<ImportSourceKind | null>(null);
   const [contacts, setContacts] = React.useState<ImportContactDraft[]>([]);
-  const [resolutions, setResolutions] = React.useState<Record<number, ResolutionChoice>>({});
+  const [importPreview, setImportPreview] = React.useState<PreviewSnapshot | null>(null);
+  const [batchEntityIds, setBatchEntityIds] = React.useState<string[]>([]);
+  const [postResolutions, setPostResolutions] = React.useState<Record<number, ResolutionChoice>>(
+    {},
+  );
   const [result, setResult] = React.useState<{
     created: number;
     matched: number;
@@ -40,13 +65,18 @@ export function ImportsClient() {
     batchId: string;
     kind: ImportSourceKind;
   } | null>(null);
+  const [toast, setToast] = React.useState<string | null>(null);
   const [deviceSupported] = React.useState(() => deviceContactsSupported());
   const inputRef = React.useRef<HTMLInputElement>(null);
-  /** Bumps on each file selection so a stale `file.text()` cannot overwrite newer state. */
   const parseGenRef = React.useRef(0);
+  const autoImportStartedRef = React.useRef(false);
+  const lastAmbiguousCountRef = React.useRef(0);
 
-  const busyUploading = phase === 'uploading';
-  const previewEnabled = contacts.length > 0 && (phase === 'ready' || phase === 'uploading');
+  const busyImport =
+    phase === 'parsing' || phase === 'matching' || phase === 'uploading';
+
+  const previewEnabled =
+    contacts.length > 0 && (phase === 'matching' || phase === 'uploading');
   const preview = trpc.imports.previewBatch.useQuery(
     { contacts },
     { enabled: previewEnabled },
@@ -55,6 +85,7 @@ export function ImportsClient() {
   const upsert = trpc.imports.upsertBatch.useMutation({
     onSuccess: (res) => {
       const parsedKind = (res.importSource.split(':')[0] ?? 'vcard') as ImportSourceKind;
+      setBatchEntityIds(res.entityIds);
       setResult({
         created: res.created,
         matched: res.matched,
@@ -62,11 +93,19 @@ export function ImportsClient() {
         batchId: res.batchId,
         kind: parsedKind,
       });
+      setToast(
+        `added ${res.created}, merged ${res.matched}${
+          lastAmbiguousCountRef.current > 0
+            ? ` · ${lastAmbiguousCountRef.current} needed a judgement call`
+            : ''
+        }`,
+      );
       setPhase('done');
     },
     onError: () => {
       setError('import failed — try a smaller file or check the format');
       setPhase('error');
+      autoImportStartedRef.current = false;
     },
   });
 
@@ -74,6 +113,7 @@ export function ImportsClient() {
     onSuccess: (res) => {
       setPhase('undone');
       setError(null);
+      setToast(null);
       setResult((prev) =>
         prev
           ? { ...prev, created: 0, matched: prev.matched, total: res.removed }
@@ -85,33 +125,58 @@ export function ImportsClient() {
     },
   });
 
-  // Seed default choices when preview reports ambiguous rows.
+  const resolveAmbiguous = trpc.imports.resolveAmbiguousImport.useMutation({
+    onError: () => {
+      setError('could not apply that match — try again');
+    },
+  });
+
   React.useEffect(() => {
-    if (!preview.data) return;
-    setResolutions((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      for (const row of preview.data.rows) {
-        if (row.status !== 'ambiguous') continue;
-        if (next[row.index] !== undefined) continue;
-        // Default: create new (safe) until the user picks.
-        next[row.index] = null;
-        changed = true;
-      }
-      return changed ? next : prev;
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 12_000);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+
+  // One-tap: when preview finishes, upsert immediately (ambiguous rows default to create-new).
+  React.useEffect(() => {
+    if (phase !== 'matching' || !kind || contacts.length === 0) return;
+    if (preview.isFetching || preview.isError || !preview.data) return;
+    if (autoImportStartedRef.current) return;
+    autoImportStartedRef.current = true;
+    lastAmbiguousCountRef.current = preview.data.ambiguousCount;
+    setImportPreview({
+      rows: preview.data.rows,
+      ambiguousCount: preview.data.ambiguousCount,
     });
-  }, [preview.data]);
+    setPhase('uploading');
+    upsert.mutate({ kind, contacts });
+  }, [phase, kind, contacts, preview.isFetching, preview.isError, preview.data, upsert.mutate]);
+
+  async function readFilePayload(
+    file: File,
+  ): Promise<{ text?: string; bytes?: Uint8Array }> {
+    const lower = file.name.toLowerCase();
+    if (lower.endsWith('.zip')) {
+      const buf = await file.arrayBuffer();
+      return { bytes: new Uint8Array(buf) };
+    }
+    return { text: await file.text() };
+  }
 
   async function handleFile(file: File) {
-    if (busyUploading) return;
+    if (phase === 'uploading') return;
     const gen = ++parseGenRef.current;
+    autoImportStartedRef.current = false;
     setError(null);
     setResult(null);
+    setToast(null);
+    setImportPreview(null);
+    setBatchEntityIds([]);
+    setPostResolutions({});
     setPhase('parsing');
     setFilename(file.name);
     setContacts([]);
     setKind(null);
-    setResolutions({});
     try {
       if (file.size > IMPORT_MAX_BYTES) {
         if (gen !== parseGenRef.current) return;
@@ -121,9 +186,9 @@ export function ImportsClient() {
         setPhase('error');
         return;
       }
-      const text = await file.text();
+      const payload = await readFilePayload(file);
       if (gen !== parseGenRef.current) return;
-      const parsed = normalizeContactsFromFile({ filename: file.name, text });
+      const parsed = normalizeContactsFromFile({ filename: file.name, ...payload });
       if (gen !== parseGenRef.current) return;
       if (parsed.contacts.length === 0) {
         setError('no contacts found in that file');
@@ -143,7 +208,7 @@ export function ImportsClient() {
       }
       setKind(parsed.kind);
       setContacts(parsed.contacts);
-      setPhase('ready');
+      setPhase('matching');
     } catch {
       if (gen !== parseGenRef.current) return;
       setError('could not read that file');
@@ -153,20 +218,24 @@ export function ImportsClient() {
 
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
-    if (busyUploading) return;
+    if (phase === 'uploading') return;
     const file = e.dataTransfer.files?.[0];
     if (file) void handleFile(file);
   }
 
   async function handleDevicePick() {
-    if (busyUploading) return;
+    if (phase === 'uploading') return;
+    autoImportStartedRef.current = false;
     setError(null);
     setResult(null);
+    setToast(null);
+    setImportPreview(null);
+    setBatchEntityIds([]);
+    setPostResolutions({});
     setPhase('parsing');
     setFilename('device contacts');
     setContacts([]);
     setKind(null);
-    setResolutions({});
     try {
       const picked = await pickDeviceContacts();
       if (picked == null) {
@@ -188,34 +257,31 @@ export function ImportsClient() {
       }
       setKind('device');
       setContacts(picked);
-      setPhase('ready');
+      setPhase('matching');
     } catch {
       setError('could not read device contacts');
       setPhase('error');
     }
   }
 
-  const ambiguousRows = preview.data?.rows.filter((r) => r.status === 'ambiguous') ?? [];
-  const unresolved = React.useMemo(
-    () => ambiguousRows.length > 0 && ambiguousRows.some((r) => resolutions[r.index] === undefined),
-    [ambiguousRows, resolutions],
-  );
-  const previewFailed = Boolean(preview.isError);
-  const commitBlocked = busyUploading || unresolved || preview.isFetching || previewFailed;
+  const ambiguousRows =
+    importPreview?.rows.filter((r) => r.status === 'ambiguous') ?? [];
 
-  function commitImport() {
-    if (!kind || contacts.length === 0 || unresolved || previewFailed) return;
-    setPhase('uploading');
-    const resolutionPayload = Object.entries(resolutions).map(([index, entityId]) => ({
-      index: Number(index),
-      entityId,
-    }));
-    upsert.mutate({
-      kind,
-      contacts,
-      resolutions: resolutionPayload.length > 0 ? resolutionPayload : undefined,
-    });
+  function applyPostImportResolution(rowIndex: number, targetEntityId: string | null) {
+    setPostResolutions((prev) => ({ ...prev, [rowIndex]: targetEntityId }));
+    if (targetEntityId === null) return;
+    const createdEntityId = batchEntityIds[rowIndex];
+    if (!createdEntityId) return;
+    resolveAmbiguous.mutate({ createdEntityId, targetEntityId });
   }
+
+  function retryMatching() {
+    autoImportStartedRef.current = false;
+    setPhase('matching');
+    void preview.refetch();
+  }
+
+  const previewFailed = phase === 'matching' && preview.isError;
 
   return (
     <main
@@ -276,26 +342,46 @@ export function ImportsClient() {
       >
         <p
           className="mono"
-          style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--text-55)', margin: '0 0 20px' }}
+          style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--text-55)', margin: '0 0 12px' }}
         >
-          drop a LinkedIn <em style={{ fontStyle: 'italic', fontFamily: 'serif' }}>Connections.csv</em>{' '}
-          or a <em style={{ fontStyle: 'italic', fontFamily: 'serif' }}>.vcf</em> — contacts stay
-          private to your account.
+          drop a LinkedIn export,{' '}
+          <em style={{ fontStyle: 'italic', fontFamily: 'serif' }}>Connections.csv</em>, or a{' '}
+          <em style={{ fontStyle: 'italic', fontFamily: 'serif' }}>.vcf</em> — contacts stay private
+          to your account. clean files import in one tap.
         </p>
+
+        <a
+          href={LINKEDIN_DATA_EXPORT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="imports-linkedin-export"
+          className="mono"
+          style={{
+            display: 'block',
+            fontSize: 11,
+            lineHeight: 1.55,
+            color: accent,
+            marginBottom: 20,
+            textDecoration: 'none',
+          }}
+        >
+          get your LinkedIn export → LinkedIn emails the zip when it&apos;s ready; drop it here
+          without unzipping.
+        </a>
 
         <div
           data-testid="imports-dropzone"
           onDragOver={(e) => e.preventDefault()}
           onDrop={onDrop}
           onClick={() => {
-            if (busyUploading) return;
+            if (phase === 'uploading') return;
             inputRef.current?.click();
           }}
           role="button"
-          tabIndex={busyUploading ? -1 : 0}
-          aria-disabled={busyUploading}
+          tabIndex={phase === 'uploading' ? -1 : 0}
+          aria-disabled={phase === 'uploading'}
           onKeyDown={(e) => {
-            if (busyUploading) return;
+            if (phase === 'uploading') return;
             if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click();
           }}
           style={{
@@ -305,31 +391,35 @@ export function ImportsClient() {
             border: `1px dashed ${accent}59`,
             background: `${accent}0a`,
             textAlign: 'center',
-            cursor: busyUploading ? 'not-allowed' : 'pointer',
+            cursor: phase === 'uploading' ? 'not-allowed' : 'pointer',
             marginBottom: 16,
-            opacity: busyUploading ? 0.6 : 1,
+            opacity: phase === 'uploading' ? 0.6 : 1,
             transition: 'border-color 240ms var(--ease-relaxed, ease-out), opacity 240ms var(--ease-relaxed, ease-out)',
           }}
         >
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
             {phase === 'parsing'
               ? 'reading…'
-              : busyUploading
-                ? 'importing…'
-                : 'tap or drop a file'}
+              : phase === 'matching'
+                ? preview.isFetching
+                  ? 'matching…'
+                  : 'starting import…'
+                : phase === 'uploading'
+                  ? 'importing…'
+                  : 'tap or drop a file'}
           </div>
           <div className="mono" style={{ fontSize: 11, color: 'var(--text-40)' }}>
-            .csv · .vcf · up to {IMPORT_MAX_BATCH} contacts
+            .csv · .zip · .vcf · up to {IMPORT_MAX_BATCH} contacts
           </div>
           <input
             ref={inputRef}
             type="file"
-            accept=".csv,.vcf,.vcard,text/csv,text/vcard,text/x-vcard"
+            accept=".csv,.zip,.vcf,.vcard,text/csv,application/zip,text/vcard,text/x-vcard"
             hidden
             data-testid="imports-file-input"
-            disabled={busyUploading}
+            disabled={phase === 'uploading'}
             onChange={(e) => {
-              if (busyUploading) {
+              if (phase === 'uploading') {
                 e.target.value = '';
                 return;
               }
@@ -344,7 +434,7 @@ export function ImportsClient() {
           <button
             type="button"
             data-testid="imports-device-pick"
-            disabled={busyUploading}
+            disabled={busyImport}
             onClick={() => void handleDevicePick()}
             style={{
               width: '100%',
@@ -356,8 +446,8 @@ export function ImportsClient() {
               background: 'var(--surface-2)',
               color: 'var(--ink)',
               font: '600 13px Inter, system-ui, sans-serif',
-              cursor: busyUploading ? 'not-allowed' : 'pointer',
-              opacity: busyUploading ? 0.7 : 1,
+              cursor: busyImport ? 'not-allowed' : 'pointer',
+              opacity: busyImport ? 0.7 : 1,
             }}
           >
             pick from phone contacts →
@@ -375,186 +465,40 @@ export function ImportsClient() {
           </p>
         ) : null}
 
-        {phase === 'ready' || phase === 'uploading' ? (
+        {previewFailed ? (
           <div
-            data-testid="imports-preview"
+            data-testid="imports-preview-error"
+            role="alert"
             style={{
               padding: 16,
               borderRadius: 18,
               border: '1px solid var(--border-soft)',
               background: 'var(--surface-1)',
-              boxShadow: shadows.card,
               marginBottom: 12,
             }}
           >
-            <div className="mono" style={{ fontSize: 11, color: 'var(--text-40)', marginBottom: 8 }}>
-              {filename} · {kind} · {contacts.length} contact
-              {contacts.length === 1 ? '' : 's'}
-              {preview.data
-                ? ` · ${preview.data.matchCount} match · ${preview.data.newCount} new · ${preview.data.ambiguousCount} review`
-                : preview.isFetching
-                  ? ' · matching…'
-                  : ''}
-            </div>
-            <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-              {contacts.slice(0, 5).map((c) => (
-                <li
-                  key={`${c.name}-${c.email ?? ''}`}
-                  style={{
-                    fontSize: 13,
-                    padding: '6px 0',
-                    borderBottom: '1px solid var(--border-soft)',
-                  }}
-                >
-                  <strong>{c.name}</strong>
-                  {c.company ? (
-                    <span style={{ color: 'var(--text-55)' }}> · {c.company}</span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-            {contacts.length > 5 ? (
-              <div className="mono" style={{ fontSize: 11, color: 'var(--text-40)', marginTop: 8 }}>
-                +{contacts.length - 5} more
-              </div>
-            ) : null}
-
-            {previewFailed ? (
-              <div
-                data-testid="imports-preview-error"
-                role="alert"
-                style={{
-                  marginTop: 14,
-                  paddingTop: 12,
-                  borderTop: '1px solid var(--border-soft)',
-                }}
-              >
-                <p
-                  className="mono"
-                  style={{ fontSize: 12, color: colors.alarm, margin: '0 0 10px' }}
-                >
-                  could not match contacts — check your connection and retry
-                </p>
-                <button
-                  type="button"
-                  data-testid="imports-preview-retry"
-                  onClick={() => void preview.refetch()}
-                  style={{
-                    padding: '10px 14px',
-                    minHeight: 40,
-                    borderRadius: 12,
-                    border: '1px solid var(--border-soft)',
-                    background: 'var(--bg-page)',
-                    color: 'var(--ink)',
-                    font: '600 12px Inter, system-ui, sans-serif',
-                    cursor: 'pointer',
-                  }}
-                >
-                  retry matching →
-                </button>
-              </div>
-            ) : null}
-
-            {ambiguousRows.length > 0 ? (
-              <div
-                data-testid="imports-conflicts"
-                style={{
-                  marginTop: 14,
-                  paddingTop: 12,
-                  borderTop: '1px solid var(--border-soft)',
-                }}
-              >
-                <div
-                  className="mono"
-                  style={{ fontSize: 11, color: 'var(--text-55)', marginBottom: 10 }}
-                >
-                  {ambiguousRows.length} contact
-                  {ambiguousRows.length === 1 ? '' : 's'} need a match — email / linkedin / name
-                  point at different people.
-                </div>
-                <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-                  {ambiguousRows.map((row) => (
-                    <li
-                      key={row.index}
-                      data-testid={`imports-conflict-${row.index}`}
-                      style={{ marginBottom: 12 }}
-                    >
-                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-                        {row.contactName}
-                      </div>
-                      <label className="mono" style={{ fontSize: 11, color: 'var(--text-40)' }}>
-                        map to
-                        <select
-                          data-testid={`imports-conflict-select-${row.index}`}
-                          value={
-                            resolutions[row.index] === undefined
-                              ? ''
-                              : resolutions[row.index] === null
-                                ? '__new__'
-                                : resolutions[row.index]!
-                          }
-                          disabled={busyUploading}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setResolutions((prev) => ({
-                              ...prev,
-                              [row.index]: v === '__new__' ? null : v,
-                            }));
-                          }}
-                          style={{
-                            display: 'block',
-                            width: '100%',
-                            marginTop: 4,
-                            minHeight: 40,
-                            padding: '8px 12px',
-                            borderRadius: 12,
-                            border: '1px solid var(--border-soft)',
-                            background: 'var(--surface-2)',
-                            color: 'var(--ink)',
-                            font: '12px Inter, system-ui, sans-serif',
-                          }}
-                        >
-                          <option value="__new__">create new person</option>
-                          {row.candidates.map((c) => (
-                            <option key={c.entityId} value={c.entityId}>
-                              {c.name} ({c.reasons.join(' + ')})
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
+            <p
+              className="mono"
+              style={{ fontSize: 12, color: colors.alarm, margin: '0 0 10px' }}
+            >
+              could not match contacts — check your connection and retry
+            </p>
             <button
               type="button"
-              data-testid="imports-commit"
-              disabled={commitBlocked}
-              onClick={commitImport}
+              data-testid="imports-preview-retry"
+              onClick={retryMatching}
               style={{
-                marginTop: 14,
-                width: '100%',
-                minHeight: 48,
-                padding: 14,
-                borderRadius: 999,
-                background: accent,
-                color: '#000',
-                boxShadow: shadows.button,
-                font: '700 14px Inter, system-ui, sans-serif',
-                cursor: commitBlocked ? 'not-allowed' : 'pointer',
-                opacity: commitBlocked ? 0.7 : 1,
-                transition: 'box-shadow var(--dur-fast, 150ms) var(--ease-relaxed, ease-out)',
+                padding: '10px 14px',
+                minHeight: 40,
+                borderRadius: 12,
+                border: '1px solid var(--border-soft)',
+                background: 'var(--bg-page)',
+                color: 'var(--ink)',
+                font: '600 12px Inter, system-ui, sans-serif',
+                cursor: 'pointer',
               }}
             >
-              {busyUploading
-                ? 'importing…'
-                : previewFailed
-                  ? 'matching failed'
-                  : preview.isFetching
-                    ? 'matching…'
-                    : `import ${contacts.length} →`}
+              retry matching →
             </button>
           </div>
         ) : null}
@@ -567,50 +511,101 @@ export function ImportsClient() {
               borderRadius: 18,
               border: `1px solid ${accent}38`,
               background: `${accent}0f`,
+              marginBottom: 12,
             }}
           >
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>import complete</div>
             <p className="mono" style={{ fontSize: 12, color: 'var(--text-85)', margin: 0 }}>
-              {result.created} new · {result.matched} matched · {result.total} total
+              added {result.created} · merged {result.matched} · {result.total} total
             </p>
-            <div style={{ display: 'flex', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
-              {result.created > 0 ? (
-                <button
-                  type="button"
-                  data-testid="imports-undo"
-                  disabled={undo.isPending}
-                  onClick={() =>
-                    undo.mutate({ kind: result.kind, batchId: result.batchId })
-                  }
-                  className="mono"
-                  style={{
-                    fontSize: 11,
-                    color: 'var(--text-55)',
-                    background: 'transparent',
-                    border: '1px solid var(--border-soft)',
-                    borderRadius: 12,
-                    padding: '10px 14px',
-                    minHeight: 40,
-                    cursor: undo.isPending ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  {undo.isPending ? 'undoing…' : 'undo this import'}
-                </button>
-              ) : null}
-              <Link
-                href="/"
-                className="mono"
-                style={{
-                  display: 'inline-block',
-                  fontSize: 11,
-                  color: accent,
-                  textDecoration: 'none',
-                  padding: '8px 0',
-                }}
-              >
-                back to home →
-              </Link>
+            <Link
+              href="/"
+              className="mono"
+              style={{
+                display: 'inline-block',
+                marginTop: 12,
+                fontSize: 11,
+                color: accent,
+                textDecoration: 'none',
+                padding: '8px 0',
+              }}
+            >
+              back to home →
+            </Link>
+          </div>
+        ) : null}
+
+        {phase === 'done' && ambiguousRows.length > 0 ? (
+          <div
+            data-testid="imports-conflicts"
+            style={{
+              padding: 16,
+              borderRadius: 18,
+              border: '1px solid var(--border-soft)',
+              background: 'var(--surface-1)',
+              boxShadow: shadows.card,
+              marginBottom: 12,
+            }}
+          >
+            <div
+              className="mono"
+              style={{ fontSize: 11, color: 'var(--text-55)', marginBottom: 10 }}
+            >
+              {ambiguousRows.length} needed a judgement call — review
             </div>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+              {ambiguousRows.map((row) => (
+                <li
+                  key={row.index}
+                  data-testid={`imports-conflict-${row.index}`}
+                  style={{ marginBottom: 12 }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                    {row.contactName}
+                  </div>
+                  <label className="mono" style={{ fontSize: 11, color: 'var(--text-40)' }}>
+                    map to
+                    <select
+                      data-testid={`imports-conflict-select-${row.index}`}
+                      value={
+                        postResolutions[row.index] === undefined
+                          ? '__new__'
+                          : postResolutions[row.index] === null
+                            ? '__new__'
+                            : postResolutions[row.index]!
+                      }
+                      disabled={resolveAmbiguous.isPending}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        applyPostImportResolution(
+                          row.index,
+                          v === '__new__' ? null : v,
+                        );
+                      }}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        marginTop: 4,
+                        minHeight: 40,
+                        padding: '8px 12px',
+                        borderRadius: 12,
+                        border: '1px solid var(--border-soft)',
+                        background: 'var(--surface-2)',
+                        color: 'var(--ink)',
+                        font: '12px Inter, system-ui, sans-serif',
+                      }}
+                    >
+                      <option value="__new__">keep new person (imported)</option>
+                      {row.candidates.map((c) => (
+                        <option key={c.entityId} value={c.entityId}>
+                          {c.name} ({c.reasons.join(' + ')})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
 
@@ -644,10 +639,59 @@ export function ImportsClient() {
               lineHeight: 1.6,
             }}
           >
-            tip: LinkedIn → Settings → Data privacy → Get a copy of your data → Connections.
+            no imports yet — drop a file or request your LinkedIn export above.
           </div>
         ) : null}
       </section>
+
+      {toast ? (
+        <div
+          data-testid="imports-toast"
+          role="status"
+          className="mono"
+          style={{
+            position: 'fixed',
+            left: '50%',
+            bottom: 88,
+            transform: 'translateX(-50%)',
+            padding: '10px 14px',
+            background: 'var(--bg-raised, var(--surface-1))',
+            border: `1px solid ${accent}38`,
+            borderRadius: 999,
+            color: 'var(--text-85)',
+            fontSize: 12,
+            zIndex: 60,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            boxShadow: shadows.card,
+            maxWidth: 'min(92vw, 420px)',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+          }}
+        >
+          <span>{toast}</span>
+          {result && result.created > 0 && phase === 'done' ? (
+            <button
+              type="button"
+              data-testid="imports-undo"
+              disabled={undo.isPending}
+              onClick={() => undo.mutate({ kind: result.kind, batchId: result.batchId })}
+              style={{
+                fontSize: 11,
+                color: accent,
+                background: 'transparent',
+                border: 'none',
+                cursor: undo.isPending ? 'not-allowed' : 'pointer',
+                textDecoration: 'underline',
+                padding: 0,
+              }}
+            >
+              {undo.isPending ? 'undoing…' : 'undo'}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -355,6 +355,56 @@ describe('imports router', () => {
     expect(res.entityIds[0]).toBe(seedA);
   });
 
+  it('resolveAmbiguousImport merges a duplicate into the chosen person', async () => {
+    const seed = await caller(userA).upsertBatch({
+      kind: 'linkedin',
+      contacts: [
+        {
+          name: 'Seed Person',
+          email: 'seed@example.com',
+          linkedinUrl: null,
+          company: 'Acme',
+          role: null,
+        },
+      ],
+    });
+    const targetId = seed.entityIds[0]!;
+
+    const dup = await caller(userA).upsertBatch({
+      kind: 'vcard',
+      batchId: 'ambiguous-batch-1',
+      contacts: [
+        {
+          name: 'Duplicate Row',
+          email: 'dup-only@example.com',
+          linkedinUrl: 'https://www.linkedin.com/in/dup-only',
+          company: 'Other Co',
+          role: 'Eng',
+        },
+      ],
+    });
+    const createdId = dup.entityIds[0]!;
+    expect(createdId).not.toBe(targetId);
+
+    await caller(userA).resolveAmbiguousImport({
+      createdEntityId: createdId,
+      targetEntityId: targetId,
+    });
+
+    const dupRow = await db.query.entities.findFirst({
+      where: eq(schema.entities.id, createdId),
+    });
+    expect(dupRow?.deletedAt).not.toBeNull();
+
+    const facts = await client.execute({
+      sql: `SELECT key, value FROM entity_fact WHERE entity_id = ? AND key IN ('company', 'role')`,
+      args: [targetId],
+    });
+    const byKey = Object.fromEntries(facts.rows.map((r) => [r.key, r.value]));
+    expect(byKey.company).toBe('Other Co');
+    expect(byKey.role).toBe('Eng');
+  });
+
   it('undoBatch soft-deletes only entities stamped with that importSource', async () => {
     const created = await caller(userA).upsertBatch({
       kind: 'linkedin',

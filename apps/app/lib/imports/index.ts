@@ -13,6 +13,7 @@ export {
 export { parseLinkedInCsv, splitCsvRows } from './parseLinkedInCsv';
 export { parseVcard } from './parseVcard';
 export { normalizeContactsFromFile } from './normalizeContact';
+export { extractConnectionsCsvFromZip } from './extractLinkedInZip';
 export { deviceContactsSupported, pickDeviceContacts } from './pickDeviceContacts';
 export {
   resolveMatch,
