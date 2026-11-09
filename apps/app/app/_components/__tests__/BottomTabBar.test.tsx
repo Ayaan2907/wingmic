@@ -53,6 +53,21 @@ describe('CaptureOrb', () => {
     expect(beginCapture).toHaveBeenCalled();
   });
 
+  it('says what the tap does when the browser cannot record', () => {
+    render(
+      <CaptureOrb
+        isActive={false}
+        label="capture"
+        recorder={{ ...recorder, supported: false }}
+        beginCapture={beginCapture}
+      />,
+    );
+    const orb = screen.getByRole('button', { name: /tap to type a memo/i });
+    expect(orb.getAttribute('aria-keyshortcuts')).toBeNull();
+    fireEvent.click(orb);
+    expect(beginCapture).toHaveBeenCalled();
+  });
+
   it('taps recording to stop', () => {
     render(
       <CaptureOrb

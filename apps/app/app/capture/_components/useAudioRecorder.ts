@@ -18,7 +18,7 @@
  * Honors `prefers-reduced-motion`: when set, the level array is static
  * so consumers can still render the meter without animation.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 export type RecorderStatus =
   | 'idle'
@@ -67,6 +67,9 @@ function isMediaRecorderSupported(): boolean {
   );
 }
 
+// Browser support doesn't change mid-session, so there's nothing to subscribe to.
+const subscribeToNothing = () => () => {};
+
 function pickMimeType(): string | undefined {
   if (typeof MediaRecorder === 'undefined') return undefined;
   const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
@@ -88,7 +91,9 @@ export function useAudioRecorder(): UseAudioRecorder {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
 
-  const supportedRef = useRef<boolean>(isMediaRecorderSupported());
+  // The server can't see the browser, so it assumes a recorder. Hydration then
+  // matches and React re-renders with the real answer on browsers without one.
+  const supported = useSyncExternalStore(subscribeToNothing, isMediaRecorderSupported, () => true);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const startedAtRef = useRef<number>(0);
@@ -195,7 +200,7 @@ export function useAudioRecorder(): UseAudioRecorder {
   }
 
   const start = useCallback(async (): Promise<void> => {
-    if (!supportedRef.current) {
+    if (!isMediaRecorderSupported()) {
       setError({ code: 'unsupported', message: 'your browser does not support audio recording.' });
       setStatus('error');
       return;
@@ -420,6 +425,6 @@ export function useAudioRecorder(): UseAudioRecorder {
     setCancelArmed,
     setLockArmed,
     reset,
-    supported: supportedRef.current,
+    supported,
   };
 }
