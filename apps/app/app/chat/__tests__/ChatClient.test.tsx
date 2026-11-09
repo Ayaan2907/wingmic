@@ -9,10 +9,11 @@ import { render, screen, fireEvent, act, waitFor, cleanup } from '@testing-libra
 // post-commit push is a no-op in these tests (the bubble lands on the
 // same page we're already on).
 const routerPushMock = vi.fn();
+const nav = vi.hoisted(() => ({ pathname: '/chat' }));
 vi.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: (_: string) => null }),
   useRouter: () => ({ push: routerPushMock, replace: vi.fn(), refresh: vi.fn() }),
-  usePathname: () => '/chat',
+  usePathname: () => nav.pathname,
 }));
 
 // ── Mock tRPC client ────────────────────────────────────────────────────
@@ -208,11 +209,25 @@ function DuplicateSubmitHarness() {
   );
 }
 
+// Stands in for a route change: the composer only mounts once we're "on" /chat.
+function RouteHarness() {
+  const [onChat, setOnChat] = React.useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOnChat((v) => !v)}>
+        switch route
+      </button>
+      {onChat ? <ChatClient userName="ada" /> : null}
+    </>
+  );
+}
+
 function resetFakeRecorder() {
   fakeRecorder.status = 'idle';
   fakeRecorder.duration = 0;
   fakeRecorder.audioBlob = null;
   fakeRecorder.error = null;
+  fakeRecorder.supported = true;
   for (const fn of [
     fakeRecorder.start,
     fakeRecorder.stop,
@@ -283,6 +298,11 @@ describe('ChatClient', () => {
     expect(composer.style.background).toMatch(/var\(--bg-page\)|#0a0a0a/);
     const pill = composer.firstElementChild as HTMLElement;
     expect(pill.style.background).toMatch(/var\(--bg-card\)|#141414|rgb\(20,\s*20,\s*20\)/);
+  });
+
+  it('composer input can shrink so commit stays on screen at 375px', () => {
+    renderChat({ userName: 'ada' });
+    expect(screen.getByLabelText('chat composer').style.minWidth).toBe('0px');
   });
 
   it('runs the full record → transcribe → commit cycle and renders a committed bubble + graph card', async () => {
@@ -1259,6 +1279,88 @@ describe('ChatClient', () => {
     } finally {
       eventsCurrentResponse.session = null;
     }
+  });
+
+  describe('browser without a recorder', () => {
+    const orb = () => screen.getByRole('button', { name: /tap to type a memo/i });
+
+    beforeEach(() => {
+      fakeRecorder.supported = false;
+      routerPushMock.mockClear();
+    });
+    afterEach(() => {
+      nav.pathname = '/chat';
+    });
+
+    it('orb focuses the typed composer instead of failing a take', async () => {
+      renderChat({ userName: 'ada' });
+      await act(async () => {
+        fireEvent.click(orb());
+      });
+
+      const composer = screen.getByLabelText('chat composer');
+      expect(document.activeElement).toBe(composer);
+      expect(composer.getAttribute('placeholder')).toMatch(/^mic unavailable/i);
+      expect(fakeRecorder.start).not.toHaveBeenCalled();
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(routerPushMock).not.toHaveBeenCalled();
+    });
+
+    it('commits the typed memo through capture.commit', async () => {
+      mutateAsyncMock.mockResolvedValue({
+        extracted: { persons: [], companies: [], events: [], topics: [], actions: [] },
+        newEntities: 0,
+        matchedEntities: 0,
+        interactionId: 'int-typed',
+      });
+      renderChat({ userName: 'ada' });
+      await act(async () => {
+        fireEvent.click(orb());
+      });
+
+      fireEvent.change(screen.getByLabelText('chat composer'), {
+        target: { value: 'met ada lovelace at acme' },
+      });
+      fireEvent.submit(screen.getByTestId('chat-composer'));
+
+      await waitFor(() => expect(mutateAsyncMock).toHaveBeenCalledTimes(1));
+      expect(mutateAsyncMock.mock.calls[0]?.[0]).toMatchObject({
+        transcript: 'met ada lovelace at acme',
+      });
+    });
+
+    it('from another route, goes to /chat and focuses once on landing', async () => {
+      nav.pathname = '/';
+      renderWithShell(<RouteHarness />);
+      await act(async () => {
+        fireEvent.click(orb());
+      });
+      expect(routerPushMock).toHaveBeenCalledWith('/chat');
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'switch route' }));
+      });
+      expect(document.activeElement).toBe(screen.getByLabelText('chat composer'));
+
+      // One-shot: a later visit to /chat must not pop the keyboard by itself.
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'switch route' }));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'switch route' }));
+      });
+      expect(document.activeElement).not.toBe(screen.getByLabelText('chat composer'));
+    });
+
+    it('leaves Space to the page', () => {
+      renderChat({ userName: 'ada' });
+      const notPrevented = fireEvent.keyDown(window, { code: 'Space' });
+
+      expect(notPrevented).toBe(true);
+      expect(fakeRecorder.start).not.toHaveBeenCalled();
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(routerPushMock).not.toHaveBeenCalled();
+    });
   });
 
   // PR β₁-D rolled back the armRecord URL-param approach: recording now

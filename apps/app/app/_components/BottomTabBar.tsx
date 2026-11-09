@@ -149,9 +149,13 @@ export function CaptureOrb({ isActive, label, recorder, beginCapture }: CaptureO
         type="button"
         className="capture-orb"
         aria-label={
-          isActiveRec ? 'recording — tap to stop and send' : 'tap to record voice memo'
+          isActiveRec
+            ? 'recording — tap to stop and send'
+            : recorder.supported
+              ? 'tap to record voice memo'
+              : 'mic unavailable — tap to type a memo'
         }
-        aria-keyshortcuts="Space"
+        aria-keyshortcuts={recorder.supported ? 'Space' : undefined}
         aria-pressed={isActiveRec}
         aria-current={isActive ? 'page' : undefined}
         data-orb-state={orbState}

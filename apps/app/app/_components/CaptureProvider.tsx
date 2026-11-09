@@ -128,6 +128,9 @@ export interface CaptureContextValue {
   submitPaste: (id: string) => void | Promise<void>;
   submitText: (text: string) => void | Promise<void>;
   saveAskAsMemo: (id: string) => void | Promise<void>;
+  /** The orb asked for the typed path. ChatComposer focuses itself and clears this. */
+  composerFocusRequested: boolean;
+  clearComposerFocusRequest: () => void;
   /** Seed the thread from server-prefetched committed memos. Idempotent
    *  across route changes — calling repeatedly is a no-op after the first
    *  call. Merge-prepends so a live-recorded bubble created BEFORE the
@@ -179,7 +182,7 @@ const NOOP_RECORDER: UseAudioRecorder = {
   setCancelArmed: () => {},
   setLockArmed: () => {},
   reset: () => {},
-  supported: false,
+  supported: true,
 };
 
 const DEFAULT_VALUE: CaptureContextValue = {
@@ -210,6 +213,8 @@ const DEFAULT_VALUE: CaptureContextValue = {
   submitPaste: () => {},
   submitText: () => {},
   saveAskAsMemo: () => {},
+  composerFocusRequested: false,
+  clearComposerFocusRequest: () => {},
   seedThreadOnce: () => {},
 };
 
@@ -238,6 +243,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [photoBindChoices, setPhotoBindChoices] = useState<OpenCaptureTarget[] | null>(null);
+  const [composerFocusRequested, setComposerFocusRequested] = useState(false);
   const openTargetRef = useRef<OpenCaptureTarget | null>(null);
   const pendingAttachmentRef = useRef<PendingAttachment | null>(null);
   const attachmentGenerationRef = useRef(0);
@@ -627,7 +633,18 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const clearComposerFocusRequest = useCallback(() => {
+    setComposerFocusRequested(false);
+  }, []);
+
   const beginCapture = useCallback(async () => {
+    // No recorder in this browser, so a take can only fail. Send the orb to the
+    // typed composer instead: same chat surface, same commit pipeline.
+    if (!recorderRef.current.supported) {
+      setComposerFocusRequested(true);
+      if (pathnameRef.current !== '/chat') router.push('/chat');
+      return;
+    }
     if (photoBindChoices || attachmentBusyRef.current) return;
     const status = recorderRef.current.status;
     if (status === 'encoding' || status === 'ready') {
@@ -654,7 +671,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       },
     ]);
     await recorderRef.current.start();
-  }, [photoBindChoices]);
+  }, [photoBindChoices, router]);
 
   const runCapturePipeline = useCallback(
     async (id: string, blob: Blob, recordingDuration: number) => {
@@ -862,6 +879,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       const tag = (e.target as HTMLElement)?.tagName ?? '';
       const isInField = tag === 'INPUT' || tag === 'TEXTAREA';
       if (isInField) return;
+      // Hold-to-talk means nothing without a recorder, so Space stays the page's.
+      if (!recorder.supported) return;
 
       if (e.code === 'Space' && e.type === 'keydown' && !e.repeat) {
         if (
@@ -924,7 +943,7 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('keyup', onKey);
     };
-  }, [recorder.status, beginCapture]);
+  }, [recorder.status, recorder.supported, beginCapture]);
 
   const openPaste = useCallback((id: string) => {
     setPasteOpenForId(id);
@@ -1260,6 +1279,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       submitPaste,
       submitText,
       saveAskAsMemo,
+      composerFocusRequested,
+      clearComposerFocusRequest,
       seedThreadOnce,
     }),
     [
@@ -1288,6 +1309,8 @@ export function CaptureProvider({ children }: { children: React.ReactNode }) {
       submitPaste,
       submitText,
       saveAskAsMemo,
+      composerFocusRequested,
+      clearComposerFocusRequest,
       seedThreadOnce,
     ],
   );

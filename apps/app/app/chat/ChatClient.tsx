@@ -43,11 +43,20 @@ function ChatComposer() {
     clearAttachment,
     choosePhotoBind,
     choosePhotoUnassigned,
+    composerFocusRequested,
+    clearComposerFocusRequest,
   } = useCapture();
   const [text, setText] = useState('');
   const [dropping, setDropping] = useState(false);
   const pinInputRef = useRef<HTMLInputElement>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
+  // Runs on mount too: the orb may have been tapped on another route.
+  useEffect(() => {
+    if (!composerFocusRequested) return;
+    textInputRef.current?.focus();
+    clearComposerFocusRequest();
+  }, [composerFocusRequested, clearComposerFocusRequest]);
   const hot =
     recorder.status === 'arming' ||
     recorder.status === 'recording' ||
@@ -59,7 +68,7 @@ function ChatComposer() {
 
   const micUnavailable = !recorder.supported;
   const placeholder = micUnavailable
-    ? 'log a memo or ask — mic unavailable'
+    ? 'mic unavailable — type a memo or ask'
     : openTarget
       ? `add to ${openTarget.name.toLowerCase()} · or start a new memo`
       : 'log a memo or ask — "who was the rust person?"';
@@ -329,12 +338,14 @@ function ChatComposer() {
           <CameraIcon />
         </button>
         <input
+          ref={textInputRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={placeholder}
           aria-label="chat composer"
           style={{
             flex: 1,
+            minWidth: 0,
             background: 'transparent',
             border: 'none',
             color: 'var(--ink)',

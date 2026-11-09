@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, renderHook, act } from '@testing-library/react';
+import { hydrateRoot, type Root } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 
 // unmount the hook's pending scheduler work before env teardown — react-dom
 // reads window.event in a delayed commit callback and crashes when jsdom is
@@ -89,6 +91,59 @@ function withReducedMotion(value: boolean) {
 }
 
 import { useAudioRecorder } from '../useAudioRecorder';
+
+function SupportProbe() {
+  const { supported } = useAudioRecorder();
+  return <input aria-label="probe" placeholder={supported ? 'can record' : 'cannot record'} />;
+}
+
+describe('useAudioRecorder support flag', () => {
+  let box: HTMLDivElement;
+  let root: Root | undefined;
+
+  // Renders the way the server does (no window), then hydrates in the browser.
+  async function hydrateFromServer() {
+    vi.stubGlobal('window', undefined);
+    const html = renderToString(<SupportProbe />);
+    vi.unstubAllGlobals();
+
+    box = document.createElement('div');
+    box.innerHTML = html;
+    document.body.append(box);
+    await act(async () => {
+      root = hydrateRoot(box, <SupportProbe />);
+    });
+    return box.querySelector('input')?.getAttribute('placeholder');
+  }
+
+  beforeEach(() => {
+    installAudioShims();
+    withReducedMotion(false);
+  });
+  afterEach(async () => {
+    await act(async () => {
+      root?.unmount();
+    });
+    root = undefined;
+    box.remove();
+    vi.restoreAllMocks();
+  });
+
+  it('hydrates without a mismatch on a browser that can record', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(await hydrateFromServer()).toBe('can record');
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it('settles on unsupported after hydrating on a browser that cannot record', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    delete (window as unknown as { MediaRecorder?: unknown }).MediaRecorder;
+
+    expect(await hydrateFromServer()).toBe('cannot record');
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+});
 
 describe('useAudioRecorder', () => {
   beforeEach(() => {
